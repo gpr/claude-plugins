@@ -9,6 +9,7 @@ This repository is for developing Claude Code plugins. Use the `/plugin-dev:crea
 **Important**:
 - Create each new plugin in a category subdirectory (ex: `ai/`, `devex/`, `security/`). Use the plugin description to define the category, use existing one when relevant
 - After creating a new plugin, add it to `marketplace.json` to make it available in the marketplace
+- After creating or moodifying a plugin review it with @agent-plugin-dev:plugin-validator
 - Follow [Conventional Commits](https://www.conventionalcommits.org/) for all git commits (e.g., `feat:`, `fix:`, `docs:`, `chore:`). `fix`is only for released issue.
 
 ## Plugin Architecture
@@ -62,6 +63,8 @@ PreToolUse, PostToolUse, PostToolUseFailure, Stop, SubagentStop, SessionStart, S
 
 ## Reference
 
-- [Plugins Reference](https://code.claude.com/docs/en/plugins-reference)
-- [Create Plugins](https://code.claude.com/docs/en/plugins)
-- [Hooks Reference](https://code.claude.com/docs/en/hooks)
+- [Plugins Reference](https://code.claude.com/docs/en/plugins-reference.md)
+- [Create Plugins](https://code.claude.com/docs/en/plugins.md)
+- [Hooks Documentation](https://code.claude.com/docs/en/hooks.md)
+- [Skill Documentation](https://code.claude.com/docs/en/skills.md)
+- [Sub-Agents Documentation](https://code.claude.com/docs/en/sub-agents.md)
