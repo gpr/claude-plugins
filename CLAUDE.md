@@ -9,6 +9,7 @@ This repository is for developing Claude Code plugins. Use the `/plugin-dev:crea
 **Important**:
 - Create each new plugin in a category subdirectory (ex: `ai/`, `devex/`, `security/`). Use the plugin description to define the category, use existing one when relevant
 - After creating a new plugin, add it to `marketplace.json` to make it available in the marketplace
+- Follow [Conventional Commits](https://www.conventionalcommits.org/) for all git commits (e.g., `feat:`, `fix:`, `docs:`, `chore:`). `fix`is only for released issue.
 
 ## Plugin Architecture
 
