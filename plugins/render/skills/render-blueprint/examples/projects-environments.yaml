@@ -1,0 +1,329 @@
+# Projects and Environments - Multi-Environment Configuration
+#
+# Projects provide organizational structure and environment separation.
+# Use this pattern when you need:
+# - Staging and production environments
+# - Team/department isolation
+# - Environment-specific configurations
+# - Protected production deployments
+
+# Define projects with environments
+projects:
+  - name: api-production
+    environments:
+      # Production environment (protected)
+      - name: production
+        protected: true  # Requires manual approval for deployments
+
+  - name: api-staging
+    environments:
+      # Staging environment (automatic deployments)
+      - name: staging
+        protected: false
+
+# Services can be scoped to specific projects
+services:
+  # Production API
+  - name: api
+    type: web
+    runtime: node
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    region: oregon
+
+    # Production-specific configuration
+    plan: standard  # Higher tier for production
+    numInstances: 3
+
+    healthCheckPath: /health
+    maxShutdownDelaySeconds: 60
+
+    domains:
+      - api.example.com
+      - www.api.example.com
+
+    envVars:
+      # Production database
+      - key: DATABASE_URL
+        fromDatabase:
+          name: prod-db
+          property: connectionString
+
+      # Production Redis
+      - key: REDIS_URL
+        fromService:
+          name: prod-cache
+          type: keyvalue
+          property: hostport
+
+      # Production-specific environment
+      - key: NODE_ENV
+        value: production
+
+      - key: LOG_LEVEL
+        value: warn  # Less verbose in production
+
+      # Production secrets
+      - key: JWT_SECRET
+        generateValue: true
+        sync: false
+
+    # Assign to production project
+    project: api-production
+    environment: production
+
+  # Staging API (lower resource tier)
+  - name: api-staging
+    type: web
+    runtime: node
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    region: oregon
+
+    # Staging-specific configuration
+    plan: starter  # Lower tier for staging
+    numInstances: 1  # Single instance for cost savings
+
+    healthCheckPath: /health
+
+    domains:
+      - staging-api.example.com
+
+    envVars:
+      # Staging database
+      - key: DATABASE_URL
+        fromDatabase:
+          name: staging-db
+          property: connectionString
+
+      # Staging Redis
+      - key: REDIS_URL
+        fromService:
+          name: staging-cache
+          type: keyvalue
+          property: hostport
+
+      # Staging-specific environment
+      - key: NODE_ENV
+        value: staging
+
+      - key: LOG_LEVEL
+        value: debug  # More verbose in staging
+
+      # Staging can share production secrets or use separate ones
+      - key: JWT_SECRET
+        generateValue: true
+        sync: false
+
+    # Assign to staging project
+    project: api-staging
+    environment: staging
+
+  # Production worker
+  - name: worker
+    type: worker
+    runtime: node
+    buildCommand: npm install && npm run build
+    startCommand: npm run worker
+    region: oregon
+
+    numInstances: 2
+
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: prod-db
+          property: connectionString
+
+      - key: REDIS_URL
+        fromService:
+          name: prod-cache
+          type: keyvalue
+          property: hostport
+
+    project: api-production
+    environment: production
+
+  # Staging worker
+  - name: worker-staging
+    type: worker
+    runtime: node
+    buildCommand: npm install && npm run build
+    startCommand: npm run worker
+    region: oregon
+
+    numInstances: 1
+
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: staging-db
+          property: connectionString
+
+      - key: REDIS_URL
+        fromService:
+          name: staging-cache
+          type: keyvalue
+          property: hostport
+
+    project: api-staging
+    environment: staging
+
+  # Production Redis
+  - name: prod-cache
+    type: keyvalue
+    plan: standard-1  # Higher tier for production
+    region: oregon
+    ipAllowList:
+      - 0.0.0.0/0
+    project: api-production
+    environment: production
+
+  # Staging Redis
+  - name: staging-cache
+    type: keyvalue
+    plan: starter  # Lower tier for staging
+    region: oregon
+    ipAllowList:
+      - 0.0.0.0/0
+    project: api-staging
+    environment: staging
+
+# Databases separated by environment
+databases:
+  # Production database
+  - name: prod-db
+    databaseName: app_production
+    region: oregon
+    plan: standard-5  # High availability for production
+
+    highAvailability:
+      enabled: true
+
+    ipAllowList:
+      - 0.0.0.0/0
+
+    # Read replicas for scaling
+    readReplicas:
+      - name: prod-replica-1
+        region: ohio
+      - name: prod-replica-2
+        region: virginia
+
+    project: api-production
+    environment: production
+
+  # Staging database
+  - name: staging-db
+    databaseName: app_staging
+    region: oregon
+    plan: starter  # Smaller for staging
+
+    ipAllowList:
+      - 0.0.0.0/0
+
+    project: api-staging
+    environment: staging
+
+# Environment-specific variable groups
+envVarGroups:
+  - name: production-common
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+
+      - key: MONITORING_ENABLED
+        value: true
+
+      - key: RATE_LIMIT_ENABLED
+        value: true
+
+  - name: staging-common
+    envVars:
+      - key: ENVIRONMENT
+        value: staging
+
+      - key: MONITORING_ENABLED
+        value: false
+
+      - key: RATE_LIMIT_ENABLED
+        value: false
+
+# Preview environments for staging only
+previews:
+  generation: automatic
+  branch: develop  # Generate for PRs to develop
+  ttl: 7
+
+  # Preview settings
+  plan: starter
+  numInstances: 1
+
+# Key Benefits of Projects and Environments:
+#
+# 1. **Isolation**:
+#    - Clear separation between staging and production
+#    - Prevents accidental deployments to wrong environment
+#    - Different resource tiers per environment
+#
+# 2. **Access Control**:
+#    - Protected environments require manual approval
+#    - Team members can have different permissions per project
+#    - Audit trail for production changes
+#
+# 3. **Cost Management**:
+#    - Lower-tier plans for staging/development
+#    - Fewer instances for non-production
+#    - Easy to scale production independently
+#
+# 4. **Configuration Management**:
+#    - Environment-specific variables
+#    - Separate databases and caches
+#    - Different monitoring/logging levels
+#
+# 5. **Deployment Strategy**:
+#    - Test in staging first
+#    - Manual approval gate for production
+#    - Preview environments for PR testing
+
+# Alternative Approach: Separate Repositories
+#
+# Instead of projects, you can use separate repositories:
+# - production-api (render.yaml for prod)
+# - staging-api (render.yaml for staging)
+#
+# Pros:
+# - Simpler render.yaml files
+# - More explicit separation
+# - Can use different git branches/tags
+#
+# Cons:
+# - Duplicate configuration
+# - Harder to keep environments in sync
+# - More repositories to manage
+
+# Best Practices:
+#
+# 1. **Always protect production**:
+#    protected: true on production environments
+#
+# 2. **Different resource tiers**:
+#    Use higher plans/instances for production
+#
+# 3. **Separate databases**:
+#    Never share databases between environments
+#
+# 4. **Environment-specific secrets**:
+#    Use generateValue: true per environment
+#
+# 5. **Test in staging first**:
+#    Deploy to staging, verify, then deploy to production
+#
+# 6. **Use preview environments**:
+#    Test PRs in isolated environments before merging
+#
+# 7. **Monitor both environments**:
+#    Set up monitoring/alerting for staging and production
+#
+# 8. **Document differences**:
+#    Keep track of configuration differences between environments

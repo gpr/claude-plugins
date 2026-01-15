@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "plugins": [
+    {
+      "name": "render",
+      "description": "Skills for working with Render.com - create and validate Render Blueprints (render.yaml) and use the Render CLI for deployments, database access, and service management",
+      "path": "plugins/render",
+      "version": "1.0.0",
+      "category": "devops",
+      "tags": ["render", "deployment", "infrastructure", "cli", "blueprint"]
+    }
+  ]
+}

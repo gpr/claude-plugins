@@ -1,0 +1,8 @@
+{
+  "name": "render",
+  "description": "Skills for working with Render.com - create and validate Render Blueprints (render.yaml) and use the Render CLI for deployments, database access, and service management",
+  "version": "1.0.0",
+  "author": {
+    "name": "Gregory Rome"
+  }
+}

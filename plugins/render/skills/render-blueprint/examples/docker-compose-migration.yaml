@@ -1,0 +1,174 @@
+# Migration from Docker Compose to Render Blueprint
+#
+# Original docker-compose.yml structure:
+#   - nginx (reverse proxy)
+#   - api (Node.js backend)
+#   - worker (Python background worker)
+#   - postgres (database)
+#   - redis (cache)
+#
+# Render Blueprint equivalent configuration
+
+services:
+  # API Service (replaces docker-compose "api" service)
+  - name: api
+    type: web
+    runtime: docker
+    dockerfilePath: ./api/Dockerfile
+    dockerContext: ./api
+
+    # Equivalent to docker-compose "ports"
+    # Render automatically exposes port 10000
+    envVars:
+      - key: PORT
+        value: 10000
+
+    # Equivalent to docker-compose "depends_on"
+    # Handled automatically through fromDatabase and fromService
+    envVars:
+      # Database connection (replaces docker-compose link)
+      - key: DATABASE_URL
+        fromDatabase:
+          name: postgres
+          property: connectionString
+
+      # Redis connection (replaces docker-compose link)
+      - key: REDIS_URL
+        fromService:
+          name: redis
+          type: keyvalue
+          property: hostport
+
+      # Environment variables from docker-compose
+      - key: NODE_ENV
+        value: production
+
+      - key: API_SECRET
+        generateValue: true
+        sync: false
+
+    # Equivalent to docker-compose "healthcheck"
+    healthCheckPath: /health
+
+    # Equivalent to docker-compose "restart: always"
+    # Render handles this automatically
+
+    # Custom domain (replaces nginx reverse proxy)
+    domains:
+      - api.example.com
+
+  # Worker Service (replaces docker-compose "worker" service)
+  - name: worker
+    type: worker
+    runtime: docker
+    dockerfilePath: ./worker/Dockerfile
+    dockerContext: ./worker
+
+    # Equivalent to docker-compose "scale"
+    numInstances: 2
+
+    envVars:
+      # Database connection
+      - key: DATABASE_URL
+        fromDatabase:
+          name: postgres
+          property: connectionString
+
+      # Redis connection
+      - key: REDIS_URL
+        fromService:
+          name: redis
+          type: keyvalue
+          property: hostport
+
+      # Environment variables from docker-compose
+      - key: PYTHON_ENV
+        value: production
+
+      - key: WORKER_THREADS
+        value: 4
+
+    # Equivalent to docker-compose "volumes" for persistent data
+    disk:
+      name: worker-storage
+      mountPath: /data
+      sizeGB: 10
+
+  # Redis Cache (replaces docker-compose "redis" service)
+  - name: redis
+    type: keyvalue
+    plan: starter
+
+    # Render manages Redis - no need for Dockerfile
+    # Equivalent to docker-compose "image: redis:7-alpine"
+
+    ipAllowList:
+      - 0.0.0.0/0
+
+# PostgreSQL Database (replaces docker-compose "postgres" service)
+databases:
+  - name: postgres
+    databaseName: app_db  # Equivalent to POSTGRES_DB
+    plan: starter
+
+    # Render manages PostgreSQL - no need for Dockerfile
+    # Equivalent to docker-compose "image: postgres:15"
+
+    ipAllowList:
+      - 0.0.0.0/0
+
+    # Equivalent to docker-compose "volumes" for data persistence
+    # Render handles this automatically with managed databases
+
+# Environment variable groups (replaces docker-compose "env_file")
+envVarGroups:
+  - name: shared-config
+    envVars:
+      - key: LOG_LEVEL
+        value: info
+
+      - key: TZ
+        value: UTC
+
+# Key Differences and Improvements:
+#
+# 1. No nginx needed:
+#    - Render provides built-in load balancing and SSL
+#    - Custom domains handled at service level
+#
+# 2. Managed databases:
+#    - No need to manage PostgreSQL/Redis containers
+#    - Automatic backups, updates, and monitoring
+#
+# 3. Service discovery:
+#    - fromService/fromDatabase replaces docker-compose links
+#    - Automatic DNS resolution between services
+#
+# 4. Secrets management:
+#    - generateValue: true creates secure random values
+#    - sync: false preserves secrets across redeployments
+#
+# 5. Scaling:
+#    - numInstances or auto-scaling replaces docker-compose scale
+#    - Each service scales independently
+#
+# 6. Health checks:
+#    - healthCheckPath replaces docker-compose healthcheck
+#    - Zero-downtime deployments
+#
+# 7. Persistent storage:
+#    - disk replaces docker-compose volumes
+#    - Managed by Render with automatic backups
+#
+# 8. No need for docker-compose.override.yml:
+#    - Use projects for environment separation
+#    - Or maintain separate render.yaml per environment
+
+# Migration checklist:
+# ☐ Replace docker-compose links with fromService/fromDatabase
+# ☐ Move env_file values to envVars or envVarGroups
+# ☐ Replace docker-compose volumes with disk (if needed)
+# ☐ Configure custom domains (if using nginx reverse proxy)
+# ☐ Set up health check endpoints
+# ☐ Test preview environment before production deployment
+# ☐ Update CI/CD to deploy via Render Blueprint instead of docker-compose

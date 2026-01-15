@@ -1,0 +1,206 @@
+# Complete Full-Stack Application with Render Blueprint
+# Architecture: React Frontend + Node.js API + PostgreSQL + Redis + Background Worker
+
+services:
+  # Static Frontend (React/Vue/Svelte)
+  - name: webapp
+    type: static
+    staticSiteDetails:
+      buildCommand: npm install && npm run build
+      publishPath: dist
+      routes:
+        # SPA routing - rewrite all routes to index.html
+        - type: rewrite
+          source: /*
+          destination: /index.html
+      headers:
+        # Cache static assets aggressively
+        - path: /assets/*
+          headers:
+            - name: Cache-Control
+              value: public, max-age=31536000, immutable
+        # Don't cache index.html
+        - path: /index.html
+          headers:
+            - name: Cache-Control
+              value: no-cache
+    envVars:
+      # Frontend needs to know API endpoint
+      - key: VITE_API_URL
+        fromService:
+          name: api
+          type: web
+          property: hostport
+
+  # Backend API
+  - name: api
+    type: web
+    runtime: node
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    region: oregon
+
+    # Auto-scaling configuration
+    scaling:
+      minInstances: 1
+      maxInstances: 5
+      targetCPUPercent: 70
+      targetMemoryPercent: 80
+
+    # Graceful shutdown for in-flight requests
+    maxShutdownDelaySeconds: 30
+
+    # Custom domain
+    domains:
+      - api.example.com
+
+    envVars:
+      # Database connection
+      - key: DATABASE_URL
+        fromDatabase:
+          name: postgres
+          property: connectionString
+
+      # Redis for caching and sessions
+      - key: REDIS_URL
+        fromService:
+          name: cache
+          type: keyvalue
+          property: hostport
+
+      # Generated secrets
+      - key: JWT_SECRET
+        generateValue: true
+        sync: false
+
+      - key: SESSION_SECRET
+        generateValue: true
+        sync: false
+
+      # Application configuration
+      - key: NODE_ENV
+        value: production
+
+      - key: PORT
+        value: 10000
+
+      - key: CORS_ORIGIN
+        fromService:
+          name: webapp
+          type: static
+          property: host
+
+  # Background Worker (Job Processing)
+  - name: worker
+    type: worker
+    runtime: node
+    buildCommand: npm install && npm run build
+    startCommand: npm run worker
+    region: oregon
+
+    # Workers can scale independently
+    numInstances: 2
+
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: postgres
+          property: connectionString
+
+      - key: REDIS_URL
+        fromService:
+          name: cache
+          type: keyvalue
+          property: hostport
+
+      - key: NODE_ENV
+        value: production
+
+      # Worker-specific configuration
+      - key: WORKER_CONCURRENCY
+        value: 10
+
+      - key: JOB_TIMEOUT
+        value: 300000  # 5 minutes
+
+  # Scheduled Tasks (Cron Jobs)
+  - name: daily-reports
+    type: cron
+    schedule: "0 9 * * *"  # 9 AM daily
+    runtime: node
+    buildCommand: npm install
+    startCommand: node scripts/generate-reports.js
+    region: oregon
+
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: postgres
+          property: connectionString
+
+  - name: cleanup-old-data
+    type: cron
+    schedule: "0 2 * * 0"  # 2 AM every Sunday
+    runtime: node
+    buildCommand: npm install
+    startCommand: node scripts/cleanup.js
+    region: oregon
+
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: postgres
+          property: connectionString
+
+      - key: RETENTION_DAYS
+        value: 90
+
+  # Redis Cache
+  - name: cache
+    type: keyvalue
+    plan: starter  # or free, starter-1, standard-*
+    region: oregon
+    ipAllowList:
+      # Allow access from anywhere (consider restricting in production)
+      - 0.0.0.0/0
+
+# PostgreSQL Database
+databases:
+  - name: postgres
+    databaseName: app_production
+    region: oregon
+    plan: starter  # free, starter, standard-0, standard-*
+
+    # For production, consider high availability
+    # highAvailability:
+    #   enabled: true
+
+    # IP restriction for security
+    ipAllowList:
+      - 0.0.0.0/0  # Consider restricting to specific IPs
+
+    # Read replicas for scaling reads (paid plans only)
+    # readReplicas:
+    #   - name: read-replica-1
+    #     region: ohio
+
+# Shared environment variables
+envVarGroups:
+  - name: common-config
+    envVars:
+      - key: LOG_LEVEL
+        value: info
+
+      - key: TZ
+        value: UTC
+
+# Preview environments for pull requests
+previews:
+  generation: automatic
+  branch: main  # Generate for PRs to main
+  ttl: 7       # Delete after 7 days
+
+# Apply preview environment config to services
+# (Each service can override preview settings)
+```

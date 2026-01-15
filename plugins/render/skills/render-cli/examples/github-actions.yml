@@ -1,0 +1,85 @@
+# Complete GitHub Actions workflow for deploying to Render
+
+name: Deploy to Render
+
+on:
+  push:
+    branches:
+      - main
+      - staging
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for better deployment tracking
+
+      - name: Install Render CLI
+        run: |
+          # Pin to specific version for reproducibility
+          curl -fsSL https://install.render.com/latest | bash
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: Verify Render CLI installation
+        run: render --version
+
+      - name: Deploy to Staging
+        if: github.ref == 'refs/heads/staging' || (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'staging')
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY_STAGING }}
+        run: |
+          render deploys create ${{ secrets.RENDER_SERVICE_ID_STAGING }} \
+            --commit ${{ github.sha }} \
+            --wait \
+            --confirm
+
+      - name: Deploy to Production
+        if: github.ref == 'refs/heads/main' || (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'production')
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY_PRODUCTION }}
+        run: |
+          render deploys create ${{ secrets.RENDER_SERVICE_ID_PRODUCTION }} \
+            --commit ${{ github.sha }} \
+            --wait \
+            --confirm
+
+      - name: Notify on deployment failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '❌ Deployment to Render failed. Check the workflow logs for details.'
+            })
+
+# Required GitHub Secrets:
+# - RENDER_API_KEY_STAGING: API key for staging environment
+# - RENDER_API_KEY_PRODUCTION: API key for production environment
+# - RENDER_SERVICE_ID_STAGING: Service ID for staging (e.g., srv-abc123)
+# - RENDER_SERVICE_ID_PRODUCTION: Service ID for production (e.g., srv-xyz789)
+
+# To get your API key:
+# 1. Visit https://dashboard.render.com/u/settings#api-keys
+# 2. Create new API key
+# 3. Add to GitHub repository secrets
+
+# To get your Service ID:
+# 1. Run: render services
+# 2. Copy the ID from the service list (format: srv-xxxxx)

@@ -1,0 +1,206 @@
+# Monorepo Configuration with Render Blueprint
+# Structure:
+#   apps/
+#     web/          - Next.js frontend
+#     mobile-api/   - Mobile API backend
+#     admin/        - Admin dashboard
+#   packages/
+#     shared/       - Shared utilities
+#     ui/           - Shared UI components
+#   services/
+#     worker/       - Background jobs
+
+services:
+  # Frontend Web App (Next.js)
+  - name: web-app
+    type: web
+    runtime: docker
+    rootDir: apps/web
+    dockerfilePath: ./Dockerfile
+    dockerContext: ../..  # Build from monorepo root
+
+    # Only rebuild when web app or shared packages change
+    buildFilter:
+      paths:
+        - "apps/web/**"
+        - "packages/shared/**"
+        - "packages/ui/**"
+      ignoredPaths:
+        - "apps/web/tests/**"
+        - "apps/web/**/*.test.ts"
+        - "apps/web/**/*.spec.ts"
+
+    domains:
+      - app.example.com
+      - www.app.example.com
+
+    envVars:
+      - key: NEXT_PUBLIC_API_URL
+        fromService:
+          name: mobile-api
+          type: web
+          property: hostport
+
+      - key: DATABASE_URL
+        fromDatabase:
+          name: postgres
+          property: connectionString
+
+  # Mobile API Backend
+  - name: mobile-api
+    type: web
+    runtime: node
+    rootDir: apps/mobile-api
+    buildCommand: pnpm install --frozen-lockfile && pnpm build
+    startCommand: pnpm start
+
+    buildFilter:
+      paths:
+        - "apps/mobile-api/**"
+        - "packages/shared/**"
+      ignoredPaths:
+        - "apps/mobile-api/tests/**"
+        - "apps/mobile-api/**/*.test.ts"
+
+    healthCheckPath: /health
+
+    scaling:
+      minInstances: 2
+      maxInstances: 10
+      targetCPUPercent: 75
+
+    domains:
+      - api.example.com
+
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: postgres
+          property: connectionString
+
+      - key: REDIS_URL
+        fromService:
+          name: cache
+          type: keyvalue
+          property: hostport
+
+      - key: JWT_SECRET
+        generateValue: true
+        sync: false
+
+  # Admin Dashboard
+  - name: admin-dashboard
+    type: static
+    rootDir: apps/admin
+
+    staticSiteDetails:
+      buildCommand: pnpm install --frozen-lockfile && pnpm build
+      publishPath: dist
+      routes:
+        - type: rewrite
+          source: /*
+          destination: /index.html
+
+    buildFilter:
+      paths:
+        - "apps/admin/**"
+        - "packages/shared/**"
+        - "packages/ui/**"
+
+    envVars:
+      - key: VITE_API_URL
+        fromService:
+          name: mobile-api
+          type: web
+          property: hostport
+
+  # Background Worker
+  - name: background-worker
+    type: worker
+    runtime: node
+    rootDir: services/worker
+    buildCommand: pnpm install --frozen-lockfile && pnpm build
+    startCommand: pnpm start
+
+    buildFilter:
+      paths:
+        - "services/worker/**"
+        - "packages/shared/**"
+
+    numInstances: 3
+
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: postgres
+          property: connectionString
+
+      - key: REDIS_URL
+        fromService:
+          name: cache
+          type: keyvalue
+          property: hostport
+
+      - key: WORKER_CONCURRENCY
+        value: 20
+
+  # Scheduled Maintenance Tasks
+  - name: maintenance-jobs
+    type: cron
+    schedule: "0 3 * * *"  # 3 AM daily
+    runtime: node
+    rootDir: services/worker
+    buildCommand: pnpm install --frozen-lockfile
+    startCommand: node scripts/maintenance.js
+
+    buildFilter:
+      paths:
+        - "services/worker/scripts/**"
+        - "packages/shared/**"
+
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: postgres
+          property: connectionString
+
+  # Redis Cache
+  - name: cache
+    type: keyvalue
+    plan: starter
+    ipAllowList:
+      - 0.0.0.0/0
+
+# Database
+databases:
+  - name: postgres
+    databaseName: monorepo_app
+    plan: standard-0
+    ipAllowList:
+      - 0.0.0.0/0
+
+# Shared configuration for all services
+envVarGroups:
+  - name: monorepo-common
+    envVars:
+      - key: NODE_ENV
+        value: production
+
+      - key: LOG_LEVEL
+        value: info
+
+      - key: PNPM_VERSION
+        value: 8.15.0
+
+# Preview environments
+previews:
+  generation: automatic
+  branch: develop
+  ttl: 14
+
+# Notes:
+# 1. buildFilter prevents unnecessary rebuilds when unrelated apps change
+# 2. rootDir isolates each service's working directory
+# 3. dockerContext set to ../.. allows Dockerfile to access entire monorepo
+# 4. Use pnpm workspaces for efficient dependency management
+# 5. Shared packages in buildFilter.paths ensure rebuilds when shared code changes

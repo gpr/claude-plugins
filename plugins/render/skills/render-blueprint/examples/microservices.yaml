@@ -1,0 +1,312 @@
+# Microservices Architecture with Private Services
+# Architecture: API Gateway + Multiple Private Services + Shared Database
+
+services:
+  # Public API Gateway
+  - name: api-gateway
+    type: web
+    runtime: node
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    region: oregon
+
+    healthCheckPath: /health
+
+    # Public-facing domain
+    domains:
+      - api.example.com
+
+    # Gateway connects to all private services
+    envVars:
+      # User service connection
+      - key: USER_SERVICE_URL
+        fromService:
+          name: user-service
+          type: pserv
+          property: hostport
+
+      # Order service connection
+      - key: ORDER_SERVICE_URL
+        fromService:
+          name: order-service
+          type: pserv
+          property: hostport
+
+      # Payment service connection
+      - key: PAYMENT_SERVICE_URL
+        fromService:
+          name: payment-service
+          type: pserv
+          property: hostport
+
+      # Notification service connection
+      - key: NOTIFICATION_SERVICE_URL
+        fromService:
+          name: notification-service
+          type: pserv
+          property: hostport
+
+      # Shared database
+      - key: DATABASE_URL
+        fromDatabase:
+          name: postgres
+          property: connectionString
+
+      # API Gateway secrets
+      - key: JWT_SECRET
+        generateValue: true
+        sync: false
+
+  # Private User Service
+  - name: user-service
+    type: pserv  # Private service - not accessible from internet
+    runtime: node
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    region: oregon
+
+    # Internal health check
+    healthCheckPath: /health
+
+    envVars:
+      # Database connection
+      - key: DATABASE_URL
+        fromDatabase:
+          name: postgres
+          property: connectionString
+
+      # Service-specific configuration
+      - key: SERVICE_NAME
+        value: user-service
+
+      - key: LOG_LEVEL
+        value: info
+
+  # Private Order Service
+  - name: order-service
+    type: pserv
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port 10000
+    region: oregon
+
+    healthCheckPath: /health
+
+    envVars:
+      # Database connection
+      - key: DATABASE_URL
+        fromDatabase:
+          name: postgres
+          property: connectionString
+
+      # Inter-service communication
+      - key: USER_SERVICE_URL
+        fromService:
+          name: user-service
+          type: pserv
+          property: hostport
+
+      - key: PAYMENT_SERVICE_URL
+        fromService:
+          name: payment-service
+          type: pserv
+          property: hostport
+
+      - key: SERVICE_NAME
+        value: order-service
+
+  # Private Payment Service
+  - name: payment-service
+    type: pserv
+    runtime: node
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    region: oregon
+
+    healthCheckPath: /health
+
+    # Payment service needs access to external payment APIs
+    envVars:
+      # Database connection
+      - key: DATABASE_URL
+        fromDatabase:
+          name: postgres
+          property: connectionString
+
+      # External payment processor credentials (use secrets management)
+      - key: STRIPE_SECRET_KEY
+        generateValue: true
+        sync: false
+
+      - key: STRIPE_WEBHOOK_SECRET
+        generateValue: true
+        sync: false
+
+      - key: SERVICE_NAME
+        value: payment-service
+
+  # Private Notification Service
+  - name: notification-service
+    type: pserv
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: celery -A tasks worker --loglevel=info
+    region: oregon
+
+    envVars:
+      # Database connection
+      - key: DATABASE_URL
+        fromDatabase:
+          name: postgres
+          property: connectionString
+
+      # Redis for job queue
+      - key: REDIS_URL
+        fromService:
+          name: redis
+          type: keyvalue
+          property: hostport
+
+      # Email service credentials
+      - key: SENDGRID_API_KEY
+        generateValue: true
+        sync: false
+
+      - key: SERVICE_NAME
+        value: notification-service
+
+  # Background Worker (processes async tasks)
+  - name: async-worker
+    type: worker
+    runtime: node
+    buildCommand: npm install && npm run build
+    startCommand: npm run worker
+    region: oregon
+
+    numInstances: 2
+
+    envVars:
+      # Database connection
+      - key: DATABASE_URL
+        fromDatabase:
+          name: postgres
+          property: connectionString
+
+      # Redis for job queue
+      - key: REDIS_URL
+        fromService:
+          name: redis
+          type: keyvalue
+          property: hostport
+
+      # Can communicate with private services
+      - key: USER_SERVICE_URL
+        fromService:
+          name: user-service
+          type: pserv
+          property: hostport
+
+      - key: NOTIFICATION_SERVICE_URL
+        fromService:
+          name: notification-service
+          type: pserv
+          property: hostport
+
+  # Redis for job queue and caching
+  - name: redis
+    type: keyvalue
+    plan: starter
+    region: oregon
+    ipAllowList:
+      - 0.0.0.0/0
+
+# Shared PostgreSQL database
+databases:
+  - name: postgres
+    databaseName: microservices_db
+    region: oregon
+    plan: standard-0
+
+    # For production, enable high availability
+    # highAvailability:
+    #   enabled: true
+
+    ipAllowList:
+      - 0.0.0.0/0
+
+# Shared environment variables
+envVarGroups:
+  - name: common-config
+    envVars:
+      - key: NODE_ENV
+        value: production
+
+      - key: LOG_FORMAT
+        value: json
+
+      - key: TZ
+        value: UTC
+
+# Key Architectural Decisions:
+#
+# 1. Private Services (pserv):
+#    - Not accessible from the internet
+#    - Only accessible by other Render services in same workspace
+#    - Perfect for microservices that should only be accessed via gateway
+#    - Reduces attack surface (no need to secure internal APIs from public)
+#
+# 2. API Gateway Pattern:
+#    - Single public entry point (type: web)
+#    - Routes requests to appropriate private services
+#    - Handles authentication/authorization centrally
+#    - Simplifies CORS and security policies
+#
+# 3. Service Discovery:
+#    - fromService automatically provides internal service URLs
+#    - No need for service registry (Consul, Eureka, etc.)
+#    - Services can reference each other by name
+#
+# 4. Database Strategy:
+#    - Shared database for simplicity (common in small/medium systems)
+#    - Each service accesses its own schema/tables (logical separation)
+#    - Alternative: Separate database per service (not shown here)
+#
+# 5. Inter-Service Communication:
+#    - Services can call each other directly via fromService URLs
+#    - Synchronous HTTP calls for request/response patterns
+#    - Asynchronous jobs via Redis for fire-and-forget tasks
+#
+# 6. Security:
+#    - Private services (pserv) are not exposed to internet
+#    - API gateway handles authentication
+#    - Internal services trust gateway (no additional auth needed)
+#    - Secrets managed via generateValue: true
+#
+# 7. Scaling:
+#    - Each service can scale independently
+#    - Gateway can auto-scale based on traffic
+#    - Private services scale based on internal load
+#    - Worker scales based on job queue depth
+
+# When to Use Private Services (pserv):
+#
+# ✅ Use pserv when:
+# - Service should only be accessed by other internal services
+# - Building microservices behind an API gateway
+# - Service handles sensitive operations (payment, user data)
+# - Want to reduce attack surface
+# - Service provides internal functionality (email, PDF generation)
+#
+# ❌ Don't use pserv when:
+# - Service needs to be publicly accessible
+# - Service needs custom domain
+# - Service needs to receive webhooks from external services
+# - Single monolithic application (use 'web' instead)
+
+# Migration Path from Monolith:
+#
+# Phase 1: Monolith with 'web' service
+# Phase 2: Extract first microservice as 'pserv', keep most logic in monolith
+# Phase 3: Add API gateway as 'web', route to monolith and microservice
+# Phase 4: Extract more services as 'pserv', reduce monolith size
+# Phase 5: Fully decomposed microservices with thin gateway

@@ -1,0 +1,92 @@
+# Complete GitLab CI/CD pipeline for deploying to Render
+
+variables:
+  RENDER_CLI_VERSION: "latest"  # Pin to specific version for reproducibility
+
+stages:
+  - deploy
+
+# Deploy to staging on merge to develop branch
+deploy_staging:
+  stage: deploy
+  image: ubuntu:22.04
+  only:
+    - develop
+  before_script:
+    - apt-get update && apt-get install -y curl
+    - curl -fsSL https://install.render.com/${RENDER_CLI_VERSION} | bash
+    - export PATH="$HOME/.local/bin:$PATH"
+    - render --version
+  script:
+    - |
+      render deploys create ${RENDER_SERVICE_ID_STAGING} \
+        --commit ${CI_COMMIT_SHA} \
+        --wait \
+        --confirm
+  environment:
+    name: staging
+    url: https://your-app-staging.onrender.com
+  variables:
+    RENDER_API_KEY: ${RENDER_API_KEY_STAGING}
+
+# Deploy to production on merge to main branch
+deploy_production:
+  stage: deploy
+  image: ubuntu:22.04
+  only:
+    - main
+  before_script:
+    - apt-get update && apt-get install -y curl
+    - curl -fsSL https://install.render.com/${RENDER_CLI_VERSION} | bash
+    - export PATH="$HOME/.local/bin:$PATH"
+    - render --version
+  script:
+    - |
+      render deploys create ${RENDER_SERVICE_ID_PRODUCTION} \
+        --commit ${CI_COMMIT_SHA} \
+        --wait \
+        --confirm
+  environment:
+    name: production
+    url: https://your-app.onrender.com
+  variables:
+    RENDER_API_KEY: ${RENDER_API_KEY_PRODUCTION}
+  when: manual  # Require manual approval for production deployments
+
+# Manual deployment job (can deploy any branch to any environment)
+deploy_manual:
+  stage: deploy
+  image: ubuntu:22.04
+  when: manual
+  before_script:
+    - apt-get update && apt-get install -y curl
+    - curl -fsSL https://install.render.com/${RENDER_CLI_VERSION} | bash
+    - export PATH="$HOME/.local/bin:$PATH"
+    - render --version
+  script:
+    - |
+      if [ -z "${RENDER_SERVICE_ID}" ]; then
+        echo "Error: RENDER_SERVICE_ID variable is required"
+        exit 1
+      fi
+      render deploys create ${RENDER_SERVICE_ID} \
+        --commit ${CI_COMMIT_SHA} \
+        --wait \
+        --confirm
+  variables:
+    RENDER_API_KEY: ${RENDER_API_KEY_STAGING}  # Default to staging API key
+
+# Required GitLab CI/CD Variables (Settings > CI/CD > Variables):
+# - RENDER_API_KEY_STAGING: API key for staging environment
+# - RENDER_API_KEY_PRODUCTION: API key for production environment
+# - RENDER_SERVICE_ID_STAGING: Service ID for staging (e.g., srv-abc123)
+# - RENDER_SERVICE_ID_PRODUCTION: Service ID for production (e.g., srv-xyz789)
+
+# To get your API key:
+# 1. Visit https://dashboard.render.com/u/settings#api-keys
+# 2. Create new API key
+# 3. Add to GitLab CI/CD variables (mark as Protected and Masked)
+
+# To get your Service ID:
+# 1. Run: render services
+# 2. Copy the ID from the service list (format: srv-xxxxx)
