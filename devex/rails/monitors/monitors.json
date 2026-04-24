@@ -1,0 +1,7 @@
+[
+  {
+    "name": "rails-dev-log",
+    "command": "${CLAUDE_PLUGIN_ROOT}/scripts/tail-filtered.sh ${user_config.log_path} \"${user_config.error_pattern}\"",
+    "description": "Rails development log — errors, 5xx responses, and exceptions (filter via user_config.error_pattern)"
+  }
+]

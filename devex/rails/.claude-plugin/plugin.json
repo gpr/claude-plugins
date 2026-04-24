@@ -1,0 +1,6 @@
+{
+  "name": "rails-api-backend",
+  "description": "Rails API backend authoring: routes/migrations/conventions skills, a rails-backend subagent, PostToolUse rubocop hook, and a dev-log monitor.",
+  "version": "0.1.0",
+  "author": { "name": "Grégory Romé" }
+}
