@@ -10,25 +10,9 @@
       "tags": ["render", "deployment", "infrastructure", "cli", "blueprint"]
     },
     {
-      "name": "spec-driven-dev",
-      "description": "Enforces spec-driven development workflow with structured plans, documentation integration, and atomic commits. Read specs first, use semantic plan directories, and commit atomically.",
-      "path": "devex/spec-driven-dev",
-      "version": "1.0.0",
-      "category": "devex",
-      "tags": ["planning", "specs", "documentation", "workflow", "conventional-commits"]
-    },
-    {
-      "name": "spec-manager",
-      "description": "Skills for managing specification files with YAML frontmatter descriptions",
-      "path": "devex/spec-manager",
-      "version": "1.0.0",
-      "category": "devex",
-      "tags": ["specs", "specifications", "documentation", "planning"]
-    },
-    {
       "name": "rails-api-backend",
       "description": "Rails API backend authoring: routes/migrations/conventions skills, a rails-backend subagent, PostToolUse rubocop hook, and a dev-log monitor.",
-      "path": "devex/rails",
+      "path": "plugins/rails",
       "version": "0.1.0",
       "category": "devex",
       "tags": ["rails", "ruby", "api", "backend", "rubocop", "rspec"]

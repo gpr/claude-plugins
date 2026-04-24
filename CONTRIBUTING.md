@@ -13,10 +13,10 @@ Thank you for your interest in contributing to the Claude Code Plugins repositor
 
 ### Directory Structure
 
-Create your plugin in a category subdirectory:
+Create your plugin under `plugins/`:
 
 ```text
-<category>/your-plugin/
+plugins/your-plugin/
 ├── .claude-plugin/
 │   └── plugin.json
 ├── commands/
@@ -27,7 +27,7 @@ Create your plugin in a category subdirectory:
 └── .mcp.json (optional)
 ```
 
-**Categories**: Use existing categories when relevant (`ai/`, `devex/`, `security/`, etc.) or create a new one if needed.
+**Categories**: Classification lives in `marketplace.json` via the `category` field. Reuse an existing category (`ai`, `devex`, `security`, `devops`, etc.) when relevant, or introduce a new one if needed.
 
 ### Plugin Manifest
 
@@ -78,7 +78,7 @@ feat: add code-review plugin
 
 docs: update README with installation instructions
 
-fix: resolve hook execution order in devex/linter plugin
+fix: resolve hook execution order in linter plugin
 
 chore: update marketplace.json schema
 ```
