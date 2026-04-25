@@ -32,6 +32,14 @@
       "version": "1.1.0",
       "category": "devex",
       "tags": ["react", "vite", "typescript", "tanstack", "clerk", "shadcn", "zustand"]
+    },
+    {
+      "name": "monorepo",
+      "description": "Orchestration plugin for monorepos with a frontend/ + website/ + backends/<name>/ layout, a central Taskfile.yaml, and cocogito-based versioning. Handles the monorepo layer: cross-package tasks, conventional commits, releases, and Claude memory hygiene.",
+      "path": "plugins/monorepo",
+      "version": "0.1.0",
+      "category": "devex",
+      "tags": ["monorepo", "taskfile", "cocogito", "conventional-commits", "release"]
     }
   ]
 }

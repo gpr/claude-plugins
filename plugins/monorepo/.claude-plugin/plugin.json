@@ -1,0 +1,17 @@
+{
+  "name": "monorepo",
+  "version": "0.1.0",
+  "description": "Orchestration plugin for monorepos with a frontend/ + website/ + backends/<name>/ layout, a central Taskfile.yaml, and cocogito-based versioning. Handles the monorepo layer: cross-package tasks, conventional commits, releases, and Claude memory hygiene. Stack-specific work belongs to dedicated frontend and backend plugins.",
+  "author": {
+    "name": "Gregory Rome"
+  },
+  "keywords": [
+    "monorepo",
+    "taskfile",
+    "go-task",
+    "cocogito",
+    "conventional-commits",
+    "claude-memory",
+    "release"
+  ]
+}
