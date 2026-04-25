@@ -16,7 +16,8 @@ Other skills (tanstack-router, zustand-slices, shadcn-tailwind, pnpm-only, env-v
 1. Identify changed files. If unclear (branch vs main, last commit, staged), ask
 2. For each file, check against the relevant skill's rules
 3. Run `pnpm exec tsc --noEmit` and `pnpm exec eslint .` once; include any new errors as findings
-4. Group findings by severity: blocker → must-fix → suggestion
+4. If any changed file is under `src/components/` or `src/routes/`, query the `chromatic` MCP server for visual diffs on the changed UI surface; report regressions as must-fix
+5. Group findings by severity: blocker → must-fix → suggestion
 
 ## Drift to flag
 - TanStack Query: inline query keys, missing invalidation, mixing `useQuery` + `useSuspenseQuery` on same key, `onSuccess`/`onError` on `useQuery` (v5 removed)

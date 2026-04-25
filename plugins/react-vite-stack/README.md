@@ -32,13 +32,14 @@ At first run the plugin prompts for `api_base_url` and `clerk_publishable_key` v
 
 ## What it deliberately does not include
 - **No project-wide tsc on each edit** — the typecheck-watch monitor streams TS errors continuously instead. Per-edit tsc was 5–20s of dead time
-- **No MCP server** — no stateful service worth one for this stack
+- **One MCP server (Chromatic)** — wired into the `reviewer` agent for visual regression. Set `chromatic_project_token` via the plugin config prompt. No other MCP servers; visual regression was the threshold that justified one
 - **No marketplace metadata** — add when ready to distribute
 
 ## Known issues
 - **Plugin monitor auto-arm is broken on some Claude Code 2.1.x builds** (anthropics/claude-code#52245). If you don't see TypeScript or Vitest errors streaming after session start, ask Claude to manually arm them: "start the typecheck-watch and test-watch monitors"
 - **`@clerk/clerk-react` is in long deprecation** — Clerk now publishes `@clerk/react`. Both still work; the `clerk-rest` skill detects which is in use and won't mix them. New projects should install `@clerk/react`
 - **Monitors are skipped in non-interactive runs** — headless invocations (`--no-interactive`, CI) don't start `typecheck-watch` or `test-watch`. Run `pnpm exec tsc --noEmit` and `pnpm exec vitest run` directly in those contexts.
+- **`bundle-watch` requires `fswatch` or `entr`** and a Vite build script with `--mode analyze`. The monitor exits quietly on missing tooling; install via `brew install fswatch` (macOS) or `apt install entr` (Linux).
 
 ## Tuning
 

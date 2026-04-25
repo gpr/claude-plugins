@@ -12,6 +12,10 @@
     "clerk_publishable_key": {
       "description": "Clerk publishable key (pk_test_... or pk_live_...)",
       "sensitive": false
+    },
+    "chromatic_project_token": {
+      "description": "Chromatic project token for visual regression checks (used by reviewer via the chromatic MCP server)",
+      "sensitive": true
     }
   }
 }

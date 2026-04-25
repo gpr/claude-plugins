@@ -8,5 +8,17 @@
     "name": "test-watch",
     "description": "Vitest failures in real time. Streams failing test names and assertion errors.",
     "command": "${CLAUDE_PLUGIN_ROOT}/scripts/monitor-vitest.sh"
+  },
+  {
+    "name": "playwright-trace",
+    "description": "Playwright failures in real time. Streams failing locator and timeout errors. Lazy-armed when the vitest-rtl-playwright skill activates.",
+    "command": "${CLAUDE_PLUGIN_ROOT}/scripts/monitor-playwright.sh",
+    "when": "on-skill-invoke:vitest-rtl-playwright"
+  },
+  {
+    "name": "bundle-watch",
+    "description": "Bundle regressions: chunk size growth >10KB or forbidden Clerk imports. Lazy-armed when tanstack-query skill activates.",
+    "command": "${CLAUDE_PLUGIN_ROOT}/scripts/monitor-bundle.sh",
+    "when": "on-skill-invoke:tanstack-query"
   }
 ]

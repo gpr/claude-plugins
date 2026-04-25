@@ -22,6 +22,18 @@
           }
         ]
       }
+    ],
+    "FileChanged": [
+      {
+        "matcher": "src/routes/**/*.tsx",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/regen-routetree.sh",
+            "timeout": 30
+          }
+        ]
+      }
     ]
   }
 }

@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "chromatic": {
+      "command": "npx",
+      "args": ["-y", "chromatic", "mcp"],
+      "env": {
+        "CHROMATIC_PROJECT_TOKEN": "${user_config.chromatic_project_token}"
+      }
+    }
+  }
+}

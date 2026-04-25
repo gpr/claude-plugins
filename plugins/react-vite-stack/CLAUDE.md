@@ -12,18 +12,23 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Skill-driven agent swarm with parallel monitors:
 
-- **4 agents** (`agents/*.md`) — one task per agent, each declares the skills it relies on:
+- **5 agents** (`agents/*.md`) — one task per agent, each declares the skills it relies on:
   - `component-builder` (Sonnet) — scaffolds one route + component using shadcn primitives
   - `api-client-generator` (Opus) — one REST endpoint module: Zod schema + typed fetch + queryOptions/mutationOptions + `useXyz` hook
   - `test-writer` (Haiku) — one test file (Vitest / RTL / Playwright depending on layer)
-  - `reviewer` (Opus, read-only) — diffs against stack conventions, emits blockers/must-fix/suggestions
+  - `reviewer` (Opus, read-only) — diffs against stack conventions, emits blockers/must-fix/suggestions; queries Chromatic MCP for visual diffs
+  - `migration-pilot` (Opus, worktree isolation) — drives one cross-cutting library migration per invocation
 - **10 skills** (`skills/<name>/SKILL.md`) encode per-library conventions: `tanstack-router`, `tanstack-query`, `tanstack-form-zod`, `zustand-slices`, `shadcn-tailwind`, `clerk-rest`, `vitest-rtl-playwright`, `error-and-loading`, `env-vars`, `pnpm-only`. Auto-invoked by relevance.
-- **2 hooks** (`hooks/hooks.json`):
-  - `SessionStart` → `scripts/enforce-pnpm.sh` (refuses package-lock.json/yarn.lock/bun.lockb and missing `packageManager` field; exit 2)
-  - `PostToolUse` matcher `Edit|Write|MultiEdit` → `scripts/check-changed.sh` (Prettier + ESLint --fix on the changed file only; **deliberately skips tsc**)
-- **2 monitors** (`monitors/monitors.json`, requires Claude Code ≥ 2.1.105):
+- **3 hooks** (`hooks/hooks.json`):
+  - `SessionStart` → `scripts/enforce-pnpm.sh` (refuses package-lock.json/yarn.lock/bun.lockb and missing `packageManager` field; exit 2 is advisory — SessionStart is non-blocking)
+  - `PostToolUse` matcher `Edit|Write|MultiEdit` → `scripts/check-changed.sh` (Prettier + ESLint --fix on the changed file only; **deliberately skips tsc**; exit 2 is advisory)
+  - `FileChanged` matcher `src/routes/**/*.tsx` → `scripts/regen-routetree.sh` (regenerates `routeTree.gen.ts` via `tsr generate`)
+- **4 monitors** (`monitors/monitors.json`, requires Claude Code ≥ 2.1.105):
   - `typecheck-watch` → `scripts/monitor-tsc.sh` (streams `tsc --watch` errors line by line)
   - `test-watch` → `scripts/monitor-vitest.sh` (streams Vitest FAIL lines)
+  - `playwright-trace` → `scripts/monitor-playwright.sh` (lazy: `on-skill-invoke:vitest-rtl-playwright`; streams Playwright failures)
+  - `bundle-watch` → `scripts/monitor-bundle.sh` (lazy: `on-skill-invoke:tanstack-query`; emits chunk-growth >10KB or forbidden-import lines; needs `fswatch` or `entr`)
+- **MCP** — `.mcp.json` wires the `chromatic` server (visual regression) used by `reviewer`.
 - **LSP** — `.lsp.json` wires `typescript-language-server` with inlay hints (`.ts`, `.tsx`, `.js`, `.jsx`).
 
 The architectural bet: **monitors replace per-edit `tsc`** (which cost 5–20s of dead time). The PostToolUse hook does cheap fixes (format/lint); type errors stream from the long-lived monitor instead.
@@ -31,12 +36,13 @@ The architectural bet: **monitors replace per-edit `tsc`** (which cost 5–20s o
 ## Plugin layout
 
 ```
-.claude-plugin/plugin.json    # manifest — userConfig prompts api_base_url + clerk_publishable_key
-agents/                       # 4 agent definitions
+.claude-plugin/plugin.json    # manifest — userConfig prompts api_base_url + clerk_publishable_key + chromatic_project_token
+agents/                       # 5 agent definitions
 skills/<name>/SKILL.md        # 10 skills, one dir per skill
-hooks/hooks.json              # SessionStart + PostToolUse
-monitors/monitors.json        # typecheck-watch + test-watch (CC ≥ 2.1.105)
-scripts/*.sh                  # 4 bash scripts invoked by hooks/monitors
+hooks/hooks.json              # SessionStart + PostToolUse + FileChanged
+monitors/monitors.json        # typecheck-watch + test-watch + playwright-trace + bundle-watch (CC ≥ 2.1.105)
+scripts/*.sh                  # 7 bash scripts invoked by hooks/monitors
+.mcp.json                     # chromatic MCP server (visual regression)
 .lsp.json                     # typescript-language-server config
 README.md                     # end-user install / tuning / known issues
 ```
@@ -62,7 +68,7 @@ Hook/monitor scripts must use `${CLAUDE_PLUGIN_ROOT}` for any internal paths —
 
 Per `README.md`:
 - **No project-wide `tsc` per edit** — the `typecheck-watch` monitor handles it. Adding tsc to PostToolUse would reintroduce 5–20s blocking.
-- **No MCP server** — no stateful service is worth one for this stack.
+- **One MCP server (Chromatic)** — wired into the `reviewer` agent for visual regression via `.mcp.json` and the `chromatic_project_token` userConfig entry. Visual regression was the threshold that justified an MCP server; no others are added.
 - **No marketplace metadata** — added at distribution time, not now.
 
 ## Known end-user issues (mention in README, not fix in plugin)
