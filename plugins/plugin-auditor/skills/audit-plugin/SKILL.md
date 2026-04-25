@@ -13,6 +13,22 @@ This skill owns **content quality** (instruction concision, trigger phrase stren
 
 ## Procedure
 
+### 0. Verify and disclose harness capabilities
+
+Before doing anything else, confirm the two tools this skill depends on:
+
+- **`Task`** — required for the §3 parallel fan-out. Without it, the five auditors cannot run independently.
+- **`WebFetch`** — required so each auditor can re-read its assigned doc URL on every run. Without it, the doc-drift safeguard (the main failure mode this plugin exists to prevent) is bypassed.
+
+Decide harness state and record it as one of:
+
+- `full` — both `Task` and `WebFetch` are available. Proceed normally.
+- `degraded:no-task` — `Task` unavailable. **Do not silently inline the audit.** Tell the user the skill cannot fan out and ask whether to (a) abort, or (b) proceed inline against the rubrics with the limitation flagged in the report header. Default to (a) unless the user picks (b).
+- `degraded:no-webfetch` — `WebFetch` unavailable. Same prompt: abort or proceed against cached rubrics only, with the limitation flagged.
+- `degraded:none` — neither available. Almost always abort; only continue if the user explicitly accepts a rubric-only review.
+
+The harness state must appear verbatim as the first line of the §5 report and the §6 summary. A degraded run that doesn't disclose its mode is a contract violation.
+
 ### 1. Resolve the target
 
 - Treat the first argument as `<plugin-path>`. If absent, stop and ask the user for one.
@@ -76,6 +92,8 @@ Compose one markdown report:
 ```
 # Plugin audit plan: <plugin-name> — <ISO-8601 timestamp> (no files modified)
 
+> Harness: <full | degraded:no-task | degraded:no-webfetch | degraded:none>. <one-sentence consequence — e.g. "Live doc fetch skipped; rubric snapshots used.">
+
 ## Summary
 - Skills reviewed: N (M proposals: B blocker / H high / Me medium / L low)
 - Agents reviewed: N (M proposals: ...)
@@ -112,7 +130,7 @@ Write the report to `<plugin-path>/.claude/reviews/<ISO-8601-compact>-plan.md` u
 
 Print at most six lines:
 
-- Banner: `plan only — no files modified`.
+- Banner: `plan only — no files modified` (append `· harness: degraded:<mode>` if not `full`).
 - One-line per area (skills, agents, hooks, monitors, ideation): component/proposal count by severity.
 - Path to the full report.
 - One line: "Hand-pick items and ask me to apply them, or run `@agent-plugin-dev:plugin-validator` for structural checks."
@@ -125,4 +143,5 @@ Do not restate the report's content inline. The user can open the file.
 - Never run the agents sequentially.
 - Never skip the `WebFetch` step in an agent prompt — doc drift is the main failure mode this plugin exists to prevent.
 - Never touch files outside `<plugin-path>`.
+- Never run a degraded audit silently — if §0 finds `Task` or `WebFetch` missing, ask the user before proceeding and disclose the mode in the report header and user summary.
 - If any agent returns evidence of an `Edit` or `Write` call against plugin content, flag it at the top of the report as a contract violation and continue with the rest of the findings.
