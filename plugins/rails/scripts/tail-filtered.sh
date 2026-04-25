@@ -3,7 +3,7 @@
 # Line-buffered so Claude Code sees each match as a discrete notification
 # instead of waiting for stdio flush.
 
-set -u
+set -euo pipefail
 
 LOG_PATH="${1:-log/development.log}"
 PATTERN="${2:-}"

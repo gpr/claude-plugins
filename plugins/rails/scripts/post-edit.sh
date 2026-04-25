@@ -3,7 +3,7 @@
 # - Always: rubocop --autocorrect on the changed file (if rubocop is available)
 # - Optional: run the matching RSpec file if run_tests_on_edit=true
 
-set -u
+set -euo pipefail
 
 # Hook payload arrives on stdin as JSON. We pull the affected path via jq
 # if available; otherwise fall back to a grep — hooks shouldn't hard-require jq.
@@ -13,7 +13,7 @@ extract_path() {
   if command -v jq >/dev/null 2>&1; then
     printf '%s' "${PAYLOAD}" | jq -r '.tool_input.file_path // empty' 2>/dev/null
   else
-    printf '%s' "${PAYLOAD}" | grep -oE '"file_path"[[:space:]]*:[[:space:]]*"[^"]+"' | head -1 | sed -E 's/.*"([^"]+)"$/\1/'
+    printf '%s' "${PAYLOAD}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('tool_input',{}).get('file_path',''),end='')" 2>/dev/null
   fi
 }
 

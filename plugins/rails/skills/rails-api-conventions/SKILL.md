@@ -1,9 +1,7 @@
 ---
 name: rails-api-conventions
-description: Conventions for a Rails API-only backend. Use when scaffolding controllers, choosing status codes, shaping error envelopes, picking a serializer, adding pagination, versioning endpoints, or reviewing API PRs.
+description: Applies Rails API-only backend conventions when scaffolding controllers, choosing status codes, shaping error envelopes, picking a serializer, adding pagination, versioning endpoints, or reviewing API PRs.
 ---
-
-# Rails API Conventions
 
 ## Controller shape
 

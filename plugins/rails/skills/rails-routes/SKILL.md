@@ -1,9 +1,7 @@
 ---
 name: rails-routes
-description: Inspect Rails routes, find which controller action handles a URL, or scaffold a new API route. Use when the user asks about routing, 404s with no matching route, or wants to add/modify routes.rb.
+description: Inspects Rails routes, finds which controller action handles a URL, and scaffolds new API routes when the user asks about routing, encounters 404s with no matching route, or wants to add or modify routes.rb.
 ---
-
-# Rails Routes
 
 ## Inspecting existing routes
 

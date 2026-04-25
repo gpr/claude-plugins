@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "rails-db-inspector": {
+      "command": "npx",
+      "args": ["-y", "@itunified.io/mcp-postgres"],
+      "env": {
+        "DATABASE_URL": "${user_config.db_url}"
+      }
+    }
+  }
+}

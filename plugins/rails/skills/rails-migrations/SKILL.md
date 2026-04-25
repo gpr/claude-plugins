@@ -1,9 +1,7 @@
 ---
 name: rails-migrations
-description: Generate, inspect, and safely manage Rails migrations. Use when the user wants to add/change/drop columns, indexes, or tables, or when they're resolving a migration conflict or failed migration.
+description: Generates, inspects, and safely manages Rails migrations when adding, changing, or dropping columns, indexes, or tables, or when resolving a migration conflict or failed migration.
 ---
-
-# Rails Migrations
 
 ## Generating migrations
 
