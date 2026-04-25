@@ -16,6 +16,14 @@
       "version": "0.1.0",
       "category": "devex",
       "tags": ["rails", "ruby", "api", "backend", "rubocop", "rspec"]
+    },
+    {
+      "name": "plugin-auditor",
+      "description": "Read-only auditor: fans out four parallel subagents to score skills, agents, hooks, and monitors against live docs, writes a prioritised plan to <plugin>/.claude/reviews/, and proposes bold new components. Never edits plugin files.",
+      "path": "plugins/plugin-auditor",
+      "version": "0.1.0",
+      "category": "devex",
+      "tags": ["review", "quality", "audit", "meta", "prompt-engineering"]
     }
   ]
 }

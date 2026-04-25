@@ -1,0 +1,9 @@
+{
+  "name": "plugin-auditor",
+  "description": "Audits a Claude Code plugin's skills, agents, hooks, and monitors against live docs and prompt-engineering best practices. Read-only: emits a prioritised plan of proposals under <plugin>/.claude/reviews/ — never edits plugin files.",
+  "version": "0.1.0",
+  "author": {
+    "name": "Grégory Romé",
+    "email": "gregory.rome@teads.com"
+  }
+}
