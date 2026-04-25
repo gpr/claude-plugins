@@ -24,6 +24,14 @@
       "version": "0.1.0",
       "category": "devex",
       "tags": ["review", "quality", "audit", "meta", "prompt-engineering"]
+    },
+    {
+      "name": "react-vite-stack",
+      "description": "Opinionated stack: pnpm + Vite + React + TS + TanStack (Router/Query/Form) + Zod + Zustand + shadcn/ui + Tailwind + Clerk + Vitest/RTL + Playwright",
+      "path": "plugins/react-vite-stack",
+      "version": "1.1.0",
+      "category": "devex",
+      "tags": ["react", "vite", "typescript", "tanstack", "clerk", "shadcn", "zustand"]
     }
   ]
 }

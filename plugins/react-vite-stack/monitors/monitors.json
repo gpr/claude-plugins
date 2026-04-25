@@ -1,0 +1,14 @@
+[
+  {
+    "name": "typecheck-watch",
+    "description": "TypeScript errors as they appear. Streams one line per diagnostic.",
+    "command": "${CLAUDE_PLUGIN_ROOT}/scripts/monitor-tsc.sh",
+    "persistent": true
+  },
+  {
+    "name": "test-watch",
+    "description": "Vitest failures in real time. Streams failing test names and assertion errors.",
+    "command": "${CLAUDE_PLUGIN_ROOT}/scripts/monitor-vitest.sh",
+    "persistent": true
+  }
+]

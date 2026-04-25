@@ -1,0 +1,21 @@
+{
+  "typescript": {
+    "command": "typescript-language-server",
+    "args": ["--stdio"],
+    "extensionToLanguage": {
+      ".ts": "typescript",
+      ".tsx": "typescriptreact",
+      ".js": "javascript",
+      ".jsx": "javascriptreact"
+    },
+    "initializationOptions": {
+      "preferences": {
+        "includeInlayParameterNameHints": "all",
+        "includeInlayFunctionParameterTypeHints": true,
+        "includeInlayVariableTypeHints": true
+      }
+    },
+    "restartOnCrash": true,
+    "maxRestarts": 3
+  }
+}
