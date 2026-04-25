@@ -51,10 +51,13 @@ README.md                     # end-user install / tuning / known issues
 
 ```bash
 jq . .claude-plugin/plugin.json hooks/hooks.json monitors/monitors.json   # JSON syntax
-shellcheck scripts/*.sh                                                    # all four bash scripts
+shellcheck scripts/*.sh                                                    # all bash scripts
+chmod +x scripts/*.sh                                                      # ensure new scripts are executable
 ```
 
 Then invoke `@agent-plugin-dev:plugin-validator` (from the parent `plugin-dev` plugin) for manifest + component wiring.
+
+For prompt-engineering and doc-alignment review, run `/plugin-auditor:audit-plugin .` — output lands in `.claude/reviews/<timestamp>-plan.md` (gitignored).
 
 Test the plugin against a real React project without installing it:
 

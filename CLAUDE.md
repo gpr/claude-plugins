@@ -57,9 +57,10 @@ claude /install marketplace-name@plugin-name
 
 After any plugin change, run:
 
-1. `jq . .claude-plugin/plugin.json hooks/hooks.json` — JSON syntax
+1. `jq . .claude-plugin/plugin.json hooks/hooks.json monitors/monitors.json .mcp.json 2>/dev/null` — JSON syntax (skip files that don't exist)
 2. `shellcheck scripts/*.sh` — shell scripts (if any)
 3. `@agent-plugin-dev:plugin-validator` — manifest + component wiring
+4. `/plugin-auditor:audit-plugin <plugin-path>` — prompt-engineering and doc-alignment audit
 
 Use `${CLAUDE_PLUGIN_ROOT}` for all script paths in hooks/MCP config. Never hardcode absolute paths.
 
@@ -73,7 +74,7 @@ Use `${CLAUDE_PLUGIN_ROOT}` for all script paths in hooks/MCP config. Never hard
 
 ## Hook Events
 
-PreToolUse, PostToolUse, PostToolUseFailure, Stop, SubagentStop, SessionStart, SessionEnd, UserPromptSubmit, PreCompact, Notification, PermissionRequest
+PreToolUse, PostToolUse, PostToolUseFailure, Stop, SubagentStop, SessionStart, SessionEnd, UserPromptSubmit, PreCompact, Notification, PermissionRequest, FileChanged, WorktreeCreate, WorktreeRemove
 
 ## Reference
 
@@ -86,3 +87,13 @@ PreToolUse, PostToolUse, PostToolUseFailure, Stop, SubagentStop, SessionStart, S
 ## Critical: source code vs. instructions
 
 Every `*.md`, `hooks.json`, `monitors.json`, and `*.sh` file in `plugins/` is **payload shipped to end users**. Treat them as source code to edit, lint, and review.
+
+## Tips
+
+- `@agent-plugin-dev:plugin-validator` knows the docs at training time only. For new fields (`FileChanged`, monitor `when:`, agent `isolation: "worktree"`), cross-check `code.claude.com/docs/en/plugins-reference.md` via WebFetch before treating its findings as blocking.
+- To split a working tree where audit fixes and new features touch the same files (`hooks.json`, `monitors.json`, `CLAUDE.md`), prefer `git add -p` over snapshot/revert dance — picks lines, no scratch files needed.
+
+## Sandbox gotchas
+
+- `cp`, `git checkout`, and direct file writes outside `Edit`/`Write` typically fail with "Operation not permitted" — re-run with `dangerouslyDisableSandbox: true`.
+- `$TMPDIR` is not stable across Bash invocations in sandbox mode. Don't snapshot state to a temp file in one call and read it from another.

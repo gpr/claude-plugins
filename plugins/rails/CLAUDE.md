@@ -65,8 +65,9 @@ Prefer the most recent documented features, including those in preview, when the
 Run after any change:
 
 1. `jq . .claude-plugin/plugin.json hooks/hooks.json monitors/monitors.json` — JSON syntax.
-2. `shellcheck scripts/post-edit.sh scripts/tail-filtered.sh` — shell scripts.
+2. `shellcheck scripts/*.sh` — shell scripts.
 3. `@agent-plugin-dev:plugin-validator` — manifest and component wiring.
+4. `claude --plugin-dir "$(pwd)"` — load against a real Rails app to smoke-test wiring.
 
 ## Commit conventions
 
