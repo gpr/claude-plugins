@@ -2,3 +2,4 @@
 *.local.json
 **/.claude/worktrees/
 **/.claude/plans/
+**/.claude/reviews/
