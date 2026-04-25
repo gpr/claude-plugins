@@ -1,12 +1,11 @@
 {
   "permissions": {
-    "allow": [],
+    "allow": [
+      "Bash(shellcheck *)",
+      "Bash(trash *)"
+    ],
     "deny": [],
     "ask": []
-},
-  "enabledPlugins": {
-    "commit-commands@claude-plugins-official": true,
-    "plugin-dev@claude-plugins-official": true,
-    "hookify@claude-plugins-official": true
-  }
+  },
+  "enabledPlugins": {}
 }
