@@ -4,14 +4,15 @@ Audits a Claude Code plugin's content quality and surfaces ambitious new compone
 
 ## What it does
 
-One user-invoked skill (`/plugin-auditor:audit-plugin <plugin-path>`) fans out to four focused subagents **in parallel**:
+One user-invoked skill (`/plugin-auditor:audit-plugin <plugin-path>`) fans out to five focused subagents **in parallel**:
 
 | Agent | Audits | Doc source |
 |-------|--------|------------|
 | `skills-auditor` | `skills/*/SKILL.md` | skills.md |
 | `agents-auditor` | `agents/*.md` | sub-agents.md |
 | `hooks-auditor` | `hooks/hooks.json` + `scripts/*.sh` | hooks.md |
-| `monitors-ideator` | `monitors/monitors.json` + whole-plugin ideation | plugins-reference.md |
+| `monitors-auditor` | `monitors/monitors.json` | plugins-reference.md |
+| `plugin-ideator` | whole plugin + `marketplace.json` for synergies | plugins-reference.md |
 
 Each agent:
 
@@ -22,7 +23,7 @@ Each agent:
 
 The orchestrator aggregates the four reports into `<plugin-path>/.claude/reviews/<timestamp>-plan.md`, prepends a prioritised action plan sorted by severity, and prints a short summary. The user decides what to apply.
 
-`monitors-ideator` also proposes 3–6 bold new components (skills, agents, hooks, monitors, MCP integrations, cross-plugin synergies) grounded in the target plugin's domain.
+`plugin-ideator` proposes 3–6 bold new components (skills, agents, hooks, monitors, MCP integrations, cross-plugin synergies) grounded in the target plugin's domain.
 
 ## Usage
 

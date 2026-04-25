@@ -5,7 +5,7 @@ argument-hint: <plugin-path>
 allowed-tools: Read, Glob, Bash, Task, Write
 ---
 
-Fan out four focused auditor agents in parallel, aggregate their findings, and return a ranked plan of proposed changes. **No plugin files are modified** — the user decides what to apply.
+Fan out five focused auditor/ideator agents in parallel, aggregate their findings, and return a ranked plan of proposed changes. **No plugin files are modified** — the user decides what to apply.
 
 ## Scope boundary
 
@@ -25,22 +25,23 @@ This skill owns **content quality** (instruction concision, trigger phrase stren
   - `<plugin-path>/scripts/*.sh`
   - `<plugin-path>/CLAUDE.md` (optional context)
 
-Record which component types exist. A missing type is not a failure — the monitors-ideator will still run to propose additions.
+Record which component types exist. A missing type is not a failure — `plugin-ideator` will still run to propose additions.
 
 ### 2. Load rubrics
 
-Read all four rubric files from this skill's own `references/` subdirectory (use `${CLAUDE_SKILL_DIR}/references/` to resolve the path from inside this skill):
+Read all five rubric files from this skill's own `references/` subdirectory (use `${CLAUDE_SKILL_DIR}/references/` to resolve the path from inside this skill):
 
 - `rubric-skills.md`
 - `rubric-agents.md`
 - `rubric-hooks.md`
 - `rubric-monitors.md`
+- `rubric-ideation.md`
 
-Each auditor agent receives its rubric embedded in its prompt — do not ask the agent to read the file (keeps the agent's context self-contained and avoids a race with parallel runs).
+Each agent receives its rubric embedded in its prompt — do not ask the agent to read the file (keeps the agent's context self-contained and avoids a race with parallel runs).
 
-### 3. Fan out — single message, four Task calls
+### 3. Fan out — single message, five Task calls
 
-Launch all four agents in **one** assistant message with four parallel `Task` tool calls (`subagent_type` set to the auditor name in each). Sequential spawning is forbidden; it defeats the purpose of this skill.
+Launch all five agents in **one** assistant message with five parallel `Task` tool calls (`subagent_type` set to the agent name in each). Sequential spawning is forbidden; it defeats the purpose of this skill.
 
 Each agent prompt must be self-contained and include:
 
@@ -59,13 +60,14 @@ Agent assignments:
 | `skills-auditor` | every `skills/*/SKILL.md` and `skills/*/references/*.md` | https://code.claude.com/docs/en/skills.md |
 | `agents-auditor` | every `agents/*.md` | https://code.claude.com/docs/en/sub-agents.md |
 | `hooks-auditor` | `hooks/hooks.json` + every `scripts/*.sh` | https://code.claude.com/docs/en/hooks.md |
-| `monitors-ideator` | `monitors/monitors.json` (if any) + full plugin context for ideation | https://code.claude.com/docs/en/plugins-reference.md |
+| `monitors-auditor` | `monitors/monitors.json` | https://code.claude.com/docs/en/plugins-reference.md |
+| `plugin-ideator` | full plugin tree (all components) + repo `marketplace.json` for synergies | https://code.claude.com/docs/en/plugins-reference.md |
 
-If a file list is empty for an agent, still launch it — for auditors this produces a "nothing to review" note; for the ideator the whole point is proposing what's missing.
+If a file list is empty for an auditor, still launch it — produces a "nothing to review" note. `plugin-ideator` always runs regardless of which components are present; the whole point is proposing what's missing.
 
-### 4. Wait for all four
+### 4. Wait for all five
 
-Do not do any audit work yourself while the agents run. Wait until all four have returned before writing the report — a partial report produces a partial plan.
+Do not do any audit work yourself while the agents run. Wait until all five have returned before writing the report — a partial report produces a partial plan.
 
 ### 5. Aggregate
 
@@ -78,8 +80,8 @@ Compose one markdown report:
 - Skills reviewed: N (M proposals: B blocker / H high / Me medium / L low)
 - Agents reviewed: N (M proposals: ...)
 - Hooks reviewed: N (M proposals: ...)
-- Monitors reviewed: N
-- New-component proposals: N
+- Monitors reviewed: N (M proposals: ...)
+- Ideation proposals: N
 
 ## Prioritised action plan
 1. [blocker] <file:line> — <one-line change> (area: skills)
@@ -95,8 +97,11 @@ Compose one markdown report:
 ## Hooks
 <hooks-auditor report>
 
-## Monitors & ideation
-<monitors-ideator report>
+## Monitors
+<monitors-auditor report>
+
+## Ideation
+<plugin-ideator report>
 ```
 
 Sort the prioritised list by severity, then by area. Each entry should reference the detailed proposal in the per-area section below.
@@ -108,7 +113,7 @@ Write the report to `<plugin-path>/.claude/reviews/<ISO-8601-compact>-plan.md` u
 Print at most six lines:
 
 - Banner: `plan only — no files modified`.
-- One-line per area: component count + proposals by severity.
+- One-line per area (skills, agents, hooks, monitors, ideation): component/proposal count by severity.
 - Path to the full report.
 - One line: "Hand-pick items and ask me to apply them, or run `@agent-plugin-dev:plugin-validator` for structural checks."
 
