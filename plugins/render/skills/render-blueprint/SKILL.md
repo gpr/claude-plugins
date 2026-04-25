@@ -1,11 +1,13 @@
 ---
 name: render-blueprint
-description: |
-  This skill should be used when the user asks about "render.yaml", "Render Blueprint", "infrastructure as code for Render", "validate render.yaml", "create render.yaml", mentions "Render IaC", needs help with "Render service configuration", "environment variables in render.yaml", "database configuration in Render", "monorepo with Render", or is troubleshooting "render.yaml validation errors", "blueprint deployment issues", "service interconnection in Render", wants to "generate render.yaml", "migrate to Render Blueprint", "configure preview environments", or needs examples of "web service configuration", "worker configuration", "cron job setup", "static site deployment", "Docker service on Render".
-version: 1.0.0
+description: Create, validate, and troubleshoot Render Blueprint (render.yaml) infrastructure-as-code configurations for services, databases, preview environments, and monorepo setups.
 ---
 
 # Render Blueprint Assistant
+
+## When to Use
+
+Trigger this skill for tasks involving `render.yaml`, Render Blueprints, or Render IaC: creating/validating/migrating `render.yaml`, configuring services (web, worker, cron, static, Docker), databases, env var groups, service interconnection, monorepo builds, or preview environments. Also covers troubleshooting blueprint validation and deployment errors.
 
 ## Skill Instructions
 
@@ -330,97 +332,6 @@ services:
               value: public, max-age=31536000
 ```
 
-### Complete Example: Full Stack App
-
-```yaml
-services:
-  # Frontend
-  - name: webapp
-    type: static
-    staticSiteDetails:
-      buildCommand: npm install && npm run build
-      publishPath: dist
-    envVars:
-      - key: API_URL
-        fromService:
-          name: api
-          type: web
-          property: hostport
-
-  # Backend API
-  - name: api
-    type: web
-    runtime: node
-    buildCommand: npm install && npm run build
-    startCommand: npm start
-    healthCheckPath: /api/health
-    envVars:
-      - key: DATABASE_URL
-        fromDatabase:
-          name: postgres
-          property: connectionString
-      - key: REDIS_URL
-        fromService:
-          name: cache
-          type: keyvalue
-          property: hostport
-      - key: JWT_SECRET
-        generateValue: true
-        sync: false
-
-  # Background Worker
-  - name: worker
-    type: worker
-    runtime: node
-    buildCommand: npm install && npm run build
-    startCommand: npm run worker
-    envVars:
-      - key: DATABASE_URL
-        fromDatabase:
-          name: postgres
-          property: connectionString
-      - key: REDIS_URL
-        fromService:
-          name: cache
-          type: keyvalue
-          property: hostport
-
-  # Scheduled Job
-  - name: cleanup
-    type: cron
-    schedule: "0 2 * * *"  # 2 AM daily
-    runtime: node
-    buildCommand: npm install
-    startCommand: node scripts/cleanup.js
-    envVars:
-      - key: DATABASE_URL
-        fromDatabase:
-          name: postgres
-          property: connectionString
-
-  # Redis Cache
-  - name: cache
-    type: keyvalue
-    plan: free
-    ipAllowList:
-      - 0.0.0.0/0
-
-# Database
-databases:
-  - name: postgres
-    databaseName: appdb
-    plan: standard-0
-
-# Shared Environment Variables
-envVarGroups:
-  - name: common
-    envVars:
-      - key: NODE_ENV
-        value: production
-      - key: LOG_LEVEL
-        value: info
-```
-
 ### Validation
 
 **JSON Schema**: Validate against `https://render.com/schema/render.yaml.json`
@@ -436,52 +347,7 @@ envVarGroups:
 }
 ```
 
-**Common Validation Errors**:
-
-1. **Missing required fields**
-   ```yaml
-   # Error: Missing 'type'
-   services:
-     - name: api
-       runtime: node
-
-   # Fix: Add 'type'
-   services:
-     - name: api
-       type: web
-       runtime: node
-   ```
-
-2. **Invalid constraints**
-   ```yaml
-   # Error: Disk size must be ≥1GB and multiples of 5
-   disk:
-     sizeGB: 7
-
-   # Fix: Use valid size
-   disk:
-     sizeGB: 10
-   ```
-
-3. **Circular references**
-   ```yaml
-   # Error: Service A references B, B references A
-   # Fix: Restructure to avoid cycles
-   ```
-
-4. **Type mismatches**
-   ```yaml
-   # Error: keyvalue shouldn't specify runtime
-   services:
-     - name: cache
-       type: keyvalue
-       runtime: redis  # Wrong!
-
-   # Fix: Remove runtime
-   services:
-     - name: cache
-       type: keyvalue
-   ```
+**Common Validation Errors**: See `references/validation.md` for detailed validation rules and error solutions.
 
 ### Best Practices
 
@@ -562,7 +428,7 @@ envVarGroups:
 
 ### Common Patterns
 
-For detailed examples and troubleshooting, see:
+For complete examples and troubleshooting, see:
 - `examples/fullstack-app.yaml` - Complete application with all service types
 - `examples/monorepo.yaml` - Monorepo with buildFilter configuration
 - `examples/microservices.yaml` - Private services (pserv) architecture

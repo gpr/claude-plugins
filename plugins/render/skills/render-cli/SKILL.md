@@ -1,11 +1,13 @@
 ---
 name: render-cli
-description: |
-  This skill should be used when the user asks about "Render CLI", "render command", "render login", "render deploys", "render psql", "render ssh", "render services", "deploy to Render", "Render deployment", "Render.com CLI", mentions "RENDER_API_KEY", needs help with "Render CI/CD integration", "GitHub Actions with Render", "PostgreSQL access on Render", "SSH into Render service", or is troubleshooting "Render authentication", "Render deployment failure", "Render database connection", "Render CLI token expired", or wants to "trigger Render deployment", "access Render database", "view Render logs", or "automate Render deployments".
-version: 1.0.0
+description: Use the Render CLI to manage services, deployments, databases, logs, and SSH access, and to automate Render.com workflows in CI/CD pipelines.
 ---
 
 # Render CLI Assistant
+
+## When to Use
+
+Trigger this skill for tasks involving the Render CLI (`render` command): login/auth, deploying services, viewing deploys/logs, `render psql`, `render ssh`, managing services, CI/CD integration (GitHub Actions, GitLab CI), `RENDER_API_KEY` usage, or troubleshooting Render authentication, deployment failures, database connections, and expired CLI tokens.
 
 ## Skill Instructions
 
