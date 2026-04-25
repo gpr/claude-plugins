@@ -1,6 +1,6 @@
 ---
 name: error-and-loading
-description: Use when adding routes or components that fetch data. Loading and error states are required, not optional. Covers Suspense, ErrorBoundary, route-level pendingComponent/errorComponent.
+description: "Enforces three-layer loading/error boundaries (pendingComponent, errorComponent, Suspense) for data-driven routes. Invoke when adding a route that fetches data, wiring a pendingComponent or errorComponent, or handling Suspense Query boundaries."
 ---
 
 # Error and loading states

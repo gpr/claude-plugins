@@ -7,7 +7,7 @@ maxTurns: 8
 skills: [vitest-rtl-playwright]
 ---
 
-You write one test file at a time, co-located next to the source (`Foo.tsx` → `Foo.test.tsx`).
+Write one test file per invocation, co-located next to the source (`Foo.tsx` → `Foo.test.tsx`).
 
 ## Decide layer
 - Pure module / schema / store slice → Vitest only, no DOM

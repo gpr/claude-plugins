@@ -1,6 +1,6 @@
 ---
 name: pnpm-only
-description: Use when installing, removing, or running packages. Enforces pnpm in a project that explicitly forbids npm/yarn/bun.
+description: "Enforces pnpm as the exclusive package manager and blocks npm/yarn/bun. Invoke when installing packages, removing dependencies, running scripts, or resolving a corrupted lockfile."
 ---
 
 # pnpm only

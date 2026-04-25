@@ -1,6 +1,6 @@
 ---
 name: clerk-rest
-description: Use when adding auth, calling protected API endpoints, or gating routes/components. Clerk + REST conventions.
+description: "Enforces Clerk + REST auth conventions for this React/Vite stack. Invoke when adding authentication, calling protected API endpoints, gating routes with Clerk guards, or wiring cross-origin token headers."
 ---
 
 # Clerk + REST

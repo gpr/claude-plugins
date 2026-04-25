@@ -1,12 +1,19 @@
 #!/usr/bin/env bash
 # SessionStart: refuse to proceed if non-pnpm artifacts exist.
 # To bypass for a polyglot context: rename or delete this script.
-set -u
+# NOTE: SessionStart exit 2 is non-blocking per docs; output is advisory only.
+set -euo pipefail
 
 problems=""
-[ -f package-lock.json ] && problems+="- package-lock.json present (delete: pnpm import && rm package-lock.json)\n"
-[ -f yarn.lock ] && problems+="- yarn.lock present (delete: pnpm import && rm yarn.lock)\n"
-[ -f bun.lockb ] && problems+="- bun.lockb present (delete it; this project uses pnpm)\n"
+if [ -f package-lock.json ]; then
+  problems+="- package-lock.json present (delete: pnpm import && rm package-lock.json)\n"
+fi
+if [ -f yarn.lock ]; then
+  problems+="- yarn.lock present (delete: pnpm import && rm yarn.lock)\n"
+fi
+if [ -f bun.lockb ]; then
+  problems+="- bun.lockb present (delete it; this project uses pnpm)\n"
+fi
 
 if [ -f package.json ] && ! grep -q '"packageManager"[[:space:]]*:[[:space:]]*"pnpm@' package.json; then
   problems+="- package.json missing \"packageManager\": \"pnpm@<version>\" (run: corepack use pnpm@latest)\n"

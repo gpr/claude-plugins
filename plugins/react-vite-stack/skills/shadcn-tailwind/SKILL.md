@@ -1,6 +1,6 @@
 ---
 name: shadcn-tailwind
-description: Use when adding UI primitives, styling components, or theming. shadcn/ui CLI + Tailwind v4 conventions.
+description: "Applies shadcn/ui CLI and Tailwind v4 conventions for UI work. Invoke when adding UI primitives via the shadcn CLI, styling components with Tailwind utilities, or configuring the design-token theme."
 ---
 
 # shadcn/ui + Tailwind

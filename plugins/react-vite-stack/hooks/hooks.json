@@ -5,7 +5,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/enforce-pnpm.sh"
+            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/enforce-pnpm.sh",
+            "timeout": 10
           }
         ]
       }
@@ -16,7 +17,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/check-changed.sh"
+            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/check-changed.sh",
+            "timeout": 60
           }
         ]
       }

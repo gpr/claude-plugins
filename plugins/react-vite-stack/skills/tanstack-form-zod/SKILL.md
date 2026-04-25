@@ -1,6 +1,6 @@
 ---
 name: tanstack-form-zod
-description: Use when building forms. Schema-first with Zod; field-level + form-level validation; one shadcn input per field.
+description: "Scaffolds TanStack Form + Zod forms following schema-first conventions. Invoke when building a form, wiring field-level or form-level validation, adding async validation, or connecting form submit to a TanStack Query mutation."
 ---
 
 # TanStack Form + Zod

@@ -1,6 +1,6 @@
 ---
 name: tanstack-router
-description: Use when adding routes, route loaders, search params, or navigation. File-based routes with type-safe params.
+description: "Encodes file-based TanStack Router conventions with type-safe params and Zod-validated search params. Invoke when adding routes, writing route loaders, defining search param schemas, or navigating programmatically."
 ---
 
 # TanStack Router

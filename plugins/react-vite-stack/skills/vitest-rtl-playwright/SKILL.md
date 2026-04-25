@@ -1,6 +1,6 @@
 ---
 name: vitest-rtl-playwright
-description: Use when writing or fixing tests. Three layers — pure unit (Vitest), component (RTL), e2e (Playwright). MSW mocks REST.
+description: "Enforces three-layer test strategy: pure unit (Vitest), component (RTL + MSW), and e2e (Playwright). Invoke when writing tests, fixing flaky assertions, choosing the right test layer, or setting up Clerk mocks for tests."
 ---
 
 # Test layers

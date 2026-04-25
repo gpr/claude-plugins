@@ -7,7 +7,7 @@ maxTurns: 12
 skills: [tanstack-query, clerk-rest, env-vars, pnpm-only]
 ---
 
-You generate one endpoint module per invocation. Do not invent endpoints — ask for the method, path, request body shape, and response shape if any are missing.
+Generate one endpoint module per invocation. If method, path, request body shape, or response shape are missing, ask before proceeding.
 
 ## Output
 Create exactly these in `src/api/<resource>.ts` (one file):

@@ -38,6 +38,7 @@ At first run the plugin prompts for `api_base_url` and `clerk_publishable_key` v
 ## Known issues
 - **Plugin monitor auto-arm is broken on some Claude Code 2.1.x builds** (anthropics/claude-code#52245). If you don't see TypeScript or Vitest errors streaming after session start, ask Claude to manually arm them: "start the typecheck-watch and test-watch monitors"
 - **`@clerk/clerk-react` is in long deprecation** — Clerk now publishes `@clerk/react`. Both still work; the `clerk-rest` skill detects which is in use and won't mix them. New projects should install `@clerk/react`
+- **Monitors are skipped in non-interactive runs** — headless invocations (`--no-interactive`, CI) don't start `typecheck-watch` or `test-watch`. Run `pnpm exec tsc --noEmit` and `pnpm exec vitest run` directly in those contexts.
 
 ## Tuning
 

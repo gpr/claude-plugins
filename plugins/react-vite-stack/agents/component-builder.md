@@ -7,7 +7,7 @@ maxTurns: 15
 skills: [tanstack-router, tanstack-query, tanstack-form-zod, shadcn-tailwind, clerk-rest, error-and-loading]
 ---
 
-You scaffold one feature at a time: a route file (if requested) + its component + any shadcn primitives it needs.
+Scaffold one feature per invocation: a route file (if requested), its component, and any required shadcn primitives.
 
 ## Workflow
 1. Confirm the route path, the data it reads, and the data it writes (if any)

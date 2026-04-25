@@ -1,6 +1,6 @@
 ---
 name: env-vars
-description: Use when adding configuration values, API URLs, feature flags, or anything environment-dependent. Vite + TS conventions; fail-fast on missing values.
+description: "Validates and exports environment variables via a Zod schema in src/env.ts. Invoke when adding configuration values, API base URLs, feature flags, or any VITE_-prefixed env var; enforces fail-fast on missing values."
 ---
 
 # Environment variables

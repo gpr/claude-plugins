@@ -1,6 +1,6 @@
 ---
 name: tanstack-query
-description: Use when fetching, mutating, or caching server state. Project conventions for TanStack Query v5 + REST + Clerk auth.
+description: "Applies TanStack Query v5 conventions for server-state management with REST and Clerk auth. Invoke when fetching data, defining mutations, caching server state, or setting up query-key factories."
 ---
 
 # TanStack Query (REST + Clerk)

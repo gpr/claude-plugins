@@ -1,6 +1,6 @@
 ---
 name: zustand-slices
-description: Use when adding client-only state (UI state, ephemeral selections, multi-step flows). Server state belongs in TanStack Query, not here.
+description: "Applies the Zustand slices pattern for client-only state in this stack. Invoke when adding UI state (sidebar, theme), ephemeral cross-component selections, multi-step flow drafts, or deciding whether state belongs in Zustand vs TanStack Query."
 ---
 
 # Zustand (slices pattern)
