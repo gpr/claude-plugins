@@ -90,8 +90,8 @@ Every `*.md`, `hooks.json`, `monitors.json`, and `*.sh` file in `plugins/` is **
 
 ## Tips
 
-- `@agent-plugin-dev:plugin-validator` knows the docs at training time only. For new fields (`FileChanged`, monitor `when:`, agent `isolation: "worktree"`), cross-check `code.claude.com/docs/en/plugins-reference.md` via WebFetch before treating its findings as blocking.
-- To split a working tree where audit fixes and new features touch the same files (`hooks.json`, `monitors.json`, `CLAUDE.md`), prefer `git add -p` over snapshot/revert dance — picks lines, no scratch files needed.
+- `@agent-plugin-dev:plugin-validator` knows the docs at training time only. For new fields (`FileChanged`, monitor `when:`, agent `isolation: "worktree"`), cross-check `code.claude.com/docs/en/plugins-reference.md` via WebFetch — or delegate to `@agent-docs-cross-checker` (in `.claude/agents/`) — before treating its findings as blocking.
+- To split a working tree where audit fixes and new features touch the same files (`hooks.json`, `monitors.json`, `CLAUDE.md`), use `git add -p` for per-hunk staging. Avoid snapshotting state to `$TMPDIR` — it is not stable across sandboxed Bash calls.
 
 ## Sandbox gotchas
 

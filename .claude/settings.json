@@ -2,10 +2,39 @@
   "permissions": {
     "allow": [
       "Bash(shellcheck *)",
-      "Bash(trash *)"
+      "Bash(trash *)",
+      "Bash(mkdir -p *)",
+      "Bash(chmod +x *)",
+      "Bash(curl -s *)",
+      "Bash(yq *)",
+      "Bash(rg *)",
+      "Bash(fd *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git checkout *)",
+      "Bash(git worktree *)"
     ],
     "deny": [],
     "ask": []
   },
-  "enabledPlugins": {}
+  "enabledPlugins": {},
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "f=$(jq -r '.tool_input.file_path // empty'); case \"$f\" in *.json) jq . \"$f\" >/dev/null 2>&1 || { echo \"invalid JSON: $f\" >&2; exit 2; };; esac",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "f=$(jq -r '.tool_input.file_path // empty'); case \"$f\" in plugins/*/scripts/*.sh) chmod +x \"$f\" 2>/dev/null;; esac",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
 }
