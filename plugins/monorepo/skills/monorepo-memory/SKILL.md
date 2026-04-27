@@ -1,11 +1,11 @@
 ---
 name: monorepo-memory
-description: Manages CLAUDE.md memory files across a monorepo with frontend/, website/, and backends/<name>/ packages. Use when the user wants to update Claude memory, add context to CLAUDE.md, document a convention for Claude, decide where a piece of information should live (root vs package), or audit existing memory files for staleness or duplication. Triggers on phrases like "update CLAUDE.md", "add this to memory", "document for Claude", "Claude memory", "CLAUDE.md hygiene", or "where should I put this in memory".
+description: Manages CLAUDE.md memory files across a monorepo with frontend/, website/, and backends/<name>/ packages. Covers updating memory, adding context to CLAUDE.md, deciding root-vs-package placement, and auditing memory files for staleness or duplication. Trigger phrases include "update CLAUDE.md", "add this to memory", "document for Claude", "Claude memory", "CLAUDE.md hygiene", "where should I put this in memory".
 ---
 
 # Monorepo memory
 
-Memory is split across the monorepo. Each package owns its own `CLAUDE.md`; the repo root has one too. Place context at the right level and keep each file lean — that is the entire job of this skill.
+Memory is split across the monorepo. Each package owns its own `CLAUDE.md`; the repo root has one too. Place context at the right level and keep each file lean.
 
 ## File locations
 

@@ -1,9 +1,7 @@
 ---
 name: cog-versioning
-description: Knowledge about cocogito (cog) for conventional commits, semantic version bumping, and changelog generation in this monorepo. Use when the user wants to write a commit message, run cog verify, bump the version, regenerate the changelog, configure cog.toml, or understand the conventional-commit format. Triggers on phrases like "cog", "cocogito", "conventional commit", "bump version", "changelog", "commit message", or "cog verify".
+description: Provides cocogito (cog) conventions for conventional commits, semantic version bumping, and changelog generation in this monorepo. Invoked when writing commit messages, running `cog verify`, bumping the version, regenerating the changelog, configuring `cog.toml`, or explaining the conventional-commit format. Trigger phrases include "cog", "cocogito", "conventional commit", "bump version", "changelog", "commit message", "cog verify".
 ---
-
-# Cocogito versioning
 
 Cocogito (`cog`) lives at the repo root. It enforces conventional commits, derives the next version, and generates `CHANGELOG.md`. There is one repo-wide version — no per-package versions.
 

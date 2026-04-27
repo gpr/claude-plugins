@@ -1,0 +1,8 @@
+[
+  {
+    "name": "claude-md-staleness",
+    "description": "Daily audit: cross-checks every CLAUDE.md against Taskfile tasks and backends/* directories. Flags tasks no longer in Taskfile, backends listed in root CLAUDE.md but missing on disk, and files over 300 lines.",
+    "command": "${CLAUDE_PLUGIN_ROOT}/scripts/audit-memory.sh",
+    "interval": 86400
+  }
+]

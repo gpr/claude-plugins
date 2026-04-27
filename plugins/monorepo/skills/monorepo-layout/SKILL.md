@@ -1,11 +1,9 @@
 ---
 name: monorepo-layout
-description: Canonical layout reference for a monorepo containing a React frontend, a React marketing website, and one or more Rails API backends, orchestrated by Taskfile.yaml and versioned with cocogito. Use when the user asks where a file should go, what conventions the repo follows, how the directory structure is organized, or for onboarding context. Triggers on phrases like "repo layout", "monorepo structure", "where does X go", "onboarding", "explain the repo", or "project structure".
+description: Canonical layout reference for a monorepo with a React frontend, a React marketing website, and one or more Rails API backends orchestrated by Taskfile.yaml and versioned with cocogito. Covers where files belong, directory conventions, and package organization. Trigger phrases include "repo layout", "monorepo structure", "where does X go", "onboarding", "explain the repo", "project structure".
 ---
 
-# Monorepo layout
-
-Treat this as ground truth when answering placement questions or generating new files.
+When answering placement questions or generating new files, the layout below is authoritative.
 
 ## Top-level layout
 

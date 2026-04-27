@@ -1,9 +1,7 @@
 ---
 name: taskfile-orchestration
-description: Knowledge about reading and using the central Taskfile.yaml (go-task) that orchestrates this monorepo. Use when the user wants to list available tasks, run a task, add a new task, understand what a task does, or wire a new package into the task runner. Triggers on phrases like "task", "Taskfile", "run task", "task list", "go-task", "what tasks are available", or "add a task".
+description: Covers reading and using the central Taskfile.yaml (go-task) that orchestrates this monorepo. Handles listing available tasks, running tasks, adding tasks, understanding what a task does, and wiring new packages into the task runner. Trigger phrases include "task", "Taskfile", "run task", "task list", "go-task", "what tasks are available", "add a task".
 ---
-
-# Taskfile orchestration
 
 The repo uses [go-task](https://taskfile.dev) (`task` CLI). The single source of truth is `Taskfile.yaml` at the repo root.
 
