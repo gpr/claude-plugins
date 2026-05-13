@@ -1,0 +1,76 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ${CLAUDE_PLUGIN_ROOT}/scripts/setup.sh",
+            "async": true,
+            "timeout": 120
+          },
+          {
+            "type": "command",
+            "command": "bash ${CLAUDE_PLUGIN_ROOT}/scripts/advisory.sh",
+            "timeout": 20
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ${CLAUDE_PLUGIN_ROOT}/scripts/ruff-format-lint.sh",
+            "timeout": 30,
+            "if": "Write(*.py) || Edit(*.py)"
+          },
+          {
+            "type": "command",
+            "command": "bash ${CLAUDE_PLUGIN_ROOT}/scripts/auto-test.sh",
+            "async": true,
+            "timeout": 60,
+            "if": "Write(*.py) || Edit(*.py)"
+          },
+          {
+            "type": "command",
+            "command": "bash ${CLAUDE_PLUGIN_ROOT}/scripts/bandit.sh",
+            "async": true,
+            "timeout": 30,
+            "if": "Write(*.py) || Edit(*.py)"
+          },
+          {
+            "type": "command",
+            "command": "bash ${CLAUDE_PLUGIN_ROOT}/scripts/prettier-format.sh",
+            "timeout": 15,
+            "if": "Write(*.md) || Edit(*.md) || Write(*.json) || Edit(*.json) || Write(*.yaml) || Edit(*.yaml)"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ${CLAUDE_PLUGIN_ROOT}/scripts/dep-audit.sh",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "CwdChanged": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ${CLAUDE_PLUGIN_ROOT}/scripts/load-env.sh",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  }
+}

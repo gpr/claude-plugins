@@ -1,0 +1,21 @@
+{
+  "name": "python-uv-project",
+  "version": "0.1.0",
+  "description": "Opinionated Python uv development environment with pyright LSP, ruff auto-formatting/linting, and automatic test execution for uv-managed projects",
+  "author": {
+    "name": "Gregory Romé",
+    "email": "gregory.rome@teads.com"
+  },
+  "license": "MIT",
+  "keywords": [
+    "python",
+    "uv",
+    "ruff",
+    "pytest",
+    "lsp",
+    "pyright",
+    "hooks",
+    "auto-format",
+    "auto-test"
+  ]
+}

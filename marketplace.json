@@ -40,6 +40,14 @@
       "version": "0.1.0",
       "category": "devex",
       "tags": ["monorepo", "taskfile", "cocogito", "conventional-commits", "release"]
+    },
+    {
+      "name": "python-uv-project",
+      "description": "Opinionated Python uv development environment: ruff auto-format/lint, pytest with coverage gating, bandit security scanning, Pyright LSP integration, and dep auditing — all via PostToolUse hooks.",
+      "path": "plugins/python-uv-project",
+      "version": "0.1.0",
+      "category": "devex",
+      "tags": ["python", "uv", "ruff", "pytest", "pyright", "hooks", "auto-format", "auto-test"]
     }
   ]
 }
