@@ -1,0 +1,40 @@
+{
+  "name": "gpr-plugins",
+  "owner": {
+    "name": "Grégory Romé",
+    "email": "gregory.rome@gmail.com"
+  },
+  "description": "Personal Claude Code plugin collection",
+  "plugins": [
+    {
+      "name": "render",
+      "source": "./plugins/render",
+      "description": "Skills for working with Render.com - create and validate Render Blueprints (render.yaml) and use the Render CLI for deployments, database access, and service management"
+    },
+    {
+      "name": "rails-api-backend",
+      "source": "./plugins/rails",
+      "description": "Rails API backend authoring: routes/migrations/conventions skills, a rails-backend subagent, PostToolUse rubocop hook, and a dev-log monitor."
+    },
+    {
+      "name": "plugin-auditor",
+      "source": "./plugins/plugin-auditor",
+      "description": "Read-only auditor: fans out four parallel subagents to score skills, agents, hooks, and monitors against live docs, writes a prioritised plan to <plugin>/.claude/reviews/, and proposes bold new components. Never edits plugin files."
+    },
+    {
+      "name": "react-vite-stack",
+      "source": "./plugins/react-vite-stack",
+      "description": "Opinionated stack: pnpm + Vite + React + TS + TanStack (Router/Query/Form) + Zod + Zustand + shadcn/ui + Tailwind + Clerk + Vitest/RTL + Playwright"
+    },
+    {
+      "name": "monorepo",
+      "source": "./plugins/monorepo",
+      "description": "Orchestration plugin for monorepos with a frontend/ + website/ + backends/<name>/ layout, a central Taskfile.yaml, and cocogito-based versioning. Handles the monorepo layer: cross-package tasks, conventional commits, releases, and Claude memory hygiene."
+    },
+    {
+      "name": "python-uv-project",
+      "source": "./plugins/python-uv-project",
+      "description": "Opinionated Python uv development environment: ruff auto-format/lint, pytest with coverage gating, bandit security scanning, Pyright LSP integration, and dep auditing — all via PostToolUse hooks."
+    }
+  ]
+}
