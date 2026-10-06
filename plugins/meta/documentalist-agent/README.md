@@ -9,7 +9,7 @@ Claude Code plugin. Runs a `documentalist` agent in the background. Other agents
 /plugin install documentalist-agent@gpr-plugins
 ```
 
-Local test: `claude --plugin-dir ./workflows/documentalist-agent`
+Local test: `claude --plugin-dir ./plugins/meta/documentalist-agent`
 
 ## Use
 

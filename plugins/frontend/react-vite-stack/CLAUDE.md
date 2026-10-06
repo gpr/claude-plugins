@@ -62,7 +62,7 @@ For prompt-engineering and doc-alignment review, run `/plugin-auditor:audit-plug
 Test the plugin against a real React project without installing it:
 
 ```bash
-claude --plugin-dir /opt/gregory.rome/workspaces/gpr/claude-plugins/plugins/react-vite-stack
+claude --plugin-dir ./plugins/frontend/react-vite-stack
 ```
 
 Hook/monitor scripts must use `${CLAUDE_PLUGIN_ROOT}` for any internal paths — never hardcode. They run in the *user's* React project root, so they detect the repo via `git rev-parse --show-toplevel` patterns inside the script bodies.

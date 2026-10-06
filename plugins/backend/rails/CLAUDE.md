@@ -75,4 +75,4 @@ Run after any change:
 
 ## Parent context
 
-Repo-wide conventions (category placement, marketplace registration, plugin validator review) live in `../../CLAUDE.md`. This file does not repeat them.
+Repo-wide conventions (category placement, marketplace registration, plugin validator review) live in `../../../CLAUDE.md`. This file does not repeat them.

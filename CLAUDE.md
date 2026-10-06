@@ -7,16 +7,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 This repository is for developing Claude Code plugins. Use the `/plugin-dev:create-plugin` skill for guided plugin creation.
 
 **Important**:
-- Create each new plugin under `plugins/<plugin-name>/`. Set `category` in `marketplace.json` (e.g. `ai`, `devex`, `security`) for classification; reuse an existing category when relevant
+- Create each new plugin under `plugins/<domain>/<plugin-name>/`. The domain directory equals the `category` in `marketplace.json` (`backend`, `frontend`, `infra`, `meta`); add a new domain only when none fits
 - After creating a new plugin, add it to `marketplace.json` to make it available in the marketplace
 - After creating or modifying a plugin, review it with `@agent-plugin-dev:plugin-validator`
 - Follow [Conventional Commits](https://www.conventionalcommits.org/) for all git commits (`feat`/`fix`/`refactor`/`perf` for production; `chore`/`test`/`docs` otherwise). Use `fix` only for released issues; use `refactor` for pre-release bugs.
-- Plugins may carry their own `CLAUDE.md` for plugin-specific rules (see `plugins/rails/CLAUDE.md`). Parent context auto-loads.
+- Plugins may carry their own `CLAUDE.md` for plugin-specific rules (see `plugins/backend/rails/CLAUDE.md`). Parent context auto-loads.
 
 ## Plugin Architecture
 
 ```
-plugins/<plugin-name>/
+plugins/<domain>/<plugin-name>/
 ├── .claude-plugin/
 │   └── plugin.json    # Plugin manifest (only manifest goes here)
 ├── commands/          # Slash commands (Markdown files)

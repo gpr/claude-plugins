@@ -13,10 +13,10 @@ Thank you for your interest in contributing to the Claude Code Plugins repositor
 
 ### Directory Structure
 
-Create your plugin under `plugins/`:
+Create your plugin under `plugins/<domain>/` (`backend`, `frontend`, `infra`, `meta`):
 
 ```text
-plugins/your-plugin/
+plugins/<domain>/your-plugin/
 ├── .claude-plugin/
 │   └── plugin.json
 ├── commands/
