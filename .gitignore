@@ -3,3 +3,6 @@
 **/.claude/worktrees/
 **/.claude/plans/
 **/.claude/reviews/
+
+# Claude specific files
+.claude/branch-usage/
