@@ -47,6 +47,12 @@
       "source": "./plugins/meta/documentalist-agent",
       "description": "Background documentalist agent that answers other agents' codebase questions and maintains an OKF knowledge bundle in .kb/.",
       "category": "meta"
+    },
+    {
+      "name": "diataxis",
+      "source": "./plugins/meta/diataxis",
+      "description": "Generate and update documentation following the Diataxis framework using Repomix for codebase exploration",
+      "category": "meta"
     }
   ]
 }
