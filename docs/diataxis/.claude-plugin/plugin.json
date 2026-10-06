@@ -1,0 +1,8 @@
+{
+  "name": "diataxis",
+  "description": "Generate and update documentation following the Diataxis framework using Repomix for codebase exploration",
+  "version": "1.0.0",
+  "author": {
+    "name": "Claude Code Plugins"
+  }
+}
