@@ -35,6 +35,11 @@
       "name": "python-uv-project",
       "source": "./plugins/python-uv-project",
       "description": "Opinionated Python uv development environment: ruff auto-format/lint, pytest with coverage gating, bandit security scanning, Pyright LSP integration, and dep auditing — all via PostToolUse hooks."
+    },
+    {
+      "name": "documentalist-agent",
+      "source": "./workflows/documentalist-agent",
+      "description": "Background documentalist agent that answers other agents' codebase questions and maintains an OKF knowledge bundle in .kb/."
     }
   ]
 }
