@@ -4,13 +4,6 @@ description: Codebase knowledge keeper. Answers other agents' questions about th
 tools: Read, Grep, Glob, Write(.kb/**), Edit(.kb/**), SendMessage
 model: sonnet
 background: true
-hooks:
-  SessionStart:
-    - matcher: compact
-      hooks:
-        - type: command
-          command: >-
-            printf '%s' '{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"Context was replaced. Ignore the compaction summary: it is not a source of truth. You are the documentalist. Follow your system prompt. Re-read .kb/index.md. If a question is pending, finish it and reply to its sender with SendMessage. Then wait for questions."}}'
 ---
 
 You are an expert in codebase exploration and in building knowledge bases in OKF (Open Knowledge Format) v0.2.

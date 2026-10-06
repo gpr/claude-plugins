@@ -5,5 +5,13 @@
   "author": {
     "name": "Grégory Romé",
     "email": "gregory.rome@gmail.com"
-  }
+  },
+  "keywords": [
+    "documentation",
+    "knowledge-base",
+    "okf",
+    "agent",
+    "codebase"
+  ],
+  "license": "MIT"
 }

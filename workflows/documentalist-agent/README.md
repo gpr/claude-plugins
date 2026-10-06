@@ -6,10 +6,10 @@ Claude Code plugin. Runs a `documentalist` agent in the background. Other agents
 
 ```
 /plugin marketplace add <path-or-repo>
-/plugin install documentalist-agent@cc-documentalist
+/plugin install documentalist-agent@gpr-plugins
 ```
 
-Local test: `claude --plugin-dir ./plugins/documentalist-agent`
+Local test: `claude --plugin-dir ./workflows/documentalist-agent`
 
 ## Use
 
@@ -25,8 +25,6 @@ Limits:
 
 - A subagent can act on the hint only if its tool list includes `SendMessage` and `ListAgents`. Custom agents with a restricted `tools:` list must add them.
 - Subagents spawned before `/documentalist-agent:start` find no documentalist and explore themselves.
-
-The agent file also has an inline `SessionStart` hook in its frontmatter. Claude Code ignores frontmatter hooks for plugin agents, so it runs only if you copy the agent to `.claude/agents/`. Inside the plugin, `hooks/hooks.json` covers it.
 
 It answers with `path:line` evidence and updates `.kb/` (`index.md`, `catalog.md`, `log.md`, concepts). It never edits source code.
 
