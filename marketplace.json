@@ -7,7 +7,13 @@
       "path": "plugins/render",
       "version": "1.0.0",
       "category": "devops",
-      "tags": ["render", "deployment", "infrastructure", "cli", "blueprint"]
+      "tags": [
+        "render",
+        "deployment",
+        "infrastructure",
+        "cli",
+        "blueprint"
+      ]
     },
     {
       "name": "rails-api-backend",
@@ -15,7 +21,14 @@
       "path": "plugins/rails",
       "version": "0.1.0",
       "category": "devex",
-      "tags": ["rails", "ruby", "api", "backend", "rubocop", "rspec"]
+      "tags": [
+        "rails",
+        "ruby",
+        "api",
+        "backend",
+        "rubocop",
+        "rspec"
+      ]
     },
     {
       "name": "plugin-auditor",
@@ -23,7 +36,13 @@
       "path": "plugins/plugin-auditor",
       "version": "0.1.0",
       "category": "devex",
-      "tags": ["review", "quality", "audit", "meta", "prompt-engineering"]
+      "tags": [
+        "review",
+        "quality",
+        "audit",
+        "meta",
+        "prompt-engineering"
+      ]
     },
     {
       "name": "react-vite-stack",
@@ -31,7 +50,15 @@
       "path": "plugins/react-vite-stack",
       "version": "1.1.0",
       "category": "devex",
-      "tags": ["react", "vite", "typescript", "tanstack", "clerk", "shadcn", "zustand"]
+      "tags": [
+        "react",
+        "vite",
+        "typescript",
+        "tanstack",
+        "clerk",
+        "shadcn",
+        "zustand"
+      ]
     },
     {
       "name": "monorepo",
@@ -39,7 +66,13 @@
       "path": "plugins/monorepo",
       "version": "0.1.0",
       "category": "devex",
-      "tags": ["monorepo", "taskfile", "cocogito", "conventional-commits", "release"]
+      "tags": [
+        "monorepo",
+        "taskfile",
+        "cocogito",
+        "conventional-commits",
+        "release"
+      ]
     },
     {
       "name": "python-uv-project",
@@ -47,7 +80,30 @@
       "path": "plugins/python-uv-project",
       "version": "0.1.0",
       "category": "devex",
-      "tags": ["python", "uv", "ruff", "pytest", "pyright", "hooks", "auto-format", "auto-test"]
+      "tags": [
+        "python",
+        "uv",
+        "ruff",
+        "pytest",
+        "pyright",
+        "hooks",
+        "auto-format",
+        "auto-test"
+      ]
+    },
+    {
+      "name": "documentalist-agent",
+      "description": "Background documentalist agent that answers other agents' codebase questions and maintains an OKF knowledge bundle in .kb/",
+      "path": "workflows/documentalist-agent",
+      "version": "0.2.0",
+      "category": "workflows",
+      "tags": [
+        "documentation",
+        "knowledge-base",
+        "okf",
+        "agent",
+        "codebase"
+      ]
     }
   ]
 }

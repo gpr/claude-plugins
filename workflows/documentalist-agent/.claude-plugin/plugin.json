@@ -1,0 +1,9 @@
+{
+  "name": "documentalist-agent",
+  "version": "0.2.0",
+  "description": "Background documentalist agent that answers other agents' codebase questions and maintains an OKF knowledge bundle in .kb/.",
+  "author": {
+    "name": "Grégory Romé",
+    "email": "gregory.rome@gmail.com"
+  }
+}
