@@ -48,7 +48,8 @@ jobs:
 
       # Commit first: if main moved meanwhile this fails before any tag is published,
       # and the next run recomputes from the last pushed tags.
+      # Tags go in batches of 5: a repository ruleset rejects larger pushes.
       - name: Push commits, then tags
         run: |
           git push origin HEAD:main
-          git push origin --tags
+          scripts/release/push-tags.sh origin
