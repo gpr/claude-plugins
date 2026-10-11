@@ -1,6 +1,6 @@
 {
   "name": "code-outline",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Intercepts full-file Read calls on source files and returns a cached outline (sections, line ranges, intra-file call graph, Haiku descriptions) so the agent reads only what matters. Outlines live in .kb/files/.",
   "author": {
     "name": "Grégory Romé",

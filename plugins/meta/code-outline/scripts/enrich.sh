@@ -38,7 +38,7 @@ snapshot="$(cat "$kb")" || exit 0
 grep -qx "source_sha256: $sha" <<<"$snapshot" || exit 0
 grep -qx "status: skeleton" <<<"$snapshot" || exit 0
 
-prompt="Below is a code outline skeleton followed by the source file. For every section header of the outline (the 'L<start>-<end>' ranges, including 'preamble' if present), write ONE short sentence (max 20 words) saying what the section does and when a reader would need it. Reply with ONLY a JSON object mapping the exact range string (e.g. \"L31-58\") to the sentence.
+prompt="Below is a code outline skeleton followed by the source file. For every section header of the outline (the 'L<start>-<end>' ranges, including 'preamble' and 'epilogue' if present), write ONE short sentence (max 20 words) saying what the section does and when a reader would need it. Reply with ONLY a JSON object mapping the exact range string (e.g. \"L31-58\") to the sentence.
 
 === OUTLINE ===
 $snapshot
@@ -46,10 +46,10 @@ $snapshot
 === SOURCE ===
 $(cat "$src")"
 
-result="$(printf '%s' "$prompt" | CODE_OUTLINE_INNER=1 "${limit[@]}" env -u CLAUDECODE claude -p --model haiku --tools "" --strict-mcp-config --no-session-persistence --output-format json 2>/dev/null | jq -r '.result // empty')" || exit 0
+result="$(printf '%s' "$prompt" | CODE_OUTLINE_INNER=1 ${limit[@]+"${limit[@]}"} env -u CLAUDECODE claude -p --model haiku --tools "" --strict-mcp-config --no-session-persistence --output-format json 2>/dev/null | jq -r '.result // empty')" || exit 0
 [[ -n "$result" ]] || exit 0
 # strip optional ``` fences
-map="$(sed -e '/^```/d' <<<"$result" | jq -c 'if type=="object" then . else empty end' 2>/dev/null)" || exit 0
+map="$(sed -e '/^```/d' <<<"$result" | jq -c 'if type=="object" and length > 0 then . else empty end' 2>/dev/null)" || exit 0
 [[ -n "$map" ]] || exit 0
 
 # Apply to the snapshot (not the live file) so descriptions can't land on a newer outline.
@@ -60,6 +60,7 @@ jq -r 'to_entries[] | "\(.key)\t\(.value)"' <<<"$map" | awk -F'\t' '
   /^status: skeleton$/ { print "status: enriched"; next }
   { print }
 ' - <(printf '%s\n' "$snapshot") >"$tmp" || exit 0
+[[ -s "$tmp" ]] || exit 0
 
 # Final check right before the swap: the live outline must still be for this source.
 [[ "$(sha256 "$src")" == "$sha" ]] || exit 0
