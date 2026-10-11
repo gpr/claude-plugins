@@ -56,6 +56,12 @@ if [[ "$cached_sha" != "$src_sha" ]]; then
   uv run --quiet --script "$plugin_root/scripts/outline.py" "$abs_path" "$rel_path" "$src_sha" >"$tmp" 2>/dev/null || exit 0
   [[ -s "$tmp" ]] || exit 0
   mv "$tmp" "$kb_file" || exit 0
+  enrich=1
+elif grep -qx 'status: skeleton' "$kb_file" && [[ ! -d "$kb_file.lock.d" ]]; then
+  # a previous enrichment died or failed: retry it
+  enrich=1
+fi
+if [[ -n "${enrich:-}" ]]; then
   nohup bash "$plugin_root/scripts/enrich.sh" "$abs_path" "$kb_file" "$src_sha" >/dev/null 2>&1 &
   disown 2>/dev/null || true
 fi

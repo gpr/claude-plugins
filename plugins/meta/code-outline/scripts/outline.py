@@ -65,8 +65,10 @@ def callee_name(call):
 def collect_defs(node, out, depth=0):
     for ch in node.children:
         if ch.type in DEF_TYPES and name_of(ch):
+            # Python: start at the decorators so reading the range includes them
+            top = ch.parent if ch.parent is not None and ch.parent.type == "decorated_definition" else ch
             out.append({"node": ch, "name": name_of(ch), "depth": depth,
-                        "start": ch.start_point[0] + 1, "end": ch.end_point[0] + 1})
+                        "start": top.start_point[0] + 1, "end": ch.end_point[0] + 1})
             collect_defs(ch, out, depth + 1)
         elif is_func_declarator(ch):
             # span the whole statement so `export const` is included
@@ -138,6 +140,10 @@ def main():
         if parts:
             out.append("- " + " · ".join(parts))
         out += ["- desc: _(pending)_", ""]
+    last = max(d["end"] for d in defs)
+    if last < total:
+        # top-level code after the last definition (e.g. `if __name__ == "__main__":`)
+        out += [f"## L{last + 1}-{total} epilogue", "- desc: _(pending)_", ""]
     print("\n".join(out))
 
 
