@@ -37,6 +37,6 @@ The hook fails open: any error lets the normal Read happen.
 
 ## Searching the cache
 
-The `kb-grep` skill (`scripts/kb-grep.py`, stdlib Python) greps the outlines and prints `path:start-end  signature — description  [call graph]`, so the agent can jump straight to the right range. Hits from outlines whose source changed are marked stale.
+The plugin registers a `kb_grep` tool (`mcp__code-outline__kb_grep`, from `hooks/register.ts`). It runs `rg` over `.kb/files/` and returns `path:start-end  signature — description  [call graph]` per section, so the agent can `Read` just that range. Inputs: `pattern` (regex), `fixed` (literal), `scope` (`all` or `signature` for exact name lookups), `path` (glob on the source path), `max`. Hits from outlines whose source changed are marked stale.
 
-Requires `jq`, `uv`, the `claude` CLI, and `sha256sum` or `shasum`. A SessionStart hook pre-fetches the tree-sitter dependency so the first Read stays under the hook timeout.
+Requires Claude Code with function-hook modules (2.1.296 tested), `jq`, `uv`, `rg`, the `claude` CLI, and `sha256sum` or `shasum`. A SessionStart hook pre-fetches the tree-sitter dependency so the first Read stays under the hook timeout.
