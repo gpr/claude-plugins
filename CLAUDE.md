@@ -8,7 +8,8 @@ This repository is for developing Claude Code plugins. Use the `/plugin-dev:crea
 
 **Important**:
 - Create each new plugin under `plugins/<domain>/<plugin-name>/`. The domain directory equals the `category` in `marketplace.json` (`backend`, `frontend`, `infra`, `meta`); add a new domain only when none fits
-- After creating a new plugin, add it to `marketplace.json` to make it available in the marketplace
+- After creating a new plugin, add it to `marketplace.json` to make it available in the marketplace, and to `cog.toml` `[monorepo.packages]` (key = plugin.json `name`) so it gets versioned. Check with `scripts/release/check-registry.sh`
+- Never hand-edit `version` in `plugin.json` or any plugin `CHANGELOG.md`; see [Versioning](#versioning)
 - After creating or modifying a plugin, review it with `@agent-plugin-dev:plugin-validator`
 - Follow [Conventional Commits](https://www.conventionalcommits.org/) for all git commits (`feat`/`fix`/`refactor`/`perf` for production; `chore`/`test`/`docs` otherwise). Use `fix` only for released issues; use `refactor` for pre-release bugs.
 - Plugins may carry their own `CLAUDE.md` for plugin-specific rules (see `plugins/backend/rails/CLAUDE.md`). Parent context auto-loads.
@@ -63,6 +64,16 @@ After any plugin change, run:
 4. `/plugin-auditor:audit-plugin <plugin-path>` — prompt-engineering and doc-alignment audit
 
 Use `${CLAUDE_PLUGIN_ROOT}` for all script paths in hooks/MCP config. Never hardcode absolute paths.
+
+## Versioning
+
+Each plugin is versioned independently by cocogitto (`cog.toml`, workflows in `.github/workflows/`). On every push to `main`, `release.yml` runs `cog bump --auto`: for each plugin whose directory changed since its last `<plugin>-<version>` tag it computes the bump from the conventional commits, rewrites `plugin.json` `version`, writes `<plugin>/CHANGELOG.md`, commits, tags and pushes.
+
+- `feat` → minor; `fix`/`perf` → patch; `!` or `BREAKING CHANGE:` → major; `refactor`/`docs`/`chore`/`test` → no bump. Commit scope is cosmetic, bumping follows the touched paths.
+- PRs are squash-merged: the PR title is the commit cog reads, and `pr-checks.yml` runs `cog verify` on it.
+- Because only `feat`/`fix`/`perf` release, use `refactor` (not `fix`) for pre-release bugs, as above.
+- Local dry run: `cog bump --auto --dry-run` (needs cocogitto 7.x; tags come from `git fetch --tags`).
+- The release workflow pushes to `main` with `GITHUB_TOKEN`; if `main` ever requires PRs, give the Actions bot a ruleset bypass.
 
 ## Plugin Components
 
