@@ -1,0 +1,54 @@
+name: release
+
+# Bump each plugin's plugin.json version + CHANGELOG.md from the conventional
+# commits that touched it, tag "<plugin>-<version>", and push to main.
+# Pushes made with GITHUB_TOKEN do not retrigger workflows.
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - uses: cocogitto/cocogitto-action@v4.2.0
+        with:
+          install-only: true
+
+      # cog.toml uses [monorepo.packages], which needs cocogitto 7.
+      - name: Require cocogitto 7.x
+        run: cog --version | grep -E '^cog 7\.'
+
+      - name: Configure git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Seed tags for unreleased plugins
+        env:
+          BEFORE: ${{ github.event.before }}
+        run: scripts/release/bootstrap-tags.sh "$BEFORE"
+
+      # Exits 0 with "No conventional commits found ..." when nothing needs a bump.
+      - name: Bump versions
+        run: cog bump --auto --skip-ci
+
+      # Commit first: if main moved meanwhile this fails before any tag is published,
+      # and the next run recomputes from the last pushed tags.
+      - name: Push commits, then tags
+        run: |
+          git push origin HEAD:main
+          git push origin --tags

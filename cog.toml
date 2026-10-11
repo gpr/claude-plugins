@@ -1,0 +1,31 @@
+# Cocogitto: per-plugin versioning. See CLAUDE.md "Versioning".
+# Tags are "<plugin>-<x.y.z>"; there is no repo-wide version.
+tag_prefix = ""
+branch_whitelist = ["main"]
+ignore_merge_commits = true
+generate_mono_repository_global_tag = false
+
+# Runs with cwd = the package path, before the version commit is created.
+pre_package_bump_hooks = [
+  "jq --arg v '{{version}}' '.version = $v' .claude-plugin/plugin.json > .claude-plugin/plugin.json.tmp && mv .claude-plugin/plugin.json.tmp .claude-plugin/plugin.json",
+]
+
+[changelog]
+path = "CHANGELOG.md"
+template = "remote"
+remote = "github.com"
+owner = "gpr"
+repository = "claude-plugins"
+
+# Key = plugin.json "name". Keep in sync with marketplace.json
+# (enforced by scripts/release/check-registry.sh).
+[monorepo.packages]
+render = { path = "plugins/infra/render", changelog_path = "plugins/infra/render/CHANGELOG.md" }
+monorepo = { path = "plugins/infra/monorepo", changelog_path = "plugins/infra/monorepo/CHANGELOG.md" }
+rails-api-backend = { path = "plugins/backend/rails", changelog_path = "plugins/backend/rails/CHANGELOG.md" }
+python-uv-project = { path = "plugins/backend/python-uv-project", changelog_path = "plugins/backend/python-uv-project/CHANGELOG.md" }
+react-vite-stack = { path = "plugins/frontend/react-vite-stack", changelog_path = "plugins/frontend/react-vite-stack/CHANGELOG.md" }
+plugin-auditor = { path = "plugins/meta/plugin-auditor", changelog_path = "plugins/meta/plugin-auditor/CHANGELOG.md" }
+documentalist-agent = { path = "plugins/meta/documentalist-agent", changelog_path = "plugins/meta/documentalist-agent/CHANGELOG.md" }
+diataxis = { path = "plugins/meta/diataxis", changelog_path = "plugins/meta/diataxis/CHANGELOG.md" }
+code-outline = { path = "plugins/meta/code-outline", changelog_path = "plugins/meta/code-outline/CHANGELOG.md" }

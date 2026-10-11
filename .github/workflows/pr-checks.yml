@@ -1,0 +1,31 @@
+name: pr-checks
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  # PRs are squash-merged, so the PR title is the commit cog reads on main.
+  title:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: cocogitto/cocogitto-action@v4.2.0
+        with:
+          install-only: true
+      # cog.toml uses [monorepo.packages], which needs cocogitto 7.
+      - name: Require cocogitto 7.x
+        run: cog --version | grep -E '^cog 7\.'
+      - name: Verify conventional commit title
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: cog verify "$PR_TITLE"
+
+  # A plugin missing from cog.toml is silently never versioned.
+  registry:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: scripts/release/check-registry.sh
