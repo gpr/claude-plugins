@@ -24,18 +24,33 @@ DEF_TYPES = {
     "function_definition", "function_declaration", "function_item", "method_definition",
     "method_declaration", "method", "singleton_method", "class_definition", "class_declaration",
     "class", "module", "struct_item", "impl_item", "trait_item", "enum_item", "interface_declaration",
-    "constructor_declaration", "arrow_function_named",
+    "constructor_declaration",
 }
-CONTAINERS = {
-    "class_definition", "class_declaration", "class", "module", "impl_item", "trait_item",
-    "interface_declaration", "class_body", "declaration_list", "block", "body_statement",
-}
+FUNC_VALUES = {"arrow_function", "function_expression", "function"}
 CALL_TYPES = {"call", "call_expression", "method_invocation", "invocation_expression", "command"}
 
 
 def name_of(node):
-    n = node.child_by_field_name("name") or node.child_by_field_name("type")
+    n = node.child_by_field_name("name")
+    if n is None:
+        # C/C++: the name sits under nested declarators (int *f(void) -> function_declarator -> identifier)
+        d = node.child_by_field_name("declarator")
+        while d is not None and d.child_by_field_name("declarator") is not None:
+            d = d.child_by_field_name("declarator")
+        if d is not None and d.type == "function_declarator":
+            d = d.child_by_field_name("declarator") or d
+        n = d
+    if n is None and node.type == "impl_item":
+        n = node.child_by_field_name("type")  # Rust: impl Foo { ... }
     return n.text.decode(errors="replace") if n else None
+
+
+def is_func_declarator(node):
+    """JS/TS: `const f = () => {}` / `const f = function () {}`."""
+    if node.type != "variable_declarator":
+        return False
+    v = node.child_by_field_name("value")
+    return v is not None and v.type in FUNC_VALUES and node.child_by_field_name("name") is not None
 
 
 def callee_name(call):
@@ -53,13 +68,21 @@ def collect_defs(node, out, depth=0):
             out.append({"node": ch, "name": name_of(ch), "depth": depth,
                         "start": ch.start_point[0] + 1, "end": ch.end_point[0] + 1})
             collect_defs(ch, out, depth + 1)
+        elif is_func_declarator(ch):
+            # span the whole statement so `export const` is included
+            outer = ch.parent if ch.parent and ch.parent.type in ("lexical_declaration", "variable_declaration") else ch
+            if outer.parent is not None and outer.parent.type == "export_statement":
+                outer = outer.parent
+            out.append({"node": ch, "name": name_of(ch), "depth": depth, "span": outer,
+                        "start": outer.start_point[0] + 1, "end": outer.end_point[0] + 1})
+            collect_defs(ch, out, depth + 1)
         else:
             collect_defs(ch, out, depth)
 
 
 def calls_in(node, acc, top=True):
     # skip nested definitions: they report their own calls
-    if not top and node.type in DEF_TYPES and name_of(node):
+    if not top and ((node.type in DEF_TYPES and name_of(node)) or is_func_declarator(node)):
         return
     if node.type in CALL_TYPES:
         n = callee_name(node)
@@ -70,6 +93,8 @@ def calls_in(node, acc, top=True):
 
 
 def main():
+    if sys.argv[1:2] == ["--warm"]:
+        sys.exit(0)  # only used to pre-fetch dependencies via `uv run --script`
     abs_path, rel_path, sha = sys.argv[1:4]
     ext = Path(abs_path).suffix.lstrip(".")
     lang = LANGS.get(ext)
@@ -99,9 +124,9 @@ def main():
            "---", f"# {rel_path}", ""]
     first = min(d["start"] for d in defs)
     if first > 1:
-        out += [f"## L1-{first - 1} preamble", ""]
+        out += [f"## L1-{first - 1} preamble", "- desc: _(pending)_", ""]
     for d in sorted(defs, key=lambda x: (x["start"], x["depth"])):
-        sig = d["node"].text.decode(errors="replace").splitlines()[0].strip()[:120]
+        sig = (d.get("span") or d["node"]).text.decode(errors="replace").splitlines()[0].strip()[:120]
         out.append(f"{'#' * min(d['depth'] + 2, 6)} L{d['start']}-{d['end']} {sig}")
         parts = []
         if d["calls"]:

@@ -6,6 +6,12 @@ set -uo pipefail
 [[ "${CODE_OUTLINE_DISABLE:-0}" == "1" || "${CODE_OUTLINE_INNER:-0}" == "1" ]] && exit 0
 command -v jq &>/dev/null && command -v uv &>/dev/null || exit 0
 
+sha256() {
+  if command -v sha256sum &>/dev/null; then sha256sum "$1" | cut -d' ' -f1
+  elif command -v shasum &>/dev/null; then shasum -a 256 "$1" | cut -d' ' -f1
+  fi
+}
+
 plugin_root="${CLAUDE_PLUGIN_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
 min_lines="${CODE_OUTLINE_MIN_LINES:-200}"
 
@@ -31,29 +37,31 @@ case "${abs_path##*.}" in
   *) exit 0 ;;
 esac
 
-lines="$(wc -l <"$abs_path")"
+# awk counts a last line that has no trailing newline (wc -l does not)
+lines="$(awk 'END{print NR}' "$abs_path")"
 (( lines >= min_lines )) || exit 0
 
 rel_path="${abs_path#"$project_root"/}"
 kb_file="$project_root/.kb/files/$rel_path.md"
-src_sha="$(sha256sum "$abs_path" | cut -d' ' -f1)"
+src_sha="$(sha256 "$abs_path")"
+[[ -n "$src_sha" ]] || exit 0
 
 cached_sha=""
 [[ -f "$kb_file" ]] && cached_sha="$(grep -m1 '^source_sha256: ' "$kb_file" | cut -d' ' -f2)"
 
 if [[ "$cached_sha" != "$src_sha" ]]; then
-  mkdir -p "$(dirname "$kb_file")" || exit 0
+  mkdir -p "$(dirname "$kb_file")" 2>/dev/null || exit 0
   tmp="$kb_file.tmp.$$"
-  if ! uv run --quiet --script "$plugin_root/scripts/outline.py" "$abs_path" "$rel_path" "$src_sha" >"$tmp" 2>/dev/null || [[ ! -s "$tmp" ]]; then
-    rm -f "$tmp"
-    exit 0
-  fi
-  mv "$tmp" "$kb_file"
+  trap 'rm -f "$tmp"' EXIT
+  uv run --quiet --script "$plugin_root/scripts/outline.py" "$abs_path" "$rel_path" "$src_sha" >"$tmp" 2>/dev/null || exit 0
+  [[ -s "$tmp" ]] || exit 0
+  mv "$tmp" "$kb_file" || exit 0
   nohup bash "$plugin_root/scripts/enrich.sh" "$abs_path" "$kb_file" "$src_sha" >/dev/null 2>&1 &
   disown 2>/dev/null || true
 fi
 
-body="$(cat "$kb_file")"
+body="$(cat "$kb_file")" || exit 0
+[[ -n "$body" ]] || exit 0
 reason="Full read blocked by code-outline: $rel_path has $lines lines. Outline below (cached at .kb/files/$rel_path.md). Read only the sections you need with offset/limit. To read the whole file anyway, pass offset=1 and limit=$lines.
 
 $body"

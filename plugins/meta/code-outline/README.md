@@ -35,4 +35,4 @@ The hook fails open: any error lets the normal Read happen.
 | `CODE_OUTLINE_MIN_LINES` | `200` | files shorter than this are read normally |
 | `CODE_OUTLINE_MAX_BYTES` | `200000` | larger files skip Haiku enrichment |
 
-Requires `jq`, `uv`, `flock` and the `claude` CLI.
+Requires `jq`, `uv`, the `claude` CLI, and `sha256sum` or `shasum`. A SessionStart hook pre-fetches the tree-sitter dependency so the first Read stays under the hook timeout.

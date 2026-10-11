@@ -11,6 +11,19 @@
           }
         ]
       }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "startup",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "uv run --quiet --script ${CLAUDE_PLUGIN_ROOT}/scripts/outline.py --warm",
+            "async": true,
+            "timeout": 120
+          }
+        ]
+      }
     ]
   }
 }
