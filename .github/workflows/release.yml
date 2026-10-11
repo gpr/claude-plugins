@@ -28,6 +28,10 @@ jobs:
         with:
           install-only: true
 
+      # cog.toml uses [monorepo.packages], which needs cocogitto 7.
+      - name: Require cocogitto 7.x
+        run: cog --version | grep -E '^cog 7\.'
+
       - name: Configure git identity
         run: |
           git config user.name "github-actions[bot]"

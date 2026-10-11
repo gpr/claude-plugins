@@ -73,6 +73,7 @@ Each plugin is versioned independently by cocogitto (`cog.toml`, workflows in `.
 - PRs are squash-merged: the PR title is the commit cog reads, and `pr-checks.yml` runs `cog verify` on it.
 - Because only `feat`/`fix`/`perf` release, use `refactor` (not `fix`) for pre-release bugs, as above.
 - Local dry run: `cog bump --auto --dry-run` (needs cocogitto 7.x; tags come from `git fetch --tags`).
+- CI pins `cocogitto-action@v4.2.0` (installs cog 7.0.0) and fails unless `cog --version` is 7.x. Don't use the floating `v4` tag: it installs 6.x, which can't read `[monorepo.packages]`.
 - The release workflow pushes to `main` with `GITHUB_TOKEN`; if `main` ever requires PRs, give the Actions bot a ruleset bypass.
 
 ## Plugin Components
