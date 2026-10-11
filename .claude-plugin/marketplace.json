@@ -53,6 +53,12 @@
       "source": "./plugins/meta/diataxis",
       "description": "Generate and update documentation following the Diataxis framework using Repomix for codebase exploration",
       "category": "meta"
+    },
+    {
+      "name": "code-outline",
+      "source": "./plugins/meta/code-outline",
+      "description": "PreToolUse hook on Read: replaces full reads of large source files with a cached outline (sections, call graph, Haiku descriptions) stored in .kb/files/, refreshed by source hash.",
+      "category": "meta"
     }
   ]
 }
