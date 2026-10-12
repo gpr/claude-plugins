@@ -9,6 +9,10 @@
 #     - Anything else (new plugin, all-zero sha) is tagged on a new empty seed commit
 #       on top of HEAD. cog counts a commit that is itself tagged as unreleased, so
 #       tagging HEAD would bump the plugin on its own introduction.
+#   If the push changed .github/workflows, <before-sha> is replaced by the last
+#   commit that touched them: GitHub refuses a GITHUB_TOKEN push of a new ref whose
+#   workflow files differ from main ("without `workflows` permission"). Plugin
+#   commits before that one are then not evaluated for this first bump.
 #
 # Needs git user.name/user.email configured when a seed commit is required.
 set -euo pipefail
@@ -20,6 +24,15 @@ here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 if ! git rev-parse -q --verify "${before}^{commit}" >/dev/null 2>&1; then
   before=""
+fi
+
+workflows=.github/workflows
+if [ -n "$before" ] && ! git diff --quiet "$before" HEAD -- "$workflows"; then
+  before="$(git log -1 --format=%H HEAD -- "$workflows")"
+  if [ -z "$before" ] || ! git diff --quiet "$before" HEAD -- "$workflows"; then
+    before=""
+  fi
+  echo "bootstrap: push changed $workflows, tagging at ${before:-a seed commit} instead"
 fi
 
 seeded=()
