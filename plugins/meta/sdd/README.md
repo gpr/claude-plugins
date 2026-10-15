@@ -58,7 +58,8 @@ creates `specs/ adr/ changes/ tests/acceptance/` and `.claude/sdd.json`: set
   - `acceptance-tester` writes only the acceptance tests and `tasks.md`.
   - `implementer` can never touch the acceptance tests, the spec or the ADRs.
   - `verifier` writes nothing.
-  - No subagent edits `.claude/`.
+  - No subagent edits `.claude/`, or changes a `status:` line in `intent.md` or an ADR
+    (that is `sdd set-status` / `sdd adr-accept`, lead only).
 
   If the guard itself fails, it refuses subagents' calls and lets the lead's through.
 - **`sdd` tool.** Agents call `mcp__sdd__sdd` with `args` instead of a script path, and

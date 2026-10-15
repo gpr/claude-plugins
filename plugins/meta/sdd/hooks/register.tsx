@@ -150,7 +150,7 @@ export const register: Register = on => {
       description: 'Spec-driven workflow: open the status pane (or `/sdd refresh`)',
       argumentHint: '[refresh]',
     })
-    await refreshChanges($)
+    void refreshChanges($)
     $.clock.every(4_000, () => void refreshAgents($))
     $.clock.every(30_000, () => void refreshChanges($))
 
@@ -197,11 +197,24 @@ export const register: Register = on => {
     if (!WRITE_TOOLS.has(tool) && tool !== 'Bash') return next(e)
 
     const role = await roleFor($, e.agentId)
-    const root = await $.session.root()
+    if (tool === 'Bash' && role === 'lead') return next(e)
+    // the root sdd.py resolved (where specs/ and .claude/sdd.json live), else the session's
+    const root = (await read($, rootDir)) || (await $.session.root())
     const cwd = await $.session.cwd()
     const bases = cwd === root ? [root] : [cwd, root]
     const cfg = await loadCfg($, root)
-    const input = e as unknown as { file_path?: string; notebook_path?: string; command?: string }
+    const input = e as unknown as {
+      file_path?: string
+      notebook_path?: string
+      command?: string
+      content?: string
+      new_string?: string
+      new_source?: string
+      edits?: { new_string?: string }[]
+    }
+    const written = [input.content, input.new_string, input.new_source, ...(input.edits ?? []).map(x => x.new_string)]
+      .filter((s): s is string => typeof s === 'string')
+      .join('\n')
 
     let reason: string | undefined
     let touchesChanges = false
@@ -214,7 +227,7 @@ export const register: Register = on => {
         if (hit === undefined) {
           reason = role === 'lead' ? undefined : `${path} is outside the project.`
         } else {
-          reason = await checkPath(hit.rel, role, cfg, lookupAt($, hit.base, cfg))
+          reason = await checkPath(hit.rel, role, cfg, lookupAt($, hit.base, cfg), written)
           touchesChanges = hit.rel.startsWith(`${cfg.changes_dir}/`)
         }
       }

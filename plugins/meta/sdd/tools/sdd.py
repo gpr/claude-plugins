@@ -46,16 +46,20 @@ SECTION_RE = re.compile(r"^## (ADDED|MODIFIED|REMOVED)\s*$")
 
 # ---------------------------------------------------------------- config ---
 def project_root() -> Path:
-    """Nearest ancestor with .claude/sdd.json, else with changes/ or specs/, else .git."""
+    """Nearest ancestor with .claude/sdd.json, else with changes/ or specs/, else the git
+    root. The search stops at the enclosing git root: nothing above the repo counts."""
     p = Path.cwd()
-    chain = [p, *p.parents]
+    chain: list[Path] = []
+    for cand in (p, *p.parents):
+        chain.append(cand)
+        if (cand / ".git").exists():
+            break
     for marker in (lambda c: (c / ".claude" / "sdd.json").exists(),
-                   lambda c: (c / "changes").is_dir() or (c / "specs").is_dir(),
-                   lambda c: (c / ".git").exists()):
+                   lambda c: (c / "changes").is_dir() or (c / "specs").is_dir()):
         for cand in chain:
             if marker(cand):
                 return cand
-    return p
+    return chain[-1] if (chain[-1] / ".git").exists() else p
 
 
 ROOT = project_root()
@@ -563,7 +567,7 @@ def collect(change: Path):
             needed = {x["id"] for x in tasks if x["kind"] == "test" and set(x["reqs"]) & set(t["reqs"])}
             if needed and not needed & set(t["blocked_by"]):
                 warns.append(f"{t['id']}: impl not blocked-by its test task(s) {','.join(sorted(needed))}")
-    return errs, warns, {"touched": touched, "tasks": tasks, "deltas": deltas,
+    return errs, warns, {"touched": touched, "tasks": tasks, "deltas": deltas, "living": living,
                          "blocks": delta_blocks, "test_ids": test_ids, "test_reqs": test_reqs}
 
 
@@ -600,8 +604,8 @@ def cmd_context(args):
     t = next((x for x in tasks if x["id"] == args[1]), None)
     if not t:
         die(f"{args[1]} not in tasks.md")
-    living = all_living()
     _, _, info = collect(d)
+    living = info["living"]
     print(f"# Context {d.name} {t['id']} ({t['kind']})\n\n{t['raw']}\n")
     for b in t["blocked_by"]:
         dep = next((x for x in tasks if x["id"] == b), None)

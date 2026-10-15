@@ -76,6 +76,31 @@ describe('bash', () => {
     expect(bash('planner', 'python3 /x/tools/sdd.py check c1')).toBe('deny'))
   test('the lead is not checked', () => expect(bash('lead', 'rm -rf specs')).toBe('allow'))
   test('verifier cannot write into changes', () => expect(bash('verifier', 'echo x >> changes/c2/tasks.md')).toBe('deny'))
+  test('verifier cannot write source either', () => expect(bash('verifier', 'rm src/app.py')).toBe('deny'))
+  test('stderr redirects are not writes', () => {
+    expect(bash('implementer', 'pytest -q tests/acceptance/test_a.py 2>&1 | tail -20')).toBe('allow')
+    expect(bash('verifier', 'pytest -q tests/acceptance 2>/dev/null')).toBe('allow')
+  })
+  test('frozen.json and the archive are protected for every subagent', () => {
+    expect(bash('acceptance-tester', 'echo {} > changes/c1/frozen.json')).toBe('deny')
+    expect(bash('planner', 'rm -rf changes/archive/2026-01-01-c0')).toBe('deny')
+  })
+  test('a relative path is resolved against the cwd once', () =>
+    expect(checkBash("sed -i 's/a/b/' ../tests/acceptance/test_a.py", 'implementer', DEFAULT_CFG, [`${ROOT}/src`, ROOT])).toBeDefined())
+})
+
+describe('status changes stay in sdd', () => {
+  const write = (role: Role, rel: string, text: string) => checkPath(rel, role, DEFAULT_CFG, look, text)
+  test('spec-author cannot approve its own change', async () => {
+    expect(await write('spec-author', 'changes/c1/intent.md', 'status: approved')).toBeDefined()
+    expect(await write('spec-author', 'changes/c1/intent.md', '---\nstatus: draft\n---\n# x')).toBeUndefined()
+  })
+  test('spec-author cannot accept its own ADR', async () => {
+    expect(await write('spec-author', 'adr/ADR-0002-y.md', 'status: accepted')).toBeDefined()
+    expect(await write('spec-author', 'adr/ADR-0003-z.md', '---\nstatus: proposed\n---')).toBeUndefined()
+  })
+  test('the lead may still edit status by hand', async () =>
+    expect(await write('lead', 'changes/c1/intent.md', 'status: approved')).toBeUndefined())
 })
 
 describe('sdd subcommands', () => {
@@ -100,5 +125,6 @@ describe('roles', () => {
     expect(roleOf(undefined)).toBe('lead')
     expect(roleOf('Explore')).toBe('other')
     expect(roleOf('implementer')).toBe('other')
+    expect(roleOf('sdd:unknown')).toBe('other')
   })
 })
