@@ -8,6 +8,10 @@
 - The guard identifies the caller from `tool.call`'s `agentId` → `$.agent.list()` type.
   Plugin agents report `sdd:<name>`; `roleOf` maps only that prefix. Renaming an agent
   file renames its role: update `ROLES` and the agent tables in README and `skills/change`.
+- The main conversation is the lead because `register.tsx`'s `prompt.compose` hook appends
+  the `sdd:lead` section (`LEAD`). Keep it a short router: the workflow lives in
+  `skills/change`. Not an agent with `settings.json` `agent`: a plugin agent's prompt
+  would replace Claude Code's whole system prompt.
 - Guard failure policy: refuse for subagents, allow for the lead (`.catch` in register.tsx).
 - The `sdd` tool's per-subcommand roles live in `SDD_RULES` (guard.ts) and are restated in
   the tool description and README. Change all three together.

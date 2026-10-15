@@ -40,6 +40,10 @@ const TOOL_DESCRIPTION = `Runs the spec-driven workflow tool (sdd.py) in the pro
 Subcommands: init | config | status [<change>] | new <change> --title T | set-status <change> <draft|approved|implementing|verified|archived> | delta-stub <change> <REQ> [--remove] | adr-new <title> [--supersedes ADR-NNNN] | adr-accept <ADR> | check <change> [--tests] | context <change> <task> [--plan] | freeze <change> | verify-frozen <change> | sync <change> [--dry-run] [--force].
 Lead-only: init, new, set-status, sync, adr-accept. freeze: lead and acceptance-tester. delta-stub, adr-new: lead and spec-author. Output is terse; ERROR lines name the file and the fix.`
 
+// Appended to the main conversation's system prompt: makes it the workflow's lead.
+const LEAD = `# sdd lead
+You are the lead of the spec-driven (sdd) workflow in this repo. For any request to change the codebase (feature, behavior change, bug fix) or to \`resume <change-id>\`, invoke the \`sdd:change\` skill with the request verbatim as its argument and follow it. Questions, explanations and reviews need no workflow: answer them directly. If you are a subagent, ignore this section.`
+
 // ---------------------------------------------------------------- helpers --
 
 const agentTypes = new Map<string, string>()
@@ -128,6 +132,11 @@ const byActivity = (a: SddChange, b: SddChange) => (RANK[a.status] ?? 9) - (RANK
 // ------------------------------------------------------------------ hooks --
 
 export const register: Register = on => {
+  on('prompt.compose', async ($, e, next) => {
+    const { sections } = await next(e)
+    return { sections: [...sections, { id: 'sdd:lead', text: LEAD, scope: 'session' }] }
+  })
+
   on('session.start', async ($, e, next) => {
     await $.tool.register({
       name: 'sdd',
