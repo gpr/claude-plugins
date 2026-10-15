@@ -221,6 +221,7 @@ const SDD_RULES: Record<string, Role[]> = {
   sync: ['lead'],
   'adr-accept': ['lead'],
   freeze: ['lead', 'acceptance-tester'],
+  'delta-new': ['lead', 'spec-author'],
   'delta-stub': ['lead', 'spec-author'],
   'adr-new': ['lead', 'spec-author'],
 }

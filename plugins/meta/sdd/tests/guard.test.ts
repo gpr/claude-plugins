@@ -112,6 +112,10 @@ describe('sdd subcommands', () => {
     expect(checkSdd('freeze', 'acceptance-tester')).toBeUndefined()
     expect(checkSdd('freeze', 'implementer')).toBeDefined()
   })
+  test('delta-new: spec-author yes, implementer no', () => {
+    expect(checkSdd('delta-new', 'spec-author')).toBeUndefined()
+    expect(checkSdd('delta-new', 'implementer')).toBeDefined()
+  })
   test('check and context are open to everyone', () => {
     expect(checkSdd('check', 'verifier')).toBeUndefined()
     expect(checkSdd('context', 'implementer')).toBeUndefined()
