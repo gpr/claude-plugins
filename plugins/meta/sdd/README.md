@@ -105,6 +105,7 @@ creates `specs/ adr/ changes/ tests/acceptance/` and `.claude/sdd.json`: set
 ```
 claude plugin validate plugins/meta/sdd
 claude plugin test plugins/meta/sdd   # guard rules + band/pane rendering on terminal and desktop
+python3 -m unittest discover -s plugins/meta/sdd/tests -p 'test_*.py'   # sdd.py, black-box in a temp repo
 ```
 
 ## Known limits
