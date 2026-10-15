@@ -17,7 +17,14 @@
     "deny": [],
     "ask": []
   },
-  "enabledPlugins": {},
+  "extraKnownMarketplaces": {
+    "claude-plugins-official": {
+      "source": { "source": "github", "repo": "anthropics/claude-plugins-official" }
+    }
+  },
+  "enabledPlugins": {
+    "plugin-dev@claude-plugins-official": true
+  },
   "hooks": {
     "PostToolUse": [
       {
