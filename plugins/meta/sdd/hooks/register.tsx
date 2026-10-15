@@ -13,10 +13,12 @@ import {
   WRITE_TOOLS,
 } from './guard'
 import type { Cfg, Lookup, Role } from './guard'
+import { infoOf, labelOf, phaseOf, phasesOf } from './phase'
 
 type $ = EngineInterface
 
 const PANE = 'sdd'
+const PHASE_PANE = 'sdd-phase'
 const TOOL = 'mcp__sdd__sdd'
 
 const changes = atom({ plugin: 'sdd', key: 'changes' } as const, [])
@@ -28,13 +30,6 @@ const isBandHidden = atom({ plugin: 'sdd', key: 'isBandHidden' } as const, false
 const lastDeny = atom({ plugin: 'sdd', key: 'lastDeny' } as const, '')
 
 const MUTATING = new Set(['init', 'new', 'set-status', 'delta-stub', 'adr-new', 'adr-accept', 'freeze', 'sync'])
-
-const NEXT_STEP: Record<string, string> = {
-  draft: 'Gate 1: review intent, REQs and ADRs',
-  approved: 'plan + tasks, then Gate 2 (sdd check)',
-  implementing: 'acceptance tests first, then impl tasks',
-  verified: 'sync merges the delta into specs/',
-}
 
 const TOOL_DESCRIPTION = `Runs the spec-driven workflow tool (sdd.py) in the project. Pass the subcommand and its arguments as \`args\`, e.g. ["check", "add-login"].
 Subcommands: init | config | status [<change>] | new <change> --title T | set-status <change> <draft|approved|implementing|verified|archived> | delta-stub <change> <REQ> [--remove] | adr-new <title> [--supersedes ADR-NNNN] | adr-accept <ADR> | check <change> [--tests] | context <change> <task> [--plan] | freeze <change> | verify-frozen <change> | sync <change> [--dry-run] [--force].
@@ -156,8 +151,8 @@ export const register: Register = on => {
     })
     await $.command.register({
       name: 'sdd',
-      description: 'Spec-driven workflow: open the status pane (or `/sdd refresh`)',
-      argumentHint: '[refresh]',
+      description: 'Spec-driven workflow: open the status pane (`/sdd phase` for the phase pane, `/sdd refresh`)',
+      argumentHint: '[phase|refresh]',
     })
     void refreshChanges($)
     $.clock.every(4_000, () => void refreshAgents($))
@@ -168,7 +163,12 @@ export const register: Register = on => {
 
   on('command.run', { command: 'sdd' }, async ($, e) => {
     await refreshChanges($)
-    if (e.args.trim() === 'refresh') return { text: 'sdd: status refreshed.' }
+    const arg = e.args.trim()
+    if (arg === 'refresh') return { text: 'sdd: status refreshed.' }
+    if (arg === 'phase') {
+      await $.ui.open({ id: PHASE_PANE, title: 'sdd phase' })
+      return { text: 'sdd: phase pane opened.' }
+    }
     await update($, isBandHidden, () => false)
     await $.ui.open({ id: PANE, title: 'Spec-driven workflow' })
     return { text: 'sdd: status pane opened.' }
@@ -278,16 +278,16 @@ export const register: Register = on => {
 
     const { Box, Button, Text } = $.ui.resolve(e)
     const check = ((await read($, checks)) ?? {})[top.id]
-    const running = (await read($, agents)) ?? []
+    const running = ((await read($, agents)) ?? []).map(a => a.type)
 
     return (
       <Box flexDirection="row" gap={1}>
         <Text bold>sdd</Text>
         <Text>{top.id}</Text>
         <Text dimColor>
-          {top.status} · {doneOf(top)}/{top.tasks.length} tasks
+          {labelOf(phaseOf(top, running))} · {top.status} · {doneOf(top)}/{top.tasks.length} tasks
           {check ? ` · check ${check.isOk ? 'ok' : 'fail'}` : ''}
-          {running.length > 0 ? ` · ${running.map(a => a.type).join(', ')} running` : ''}
+          {running.length > 0 ? ` · ${running.join(', ')} running` : ''}
           {open.length > 1 ? ` · +${open.length - 1} open` : ''}
         </Text>
         <Button key="open" label="Open" onPress={() => $.ui.open({ id: PANE, title: 'Spec-driven workflow' })} />
@@ -303,6 +303,7 @@ export const register: Register = on => {
     const running = (await read($, agents)) ?? []
     const nArchived = (await read($, archived)) ?? 0
     const denied = (await read($, lastDeny)) ?? ''
+    const types = running.map(a => a.type)
 
     const runCheck = async (id: string, withTests: boolean) => {
       const cwd = await $.session.root()
@@ -318,6 +319,7 @@ export const register: Register = on => {
         )}
         {all.map(c => {
           const check = results[c.id]
+          const phase = infoOf(phaseOf(c, types))
           return (
             <Box key={`c-${c.id}`} flexDirection="column">
               <Box flexDirection="row" gap={1}>
@@ -327,7 +329,11 @@ export const register: Register = on => {
                   {doneOf(c)}/{c.tasks.length} tasks{c.adrs.length > 0 ? ` · ${c.adrs.join(', ')}` : ''}
                 </Text>
               </Box>
-              {NEXT_STEP[c.status] && <Text dimColor>next: {NEXT_STEP[c.status]}</Text>}
+              {phase && (
+                <Text dimColor>
+                  {phase.label}: {phase.hint}
+                </Text>
+              )}
               {c.tasks.map(t => (
                 <Text key={`t-${c.id}-${t.id}`} dimColor={t.done}>
                   {t.done ? '[x]' : '[ ]'} {t.id} {t.kind} {t.reqs.join(' ')}
@@ -368,6 +374,51 @@ export const register: Register = on => {
           <Text dimColor>{nArchived} archived</Text>
           <Button key="refresh" label="Refresh" onPress={() => refreshChanges($)} />
         </Box>
+      </Box>
+    )
+  })
+
+  on('ui.render', { component: 'Pane', requestId: PHASE_PANE }, async ($, e) => {
+    const { Box, Text } = $.ui.resolve(e)
+    const open = ((await read($, changes)) ?? []).filter(isOpen).sort(byActivity)
+    const running = ((await read($, agents)) ?? []).map(a => a.type)
+    const top = open[0]
+    if (top === undefined) {
+      return <Text dimColor>No open change: triage. Describe a change or run /sdd:change.</Text>
+    }
+
+    const steps = phasesOf(top)
+    const current = phaseOf(top, running)
+    const at = steps.findIndex(p => p.id === current)
+
+    return (
+      <Box flexDirection="column" gap={1}>
+        <Box flexDirection="row" gap={1}>
+          <Text bold>{top.id}</Text>
+          <Text dimColor>
+            {top.status} · {doneOf(top)}/{top.tasks.length} tasks
+            {running.length > 0 ? ` · ${running.join(', ')} running` : ''}
+          </Text>
+        </Box>
+        <Box flexDirection="column">
+          {steps.map((p, i) => (
+            <Text
+              key={`p-${p.id}`}
+              bold={i === at}
+              color={i === at ? 'cyan' : i < at ? 'green' : undefined}
+              dimColor={i > at}
+            >
+              {i === at ? '▶' : i < at ? '✓' : '·'} {i + 1}. {p.label}
+              {i === at ? ` — ${p.hint}` : ''}
+            </Text>
+          ))}
+        </Box>
+        {at === -1 && <Text dimColor>No workflow phase for status {top.status}.</Text>}
+        {open.slice(1).map(c => (
+          <Text key={`o-${c.id}`} dimColor>
+            also open: {c.id} · {labelOf(phaseOf(c, running))}
+          </Text>
+        ))}
       </Box>
     )
   })

@@ -95,7 +95,8 @@ the affected REQs only, then re-plan the affected tasks, re-run their test tasks
 ## Status
 The plugin shows the active change, its status and task progress above the prompt, and
 `/sdd` opens a pane with every open change, its tasks, the last check and running
-workflow agents. You do not need to recap progress to the user; point them to it.
+workflow agents; `/sdd phase` opens a pane with the workflow phase the change is in.
+You do not need to recap progress to the user; point them to it.
 
 ## Token rules
 - Agents get `sdd context` bundles, not whole files and not your conversation.

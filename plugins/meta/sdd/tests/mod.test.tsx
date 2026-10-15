@@ -76,9 +76,63 @@ test('the band shows the most active change and its progress', async ($, on) => 
       props: { hasSurvey: false, isWorking: false, maxRows: 3, bodyColumns: 100, ...SITE },
     })
     expect(await ui.find({ type: 'Text', text: 'add-login' })).toBeDefined()
-    expect(await ui.find({ type: 'Text', text: /implementing · 1\/2 tasks/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /Implement · implementing · 1\/2 tasks/ })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: /\+1 open/ })).toBeDefined()
     expect(await ui.find({ key: 'open' })).toBeDefined()
+    await ui.unmount()
+  }
+})
+
+test('the phase pane marks the current phase of the most active change', async ($, on) => {
+  const status = {
+    root: '/repo',
+    archived: 0,
+    changes: [
+      {
+        id: 'add-login',
+        title: 'Add login',
+        status: 'implementing',
+        size: 'change',
+        adrs: [],
+        tasks: [
+          { id: 'T1', kind: 'test', done: true, reqs: ['REQ-AUTH-001'] },
+          { id: 'T2', kind: 'impl', done: false, reqs: ['REQ-AUTH-001'] },
+        ],
+      },
+    ],
+  }
+  on('session.root', () => ({ value: '/repo' }))
+  on('process.run', () => ({
+    value: { exitCode: 0, stdout: JSON.stringify(status), stderr: '', isStdoutTruncated: false, isStderrTruncated: false },
+  }))
+  on('agent.list', () => ({ value: [] }))
+  await $.command.run({ command: 'sdd', args: 'refresh', origin: { kind: 'composer' }, presentation: { isFullscreen: false, columns: 100 } })
+
+  for (const surface of SURFACES) {
+    const ui = await $.ui.mount({
+      plugin: 'sdd',
+      surface,
+      component: 'Pane',
+      requestId: 'sdd-phase',
+      props: { title: 'sdd phase', isFocused: false, bodyColumns: 80, placement: 'dock', ...SITE },
+    })
+    expect(await ui.find({ type: 'Text', text: /▶ 6\. Implement/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /✓ 5\. Acceptance tests/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /· 7\. Verify/ })).toBeDefined()
+    await ui.unmount()
+  }
+})
+
+test('the phase pane says triage when no change is open', async $ => {
+  for (const surface of SURFACES) {
+    const ui = await $.ui.mount({
+      plugin: 'sdd',
+      surface,
+      component: 'Pane',
+      requestId: 'sdd-phase',
+      props: { title: 'sdd phase', isFocused: false, bodyColumns: 80, placement: 'dock', ...SITE },
+    })
+    expect(await ui.find({ type: 'Text', text: /No open change: triage/ })).toBeDefined()
     await ui.unmount()
   }
 })

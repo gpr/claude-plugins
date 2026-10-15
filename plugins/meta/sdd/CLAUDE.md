@@ -12,6 +12,9 @@
   the `sdd:lead` section (`LEAD`). Keep it a short router: the workflow lives in
   `skills/change`. Not an agent with `settings.json` `agent`: a plugin agent's prompt
   would replace Claude Code's whole system prompt.
+- `hooks/phase.ts` maps a change (status, tasks, running agents) to a phase of
+  `skills/change`, as pure functions tested in `tests/phase.test.ts`. A new step or
+  status in the workflow changes `PHASES`/`phaseOf` and their tests together.
 - Guard failure policy: refuse for subagents, allow for the lead (`.catch` in register.tsx).
 - The `sdd` tool's per-subcommand roles live in `SDD_RULES` (guard.ts) and are restated in
   the tool description and README. Change all three together.
