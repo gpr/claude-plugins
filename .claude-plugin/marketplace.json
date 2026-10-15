@@ -59,6 +59,12 @@
       "source": "./plugins/meta/code-outline",
       "description": "PreToolUse hook on Read: replaces full reads of large source files with a cached outline (sections, call graph, Haiku descriptions) stored in .kb/files/, refreshed by source hash.",
       "category": "meta"
+    },
+    {
+      "name": "sdd",
+      "source": "./plugins/meta/sdd",
+      "description": "Spec-driven multi-agent workflow: a lead skill triages requests, spec/ADR deltas are gated by you and synced deterministically, then plan, acceptance tests first, inner-TDD implementers and a verifier. A mod guards writes per agent and shows live status.",
+      "category": "meta"
     }
   ]
 }
