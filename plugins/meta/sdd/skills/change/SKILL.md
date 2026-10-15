@@ -79,11 +79,19 @@ If an implementer returns `BLOCKED: REQ-... <reason>` -> step 9. Never relax a t
 1. Delegate to `verifier` with the change id. It runs the frozen-test check, the
    acceptance and unit suites, `sdd check <id> --tests`, and reviews the diff.
 2. On FAIL: route each finding (implementer for code, step 9 for spec problems).
-3. On PASS: `sdd set-status <id> verified`, then `sdd sync <id> --dry-run`, then
+3. On PASS, review before syncing: the verifier checks conformance to the spec, not bugs
+   outside its scenarios. Run the `code-review` skill on the change's diff against the
+   base branch (skip this if the skill is not available). Never pass `--fix`: the
+   implementer fixes code, test first. Route each finding:
+   - a bug inside the behavior of an existing REQ -> implementer, with a failing test first;
+   - a fix that needs behavior no REQ describes (validation, a new error path) -> step 9;
+   - not worth fixing -> tell the user in one line, then go on.
+   After any fix, go back to 8.1.
+4. Then `sdd set-status <id> verified`, then `sdd sync <id> --dry-run`, then
    `sdd sync <id>`. Sync merges the delta into specs/, accepts the ADRs and archives the
    change. If sync reports CONFLICT, another change modified the same REQ first: resume
    spec-author to rebase the delta (`delta-stub` again), back to Gate 1 for that REQ only.
-4. Commit spec, ADR, tests and code together. Report to the user in 3 lines: what changed,
+5. Commit spec, ADR, tests and code together. Report to the user in 3 lines: what changed,
    REQ ids, anything deferred.
 
 ## 9. Reopen (failure path)
