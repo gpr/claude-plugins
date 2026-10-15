@@ -29,3 +29,4 @@ plugin-auditor = { path = "plugins/meta/plugin-auditor", changelog_path = "plugi
 documentalist-agent = { path = "plugins/meta/documentalist-agent", changelog_path = "plugins/meta/documentalist-agent/CHANGELOG.md" }
 diataxis = { path = "plugins/meta/diataxis", changelog_path = "plugins/meta/diataxis/CHANGELOG.md" }
 code-outline = { path = "plugins/meta/code-outline", changelog_path = "plugins/meta/code-outline/CHANGELOG.md" }
+sdd = { path = "plugins/meta/sdd", changelog_path = "plugins/meta/sdd/CHANGELOG.md" }
