@@ -16,7 +16,9 @@ request ─► lead (/sdd:change) ─► triage ──direct──► general-pu
                                   ▼
                         sdd:implementer(s)  (inner TDD; BLOCKED ─► reopen spec ─► GATE 1)
                                   ▼
-                           sdd:verifier ─► PASS ─► sdd sync (delta → specs/, ADRs accepted, archive)
+                           sdd:verifier ─► PASS ─► code-review (findings ─► implementer / reopen)
+                                  ▼
+                              sdd sync (delta → specs/, ADRs accepted, archive)
 ```
 
 ## Install
