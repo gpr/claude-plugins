@@ -28,7 +28,9 @@ export function phaseOf(change: SddChange, running: readonly string[]): PhaseId 
   const open = (kind: string) => change.tasks.some(t => t.kind === kind && !t.done)
   switch (change.status) {
     case 'draft':
-      if (change.size === 'fix') return 'plan'
+      // A fix starts with the lead's test task and goes from draft to implementing at
+      // Gate 2: it is planned once the planner has added its impl tasks.
+      if (change.size === 'fix') return isRunning('planner') || !change.tasks.some(t => t.kind === 'impl') ? 'plan' : 'gate2'
       return isRunning('spec-author') ? 'spec' : 'gate1'
     case 'approved':
       return isRunning('planner') || change.tasks.length === 0 ? 'plan' : 'gate2'
@@ -43,6 +45,10 @@ export function phaseOf(change: SddChange, running: readonly string[]): PhaseId 
   }
 }
 
+export function infoOf(id: PhaseId | undefined) {
+  return PHASES.find(p => p.id === id)
+}
+
 export function labelOf(id: PhaseId | undefined): string {
-  return PHASES.find(p => p.id === id)?.label ?? 'unknown'
+  return infoOf(id)?.label ?? 'unknown'
 }

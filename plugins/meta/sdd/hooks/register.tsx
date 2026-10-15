@@ -13,7 +13,7 @@ import {
   WRITE_TOOLS,
 } from './guard'
 import type { Cfg, Lookup, Role } from './guard'
-import { labelOf, phaseOf, phasesOf } from './phase'
+import { infoOf, labelOf, phaseOf, phasesOf } from './phase'
 
 type $ = EngineInterface
 
@@ -30,13 +30,6 @@ const isBandHidden = atom({ plugin: 'sdd', key: 'isBandHidden' } as const, false
 const lastDeny = atom({ plugin: 'sdd', key: 'lastDeny' } as const, '')
 
 const MUTATING = new Set(['init', 'new', 'set-status', 'delta-stub', 'adr-new', 'adr-accept', 'freeze', 'sync'])
-
-const NEXT_STEP: Record<string, string> = {
-  draft: 'Gate 1: review intent, REQs and ADRs',
-  approved: 'plan + tasks, then Gate 2 (sdd check)',
-  implementing: 'acceptance tests first, then impl tasks',
-  verified: 'sync merges the delta into specs/',
-}
 
 const TOOL_DESCRIPTION = `Runs the spec-driven workflow tool (sdd.py) in the project. Pass the subcommand and its arguments as \`args\`, e.g. ["check", "add-login"].
 Subcommands: init | config | status [<change>] | new <change> --title T | set-status <change> <draft|approved|implementing|verified|archived> | delta-stub <change> <REQ> [--remove] | adr-new <title> [--supersedes ADR-NNNN] | adr-accept <ADR> | check <change> [--tests] | context <change> <task> [--plan] | freeze <change> | verify-frozen <change> | sync <change> [--dry-run] [--force].
@@ -285,16 +278,16 @@ export const register: Register = on => {
 
     const { Box, Button, Text } = $.ui.resolve(e)
     const check = ((await read($, checks)) ?? {})[top.id]
-    const running = (await read($, agents)) ?? []
+    const running = ((await read($, agents)) ?? []).map(a => a.type)
 
     return (
       <Box flexDirection="row" gap={1}>
         <Text bold>sdd</Text>
         <Text>{top.id}</Text>
         <Text dimColor>
-          {labelOf(phaseOf(top, running.map(a => a.type)))} · {top.status} · {doneOf(top)}/{top.tasks.length} tasks
+          {labelOf(phaseOf(top, running))} · {top.status} · {doneOf(top)}/{top.tasks.length} tasks
           {check ? ` · check ${check.isOk ? 'ok' : 'fail'}` : ''}
-          {running.length > 0 ? ` · ${running.map(a => a.type).join(', ')} running` : ''}
+          {running.length > 0 ? ` · ${running.join(', ')} running` : ''}
           {open.length > 1 ? ` · +${open.length - 1} open` : ''}
         </Text>
         <Button key="open" label="Open" onPress={() => $.ui.open({ id: PANE, title: 'Spec-driven workflow' })} />
@@ -310,6 +303,7 @@ export const register: Register = on => {
     const running = (await read($, agents)) ?? []
     const nArchived = (await read($, archived)) ?? 0
     const denied = (await read($, lastDeny)) ?? ''
+    const types = running.map(a => a.type)
 
     const runCheck = async (id: string, withTests: boolean) => {
       const cwd = await $.session.root()
@@ -325,6 +319,7 @@ export const register: Register = on => {
         )}
         {all.map(c => {
           const check = results[c.id]
+          const phase = infoOf(phaseOf(c, types))
           return (
             <Box key={`c-${c.id}`} flexDirection="column">
               <Box flexDirection="row" gap={1}>
@@ -334,7 +329,11 @@ export const register: Register = on => {
                   {doneOf(c)}/{c.tasks.length} tasks{c.adrs.length > 0 ? ` · ${c.adrs.join(', ')}` : ''}
                 </Text>
               </Box>
-              {NEXT_STEP[c.status] && <Text dimColor>next: {NEXT_STEP[c.status]}</Text>}
+              {phase && (
+                <Text dimColor>
+                  {phase.label}: {phase.hint}
+                </Text>
+              )}
               {c.tasks.map(t => (
                 <Text key={`t-${c.id}-${t.id}`} dimColor={t.done}>
                   {t.done ? '[x]' : '[ ]'} {t.id} {t.kind} {t.reqs.join(' ')}
@@ -414,6 +413,7 @@ export const register: Register = on => {
             </Text>
           ))}
         </Box>
+        {at === -1 && <Text dimColor>No workflow phase for status {top.status}.</Text>}
         {open.slice(1).map(c => (
           <Text key={`o-${c.id}`} dimColor>
             also open: {c.id} · {labelOf(phaseOf(c, running))}
