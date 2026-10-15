@@ -101,3 +101,19 @@ test('the band stays out of the way when no change is open', async ($, on) => {
     await ui.unmount()
   }
 })
+
+test('the main conversation is the lead: its system prompt ends with the lead section', async ($, on) => {
+  // stands for the engine's own composition beneath the plugin
+  on('prompt.compose', () => ({ sections: [{ id: 'intro', text: 'engine intro', scope: 'shared' }] }))
+  const { sections } = await $.prompt.compose({
+    model: 'claude-test',
+    promptModel: 'claude-test',
+    surfaces: ['terminal'],
+    tools: [],
+    outputStyle: null,
+    traits: [],
+  })
+  expect(sections.map(s => s.id)).toEqual(['intro', 'sdd:lead'])
+  expect(sections[1].scope).toBe('session')
+  expect(sections[1].text).toContain('`sdd:change`')
+})

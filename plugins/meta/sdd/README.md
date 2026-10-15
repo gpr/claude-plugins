@@ -1,21 +1,22 @@
 # sdd: spec-driven multi-agent workflow for Claude Code
 
-One plugin: a lead skill, five workflow agents, a deterministic spec tool, and a mod
-that guards writes per agent and shows the workflow's state live.
+One plugin: a lead workflow, five workflow agents, a deterministic spec tool, and a mod
+that makes the main conversation the lead, guards writes per agent and shows the
+workflow's state live.
 
 ```
-request ─► /sdd:change ─► triage ──direct──► general-purpose / lead
-                            │ fix ──► failing test on the existing REQ ─► implement ─► verify
-                            ▼ change
-                    sdd:spec-author ─► GATE 1 (you: intent, REQs, ADRs)
-                            ▼
-                      sdd:planner ─► GATE 2 (sdd check, automatic)
-                            ▼
-                sdd:acceptance-tester ─► sdd freeze
-                            ▼
-                  sdd:implementer(s)  (inner TDD; BLOCKED ─► reopen spec ─► GATE 1)
-                            ▼
-                     sdd:verifier ─► PASS ─► sdd sync (delta → specs/, ADRs accepted, archive)
+request ─► lead (/sdd:change) ─► triage ──direct──► general-purpose / lead
+                                  │ fix ──► failing test on the existing REQ ─► implement ─► verify
+                                  ▼ change
+                          sdd:spec-author ─► GATE 1 (you: intent, REQs, ADRs)
+                                  ▼
+                            sdd:planner ─► GATE 2 (sdd check, automatic)
+                                  ▼
+                      sdd:acceptance-tester ─► sdd freeze
+                                  ▼
+                        sdd:implementer(s)  (inner TDD; BLOCKED ─► reopen spec ─► GATE 1)
+                                  ▼
+                           sdd:verifier ─► PASS ─► sdd sync (delta → specs/, ADRs accepted, archive)
 ```
 
 ## Install
@@ -27,13 +28,14 @@ request ─► /sdd:change ─► triage ──direct──► general-purpose /
 
 Install it at **project** scope in the repos that use the workflow: the guard applies
 wherever the plugin is enabled, and at user scope it would block hand edits to `specs/`
-and `adr/` in every repo.
+and `adr/` in every repo, and make every session's main conversation the lead.
 
 Requires Python 3.9+ on PATH (for `tools/sdd.py`, no dependencies).
 
 Local test: `claude --plugin-dir ./plugins/meta/sdd`
 
-In a repo, start with `/sdd:change <what you want>`. The first run calls `sdd init`, which
+In a repo, just describe the change: the main conversation is the lead and runs the
+workflow (`/sdd:change <what you want>` does the same explicitly). The first run calls `sdd init`, which
 creates `specs/ adr/ changes/ tests/acceptance/` and `.claude/sdd.json`: set
 `acceptance_cmd` and `unit_cmd` there.
 
@@ -44,9 +46,12 @@ creates `specs/ adr/ changes/ tests/acceptance/` and `.claude/sdd.json`: set
 | Format rules | `skills/formats` (`sdd:formats`) | REQ/scenario/delta/ADR/task formats, preloaded into the authoring agents |
 | Agents | `agents/` (`sdd:spec-author`, `sdd:planner`, `sdd:acceptance-tester`, `sdd:implementer`, `sdd:verifier`) | one job each, minimal tools |
 | Spec tool | `tools/sdd.py`, exposed as the `mcp__sdd__sdd` tool | check, context bundles, delta-stub with base hashes, freeze/verify-frozen, deterministic sync, ADR accept/supersede |
-| Mod | `hooks/register.tsx`, `hooks/guard.ts` | write guard per agent, the `sdd` tool, status band, `/sdd` pane |
+| Mod | `hooks/register.tsx`, `hooks/guard.ts` | lead role for the main conversation, write guard per agent, the `sdd` tool, status band, `/sdd` pane |
 
 ## The mod
+- **Lead role.** A `prompt.compose` hook appends an `sdd:lead` section to the main
+  conversation's system prompt: change requests go through `sdd:change`, questions are
+  answered directly. Claude Code's default system prompt stays as it is.
 - **Guard, in-process.** Every Edit/Write/MultiEdit/NotebookEdit/Bash call is checked
   against the calling agent, identified by the call's `agentId`:
   - Nobody edits `specs/` by hand: it changes only through `sdd sync`.
