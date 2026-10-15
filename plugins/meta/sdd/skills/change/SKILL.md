@@ -104,6 +104,9 @@ A wrong or untestable REQ goes back to the spec, never into the code or the test
 `sdd set-status <id> draft`, resume spec-author with the BLOCKED report, then Gate 1 for
 the affected REQs only, then re-plan the affected tasks, re-run their test tasks
 (re-freeze), then implementation.
+A `size: fix` change has no spec-author to resume: when it needs behavior no REQ
+describes, re-triage it as a full change. Set `size: change` in intent.md,
+`sdd set-status <id> draft`, start spec-author with the finding, then step 3.
 
 ## Status
 The plugin shows the active change, its status and task progress above the prompt, and
