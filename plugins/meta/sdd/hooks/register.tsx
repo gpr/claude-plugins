@@ -13,10 +13,12 @@ import {
   WRITE_TOOLS,
 } from './guard'
 import type { Cfg, Lookup, Role } from './guard'
+import { labelOf, phaseOf, phasesOf } from './phase'
 
 type $ = EngineInterface
 
 const PANE = 'sdd'
+const PHASE_PANE = 'sdd-phase'
 const TOOL = 'mcp__sdd__sdd'
 
 const changes = atom({ plugin: 'sdd', key: 'changes' } as const, [])
@@ -156,8 +158,8 @@ export const register: Register = on => {
     })
     await $.command.register({
       name: 'sdd',
-      description: 'Spec-driven workflow: open the status pane (or `/sdd refresh`)',
-      argumentHint: '[refresh]',
+      description: 'Spec-driven workflow: open the status pane (`/sdd phase` for the phase pane, `/sdd refresh`)',
+      argumentHint: '[phase|refresh]',
     })
     void refreshChanges($)
     $.clock.every(4_000, () => void refreshAgents($))
@@ -168,7 +170,12 @@ export const register: Register = on => {
 
   on('command.run', { command: 'sdd' }, async ($, e) => {
     await refreshChanges($)
-    if (e.args.trim() === 'refresh') return { text: 'sdd: status refreshed.' }
+    const arg = e.args.trim()
+    if (arg === 'refresh') return { text: 'sdd: status refreshed.' }
+    if (arg === 'phase') {
+      await $.ui.open({ id: PHASE_PANE, title: 'sdd phase' })
+      return { text: 'sdd: phase pane opened.' }
+    }
     await update($, isBandHidden, () => false)
     await $.ui.open({ id: PANE, title: 'Spec-driven workflow' })
     return { text: 'sdd: status pane opened.' }
@@ -285,7 +292,7 @@ export const register: Register = on => {
         <Text bold>sdd</Text>
         <Text>{top.id}</Text>
         <Text dimColor>
-          {top.status} · {doneOf(top)}/{top.tasks.length} tasks
+          {labelOf(phaseOf(top, running.map(a => a.type)))} · {top.status} · {doneOf(top)}/{top.tasks.length} tasks
           {check ? ` · check ${check.isOk ? 'ok' : 'fail'}` : ''}
           {running.length > 0 ? ` · ${running.map(a => a.type).join(', ')} running` : ''}
           {open.length > 1 ? ` · +${open.length - 1} open` : ''}
@@ -368,6 +375,50 @@ export const register: Register = on => {
           <Text dimColor>{nArchived} archived</Text>
           <Button key="refresh" label="Refresh" onPress={() => refreshChanges($)} />
         </Box>
+      </Box>
+    )
+  })
+
+  on('ui.render', { component: 'Pane', requestId: PHASE_PANE }, async ($, e) => {
+    const { Box, Text } = $.ui.resolve(e)
+    const open = ((await read($, changes)) ?? []).filter(isOpen).sort(byActivity)
+    const running = ((await read($, agents)) ?? []).map(a => a.type)
+    const top = open[0]
+    if (top === undefined) {
+      return <Text dimColor>No open change: triage. Describe a change or run /sdd:change.</Text>
+    }
+
+    const steps = phasesOf(top)
+    const current = phaseOf(top, running)
+    const at = steps.findIndex(p => p.id === current)
+
+    return (
+      <Box flexDirection="column" gap={1}>
+        <Box flexDirection="row" gap={1}>
+          <Text bold>{top.id}</Text>
+          <Text dimColor>
+            {top.status} · {doneOf(top)}/{top.tasks.length} tasks
+            {running.length > 0 ? ` · ${running.join(', ')} running` : ''}
+          </Text>
+        </Box>
+        <Box flexDirection="column">
+          {steps.map((p, i) => (
+            <Text
+              key={`p-${p.id}`}
+              bold={i === at}
+              color={i === at ? 'cyan' : i < at ? 'green' : undefined}
+              dimColor={i > at}
+            >
+              {i === at ? '▶' : i < at ? '✓' : '·'} {i + 1}. {p.label}
+              {i === at ? ` — ${p.hint}` : ''}
+            </Text>
+          ))}
+        </Box>
+        {open.slice(1).map(c => (
+          <Text key={`o-${c.id}`} dimColor>
+            also open: {c.id} · {labelOf(phaseOf(c, running))}
+          </Text>
+        ))}
       </Box>
     )
   })
