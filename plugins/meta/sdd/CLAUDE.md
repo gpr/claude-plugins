@@ -2,6 +2,8 @@
 
 - `tools/sdd.py` is the only code that writes specs, ADR statuses, `frozen.json` or the
   archive. Keep it deterministic (no model calls) and its output terse: agents read it.
+  Every behavior change gets a case in `tests/test_sdd.py`
+  (`python3 -m unittest discover -s plugins/meta/sdd/tests -p 'test_*.py'`).
 - `hooks/guard.ts` holds the write rules as pure functions; `hooks/register.tsx` only does
   I/O (`$.fs`, `$.process`, `$.agent.list`) and drawing. Every rule change gets a case in
   `tests/guard.test.ts` (`claude plugin test plugins/meta/sdd`).
