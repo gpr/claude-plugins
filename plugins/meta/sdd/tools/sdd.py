@@ -13,6 +13,7 @@ Commands
   new <change> [--title T]           scaffold changes/<change>/
   status [<change>] [--json]         list changes / show one
   set-status <change> <status>       draft|approved|implementing|verified|archived
+  delta-new <change> <capability>    scaffold changes/<change>/specs/<capability>.md
   delta-stub <change> <REQ> [--remove]
                                      copy the living REQ into the delta with its base hash
   adr-new <title> [--supersedes ADR-NNNN]
@@ -92,6 +93,15 @@ COMMENT_RE = re.compile(r"<!--(?!\s*base:).*?-->", re.S)
 def strip_comments(text: str) -> str:
     """Drop HTML comments (template guidance), keep `<!-- base: -->` markers."""
     return re.sub(r"\n{3,}", "\n\n", COMMENT_RE.sub("", text))
+
+
+def render_template(name: str, fallback: str, **vars: str) -> str:
+    """Template `name` with `{{key}}` placeholders filled; `fallback` if it is missing."""
+    src = TEMPLATES / name
+    body = src.read_text() if src.exists() else fallback
+    for k, v in vars.items():
+        body = body.replace("{{" + k + "}}", v)
+    return body
 
 
 def die(msg: str, code: int = 2):
@@ -321,10 +331,7 @@ def cmd_new(args):
     (d / "specs").mkdir(parents=True)
     today = _dt.date.today().isoformat()
     for t in ["intent.md", "plan.md", "tasks.md"]:
-        src = TEMPLATES / t
-        body = src.read_text() if src.exists() else ""
-        body = body.replace("{{id}}", name).replace("{{title}}", title).replace("{{date}}", today)
-        (d / t).write_text(body)
+        (d / t).write_text(render_template(t, "", id=name, title=title, date=today))
     print(f"created {d.relative_to(ROOT)}/ (intent.md plan.md tasks.md specs/)")
 
 
@@ -389,6 +396,23 @@ def cmd_set_status(args):
     print(f"{d.name}: {old} -> {args[1]}")
 
 
+def delta_template(cap: str) -> str:
+    return render_template("delta.md", "# Delta: {{capability}}\n", capability=cap)
+
+
+def cmd_delta_new(args):
+    if len(args) != 2:
+        die("usage: delta-new <change> <capability>")
+    d, cap = change_dir(args[0]), args[1]
+    if not re.fullmatch(r"[a-z0-9][a-z0-9-]{0,60}", cap):
+        die("capability must be kebab-case")
+    f = d / "specs" / f"{cap}.md"
+    if f.exists():
+        die(f"{f.relative_to(ROOT)} already exists")
+    atomic_write(f, delta_template(cap))
+    print(f"created {f.relative_to(ROOT)}")
+
+
 def cmd_delta_stub(args):
     if len(args) < 2:
         die("usage: delta-stub <change> <REQ> [--remove]")
@@ -399,7 +423,7 @@ def cmd_delta_stub(args):
     cap, blk = living[req]
     section = "REMOVED" if "--remove" in args else "MODIFIED"
     f = d / "specs" / f"{cap}.md"
-    text = f.read_text() if f.exists() else f"# Delta: {cap}\n"
+    text = f.read_text() if f.exists() else delta_template(cap)
     if f"### {req}:" in text:
         die(f"{req} already present in {f.relative_to(ROOT)}")
     lines = blk.lines[:1] + [f"<!-- base: {blk.digest} -->"]
@@ -428,11 +452,8 @@ def cmd_adr_new(args):
     num = f"ADR-{(max(nums) + 1 if nums else 1):04d}"
     slug = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")[:50]
     path = ADRS / f"{num}-{slug}.md"
-    tpl = TEMPLATES / "adr.md"
-    body = tpl.read_text() if tpl.exists() else "# {{num}}: {{title}}\n"
-    body = (body.replace("{{num}}", num).replace("{{title}}", title)
-            .replace("{{date}}", _dt.date.today().isoformat())
-            .replace("{{supersedes}}", sup or ""))
+    body = render_template("adr.md", "# {{num}}: {{title}}\n", num=num, title=title,
+                           date=_dt.date.today().isoformat(), supersedes=sup or "")
     atomic_write(path, body)
     print(f"{num} -> {path.relative_to(ROOT)}")
 
@@ -740,7 +761,7 @@ def cmd_sync(args):
 
 COMMANDS = {
     "init": cmd_init, "config": cmd_config, "new": cmd_new, "status": cmd_status, "set-status": cmd_set_status,
-    "delta-stub": cmd_delta_stub, "adr-new": cmd_adr_new, "adr-accept": cmd_adr_accept,
+    "delta-new": cmd_delta_new, "delta-stub": cmd_delta_stub, "adr-new": cmd_adr_new, "adr-accept": cmd_adr_accept,
     "check": cmd_check, "context": cmd_context, "freeze": cmd_freeze,
     "verify-frozen": cmd_verify_frozen, "sync": cmd_sync,
 }

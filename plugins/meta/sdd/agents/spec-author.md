@@ -23,6 +23,7 @@ Steps
 2. Fill intent.md: Why, Outcome, Scope, Non-goals, Success criteria. Keep it under a page.
    Non-goals are mandatory: name the adjacent things a reasonable engineer might also do.
 3. Write the delta in `changes/<id>/specs/<capability>.md` following sdd:formats.
+   Create it with `sdd delta-new <id> <capability>`, then fill `## ADDED`.
    For every existing REQ you change or remove, run
    `sdd delta-stub <id> <REQ> [--remove]` first, then edit.
    Each success criterion maps to at least one REQ. Each REQ has concrete scenarios,

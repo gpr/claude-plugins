@@ -60,6 +60,8 @@ Rules:
 <!-- base: 9f8e7d6c -->
 Reason: ...
 ```
+- Create the file with `sdd delta-new <c> <capability>` (the template lists the three
+  sections and a REQ/scenario skeleton in a comment); delete the sections you leave empty.
 - MODIFIED and REMOVED entries are created with `sdd delta-stub <c> <REQ> [--remove]`,
   which copies the current text and the base hash. Then edit the copied text. Never type a
   base hash yourself. A wrong or stale base fails `check` with CONFLICT: that is a real

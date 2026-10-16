@@ -29,11 +29,11 @@ const agents = atom({ plugin: 'sdd', key: 'agents' } as const, [])
 const isBandHidden = atom({ plugin: 'sdd', key: 'isBandHidden' } as const, false)
 const lastDeny = atom({ plugin: 'sdd', key: 'lastDeny' } as const, '')
 
-const MUTATING = new Set(['init', 'new', 'set-status', 'delta-stub', 'adr-new', 'adr-accept', 'freeze', 'sync'])
+const MUTATING = new Set(['init', 'new', 'set-status', 'delta-new', 'delta-stub', 'adr-new', 'adr-accept', 'freeze', 'sync'])
 
 const TOOL_DESCRIPTION = `Runs the spec-driven workflow tool (sdd.py) in the project. Pass the subcommand and its arguments as \`args\`, e.g. ["check", "add-login"].
-Subcommands: init | config | status [<change>] | new <change> --title T | set-status <change> <draft|approved|implementing|verified|archived> | delta-stub <change> <REQ> [--remove] | adr-new <title> [--supersedes ADR-NNNN] | adr-accept <ADR> | check <change> [--tests] | context <change> <task> [--plan] | freeze <change> | verify-frozen <change> | sync <change> [--dry-run] [--force].
-Lead-only: init, new, set-status, sync, adr-accept. freeze: lead and acceptance-tester. delta-stub, adr-new: lead and spec-author. Output is terse; ERROR lines name the file and the fix.`
+Subcommands: init | config | status [<change>] | new <change> --title T | set-status <change> <draft|approved|implementing|verified|archived> | delta-new <change> <capability> | delta-stub <change> <REQ> [--remove] | adr-new <title> [--supersedes ADR-NNNN] | adr-accept <ADR> | check <change> [--tests] | context <change> <task> [--plan] | freeze <change> | verify-frozen <change> | sync <change> [--dry-run] [--force].
+Lead-only: init, new, set-status, sync, adr-accept. freeze: lead and acceptance-tester. delta-new, delta-stub, adr-new: lead and spec-author. Output is terse; ERROR lines name the file and the fix.`
 
 // Appended to the main conversation's system prompt: makes it the workflow's lead.
 const LEAD = `# sdd lead

@@ -193,11 +193,58 @@ class TestStatus(SddCase):
 
 
 # -------------------------------------------------------------- delta-stub --
+class TestDeltaNew(SddCase):
+    def test_scaffolds_delta_from_template(self):
+        self.new_change()
+        code, out = self.sdd("delta-new", "c1", "auth")
+        self.assertEqual(code, 0, out)
+        self.assertIn("created changes/c1/specs/auth.md", out)
+        delta = self.read("changes/c1/specs/auth.md")
+        self.assertTrue(delta.startswith("# Delta: auth\n"))
+        for section in ("## ADDED", "## MODIFIED", "## REMOVED"):
+            self.assertEqual(delta.count(f"\n{section}\n"), 1, section)
+        self.assertIn("- GIVEN", delta)
+        self.assertNotIn("{{", delta)
+
+    def test_template_example_is_not_parsed(self):
+        # the guidance comment holds a REQ/scenario skeleton
+        self.new_change()
+        self.assert_ok(self.sdd("delta-new", "c1", "auth"))
+        code, out = self.sdd("check", "c1")
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("ERROR", out)
+        self.assertIn("no spec delta", out)
+
+    def test_rejects_bad_capability_and_duplicate(self):
+        self.new_change()
+        self.assert_fails(self.sdd("delta-new", "c1", "Auth_X"), "kebab-case", code=2)
+        self.assert_ok(self.sdd("delta-new", "c1", "auth"))
+        self.assert_fails(self.sdd("delta-new", "c1", "auth"), "already exists", code=2)
+        self.assert_fails(self.sdd("delta-new", "ghost", "auth"), "no change 'ghost'", code=2)
+
+    def test_delta_stub_fills_template_sections(self):
+        self.living()
+        self.new_change()
+        self.assert_ok(self.sdd("delta-new", "c1", "auth"))
+        self.assert_ok(self.sdd("delta-stub", "c1", "REQ-AUTH-001"))
+        delta = self.read("changes/c1/specs/auth.md")
+        self.assertEqual(delta.count("## MODIFIED"), 1)
+        self.assertLess(delta.index("## MODIFIED"), delta.index("### REQ-AUTH-001"))
+        self.assertLess(delta.index("### REQ-AUTH-001"), delta.index("## REMOVED"))
+
+
 class TestDeltaStub(SddCase):
     def setUp(self):
         super().setUp()
         self.living()
         self.new_change()
+
+    def test_missing_delta_starts_from_template(self):
+        self.assert_ok(self.sdd("delta-stub", "c1", "REQ-AUTH-001"))
+        delta = self.read("changes/c1/specs/auth.md")
+        self.assertTrue(delta.startswith("# Delta: auth\n"))
+        self.assertIn("## ADDED", delta)
+        self.assertEqual(delta.count("## MODIFIED"), 1)
 
     def test_modified_copies_block_with_base_hash(self):
         code, out = self.sdd("delta-stub", "c1", "REQ-AUTH-001")
@@ -496,7 +543,7 @@ class TestSync(SddCase):
         self.assert_ok(self.sdd("delta-stub", "c1", "REQ-AUTH-002", "--remove"))
         f = self.root / "changes/c1/specs/auth.md"
         text = f.read_text().replace("a valid password", "a valid passphrase")
-        f.write_text(text + "\n## ADDED\n\n" + ADDED_003)
+        f.write_text(text.replace("## ADDED\n", "## ADDED\n\n" + ADDED_003, 1))
         self.set_tasks("c1",
                        "- [x] T1 (test) x — REQ-AUTH-001 REQ-AUTH-003",
                        "- [x] T2 (impl) y — REQ-AUTH-001 REQ-AUTH-003 | blocked-by: T1")
@@ -531,6 +578,7 @@ class TestSync(SddCase):
         self.assertNotIn("<!-- base:", spec)
         self.assertLess(spec.index("REQ-AUTH-001"), spec.index("REQ-AUTH-003"))
         self.assertTrue(spec.startswith("# auth\n"))
+        self.assertNotIn("GIVEN <", spec)  # delta template guidance stays out
 
         self.assertIn("status: accepted", self.read("adr/ADR-0001-token-format.md"))
         self.assertFalse((self.root / "changes/c1").exists())

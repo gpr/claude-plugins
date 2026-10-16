@@ -47,7 +47,7 @@ creates `specs/ adr/ changes/ tests/acceptance/` and `.claude/sdd.json`: set
 | Lead workflow | `skills/change` (`/sdd:change`) | triage, gates, routing, close-out, reopen path |
 | Format rules | `skills/formats` (`sdd:formats`) | REQ/scenario/delta/ADR/task formats, preloaded into the authoring agents |
 | Agents | `agents/` (`sdd:spec-author`, `sdd:planner`, `sdd:acceptance-tester`, `sdd:implementer`, `sdd:verifier`) | one job each, minimal tools |
-| Spec tool | `tools/sdd.py`, exposed as the `mcp__sdd__sdd` tool | check, context bundles, delta-stub with base hashes, freeze/verify-frozen, deterministic sync, ADR accept/supersede |
+| Spec tool | `tools/sdd.py`, exposed as the `mcp__sdd__sdd` tool | check, context bundles, delta-new from the delta template, delta-stub with base hashes, freeze/verify-frozen, deterministic sync, ADR accept/supersede |
 | Mod | `hooks/register.tsx`, `hooks/guard.ts`, `hooks/phase.ts` | lead role for the main conversation, write guard per agent, the `sdd` tool, status band, `/sdd` and `/sdd phase` panes |
 
 ## The mod
@@ -73,7 +73,7 @@ creates `specs/ adr/ changes/ tests/acceptance/` and `.claude/sdd.json`: set
   the tool applies role rules per subcommand:
   - lead only: `sync`, `set-status`, `new`, `init`, `adr-accept`
   - lead and acceptance-tester: `freeze`
-  - lead and spec-author: `delta-stub`, `adr-new`
+  - lead and spec-author: `delta-new`, `delta-stub`, `adr-new`
 - **Band above the prompt.** Shows the most active open change, its phase, its status, task
   progress, the last check result, which workflow agents are running, and how many other
   changes are open. It hides itself when nothing is open.
