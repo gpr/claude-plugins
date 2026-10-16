@@ -14,8 +14,8 @@ Skill-driven agent swarm with parallel monitors:
 
 - **5 agents** (`agents/*.md`) — one task per agent, each declares the skills it relies on:
   - `component-builder` (Sonnet) — scaffolds one route + component using shadcn primitives
-  - `api-client-generator` (Opus) — one REST endpoint module: Zod schema + typed fetch + queryOptions/mutationOptions + `useXyz` hook
-  - `test-writer` (Haiku) — one test file (Vitest / RTL / Playwright depending on layer)
+  - `api-client-generator` (Sonnet) — one REST endpoint module: Zod schema + typed fetch + queryOptions/mutationOptions + `useXyz` hook
+  - `test-writer` (Sonnet) — one test file (Vitest / RTL / Playwright depending on layer)
   - `reviewer` (Opus, read-only) — diffs against stack conventions, emits blockers/must-fix/suggestions; queries Chromatic MCP for visual diffs
   - `migration-pilot` (Opus, worktree isolation) — drives one cross-cutting library migration per invocation
 - **10 skills** (`skills/<name>/SKILL.md`) encode per-library conventions: `tanstack-router`, `tanstack-query`, `tanstack-form-zod`, `zustand-slices`, `shadcn-tailwind`, `clerk-rest`, `vitest-rtl-playwright`, `error-and-loading`, `env-vars`, `pnpm-only`. Auto-invoked by relevance.
