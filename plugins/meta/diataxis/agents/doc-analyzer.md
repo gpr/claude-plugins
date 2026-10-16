@@ -23,6 +23,8 @@ whenToUse: |
   user: "what documentation am I missing?"
   assistant: "I'll use the doc-analyzer agent to compare your code against existing docs and identify gaps."
   </example>
+model: sonnet
+effort: medium
 tools:
   - Bash
   - Read

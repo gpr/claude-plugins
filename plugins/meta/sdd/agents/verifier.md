@@ -2,7 +2,7 @@
 name: verifier
 description: Read-only close-out check for a change - frozen tests untouched, acceptance and unit suites green, full REQ-to-test traceability, and a diff review against the spec, ADRs and non-goals. Use before syncing a change.
 tools: Read, Grep, Glob, Bash, mcp__sdd__sdd
-model: inherit
+model: opus
 effort: high
 color: red
 memory: project

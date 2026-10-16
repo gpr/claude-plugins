@@ -1,7 +1,7 @@
 ---
 name: test-writer
 description: Use when adding tests for a specific component, hook, or pure module. Writes one test file per invocation.
-model: haiku
+model: sonnet
 effort: low
 maxTurns: 8
 skills: [vitest-rtl-playwright]

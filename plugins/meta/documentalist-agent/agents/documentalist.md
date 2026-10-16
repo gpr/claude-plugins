@@ -3,6 +3,7 @@ name: documentalist
 description: Codebase knowledge keeper. Answers other agents' questions about the codebase, project structure and implementation details, and maintains the OKF knowledge bundle in `.kb/`. Use for any question about the codebase instead of exploring it yourself.
 tools: Read, Grep, Glob, Write(.kb/**), Edit(.kb/**), SendMessage, mcp__code-outline__kb_grep
 model: sonnet
+effort: medium
 background: true
 ---
 

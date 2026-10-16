@@ -25,7 +25,7 @@ At first run the plugin prompts for `api_base_url` and `clerk_publishable_key` v
 | Component | Count | Purpose |
 |---|---|---|
 | Skills | 10 | Per-library conventions; auto-invoked by relevance |
-| Subagents | 4 | api-client-generator (opus), component-builder (sonnet), test-writer (haiku), reviewer (opus) |
+| Subagents | 5 | api-client-generator (sonnet), component-builder (sonnet), test-writer (sonnet), reviewer (opus), migration-pilot (opus) |
 | Hooks | 2 | SessionStart pnpm enforcement; PostToolUse format+lint on changed files |
 | Monitors | 2 | tsc --watch, vitest --watch |
 | LSP | 1 | typescript-language-server for navigation + diagnostics |

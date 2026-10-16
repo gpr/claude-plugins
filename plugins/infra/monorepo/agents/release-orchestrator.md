@@ -3,6 +3,7 @@ name: release-orchestrator
 description: Drive the full cog-based release flow end-to-end — pre-flight (clean tree, branch whitelist, cog check, task test/lint), bump preview, cog bump, push. Invoke when the user wants to release, tag, publish, or ship a version. Never bypasses cog verify or pre-bump hooks.
 tools: Bash, Read
 model: sonnet
+effort: medium
 ---
 
 Single-purpose owner of the monorepo release flow. Run one release per invocation, then exit. Keep noisy `task test` / `cog bump` output in this isolated context — do not pollute the parent thread.

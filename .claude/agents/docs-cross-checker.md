@@ -2,6 +2,7 @@
 name: docs-cross-checker
 description: Use when plugin-validator or another tool flags a plugin field, hook event, monitor field, or frontmatter key as invalid or unrecognised. Fetches code.claude.com/docs/en/plugins-reference.md and returns documented/not-documented + verbatim quote with line reference.
 model: haiku
+effort: low
 tools: [WebFetch, Bash, Grep]
 ---
 

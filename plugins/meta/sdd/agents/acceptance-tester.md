@@ -3,6 +3,7 @@ name: acceptance-tester
 description: Writes failing acceptance tests from REQ scenarios and the plan's contracts, before any implementation, then freezes them. Use for (test) tasks in the change workflow.
 tools: Read, Grep, Glob, Write, Edit, Bash, mcp__sdd__sdd
 model: sonnet
+effort: medium
 skills:
   - sdd:formats
 color: yellow

@@ -3,6 +3,7 @@ name: implementer
 description: Implements one (impl) task with an inner red-green-refactor TDD loop until the frozen acceptance tests for its REQs pass. Use for (impl) tasks in the change workflow.
 tools: Read, Grep, Glob, Write, Edit, Bash, mcp__sdd__sdd
 model: sonnet
+effort: medium
 color: green
 memory: project
 ---
