@@ -39,6 +39,7 @@ const STORED: [string, SddChange, string[], string | undefined][] = [
   ['stored phase beats derivation (draft would be gate1)', stored('plan', change('draft')), [], 'plan'],
   ['stored phase beats running agents', stored('implement', change('implementing')), ['verifier'], 'implement'],
   ['unknown stored phase falls back', stored('bogus', change('verified')), [], 'sync'],
+  ['stored spec on a fix is not a fix phase: derived', { ...stored('spec', change('draft', [], 'fix')) }, [], 'plan'],
   ['stored done has no phase', stored('done', change('archived')), [], undefined],
 ]
 

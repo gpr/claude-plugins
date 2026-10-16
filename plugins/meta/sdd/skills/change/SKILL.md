@@ -40,7 +40,7 @@ number. Direct-path work has no change id and none of this.
 2. `EnterWorktree` with `path` = the printed worktree. From here every `sdd` call acts on it.
 3. `sdd status <id>`, then continue at the step the phase names (spec -> 2, gate1 -> 3,
    plan -> 4, gate2 -> 5, acceptance -> 6, implement -> 7, verify -> 8, sync -> 8.4,
-   done -> nothing left). A stored phase can lag a step that was done but not
+   done -> nothing left; a fix starts at plan, its test is written alongside). A stored phase can lag a step that was done but not
    checkpointed: trust the files (`sdd check`, task ticks) over the phase when they disagree.
    Resume a partly written spec or plan with the same agent type and the files as context.
 
@@ -54,7 +54,7 @@ Apply this rule, in order, and state the result in one line:
 - Makes a decision with lasting consequences (technology, data model, boundary,
   security posture) -> **full change** with ADR, even if behavior is unchanged.
 - Code diverges from an existing REQ (bug) -> **fix**: no spec delta, but a failing
-  acceptance test first. Step 2.1 `sdd start <id>` (then enter the worktree), set `size: fix` in intent.md, write one test task
+  acceptance test first. `sdd start <id> --title ... --pr-title "fix: ..."`, enter the worktree, `sdd checkpoint <id> --phase plan -m "chore(<id>): fix"`, set `size: fix` in intent.md, write one test task
   referencing the existing REQ, then go to step 4 (it runs step 6 alongside).
 - Anything else (refactor, rename, dependency bump, docs, config) -> **direct**: delegate
   to `general-purpose` (or do it yourself if trivial), run the unit tests, done.
@@ -96,15 +96,16 @@ For a fix, wait for both agents instead: T1 ticked and frozen (`sdd verify-froze
 passes).
 Show the user only: task count, contracts summary (one line each), and any WARN lines.
 They may still object; otherwise continue. `sdd set-status <id> implementing`, then
-`sdd checkpoint <id> --phase acceptance -m "chore(<id>): start implementation"`.
+`sdd checkpoint <id> --phase acceptance -m "chore(<id>): start implementation"` (a fix: `--phase implement`,
+its tests are already frozen).
 
 ## 6. Acceptance tests first (ATDD)
 A fix already did this step alongside step 4; skip to step 7.
 For each `(test)` task (parallel if several): delegate to `acceptance-tester` with
 the `sdd context <id> <Tn>` output pasted in the prompt. It writes the tests, confirms they
 fail for the right reason, ticks its task and runs `sdd freeze <id>`. After each one:
-`sdd checkpoint <id> -m "test(<id>): <Tn> acceptance tests"`; after the last (or for a
-fix, after T1 when moving on) add `--phase implement`.
+`sdd checkpoint <id> -m "test(<id>): <Tn> acceptance tests"`; after the last add
+`--phase implement`.
 If it reports that a scenario is untestable or ambiguous -> step 9 (reopen).
 
 ## 7. Implementation (inner TDD)

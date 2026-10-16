@@ -120,7 +120,7 @@ export async function checkPath(
   if (under(rel, S)) return `${rel}: living specs change only through \`sdd sync <change>\`.`
   if (under(rel, `${C}/archive`)) return `${rel}: archived changes are immutable.`
   if (under(rel, C) && rel.endsWith('/frozen.json')) return `${rel}: written only by \`sdd freeze\`.`
-  if (under(rel, C) && rel.endsWith('/state.json')) return `${rel}: written only by \`sdd start\` / \`sdd checkpoint\`.`
+  if (under(rel, C) && rel.endsWith('/state.json')) return `${rel}: written only by \`sdd start\`, \`checkpoint\`, \`set-pr\` and \`finish\`.`
   const isAdr = under(rel, A) && rel !== A
   const adrSt = isAdr ? await look.adrStatus(rel) : undefined
   if (adrSt === 'accepted' || adrSt === 'superseded' || adrSt === 'deprecated') {

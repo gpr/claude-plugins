@@ -28,7 +28,8 @@ export function phasesOf(change: SddChange) {
 // change's status, its tasks and the workflow agents running (types without the `sdd:`
 // prefix). Agents are session-wide, so they only refine within a status.
 export function phaseOf(change: SddChange, running: readonly string[]): PhaseId | undefined {
-  if (PHASES.some(p => p.id === change.phase)) return change.phase as PhaseId
+  // only a phase this kind of change has (a fix lists no spec or Gate 1)
+  if (phasesOf(change).some(p => p.id === change.phase)) return change.phase as PhaseId
   const isRunning = (type: string) => running.includes(type)
   const open = (kind: string) => change.tasks.some(t => t.kind === kind && !t.done)
   switch (change.status) {
