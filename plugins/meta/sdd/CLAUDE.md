@@ -14,6 +14,11 @@
   the `sdd:lead` section (`LEAD`). Keep it a short router: the workflow lives in
   `skills/change`. Not an agent with `settings.json` `agent`: a plugin agent's prompt
   would replace Claude Code's whole system prompt.
+- `state.json` (phase, branch, base, PR) is written only by `sdd.py` (`start`, `checkpoint`,
+  `set-pr`, `finish`); the guard refuses other writes. `PHASES` in `sdd.py` and
+  `hooks/phase.ts` list the same ids (plus `done`): change both, and `PHASE_STATUSES`
+  and the step names in `skills/change`, together. The git and `gh` calls stay in `sdd.py`
+  (deterministic, tested against a real bare origin with a fake `gh` in `tests/test_sdd.py`).
 - `hooks/phase.ts` maps a change (status, tasks, running agents) to a phase of
   `skills/change`, as pure functions tested in `tests/phase.test.ts`. A new step or
   status in the workflow changes `PHASES`/`phaseOf` and their tests together.

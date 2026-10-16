@@ -120,6 +120,7 @@ export async function checkPath(
   if (under(rel, S)) return `${rel}: living specs change only through \`sdd sync <change>\`.`
   if (under(rel, `${C}/archive`)) return `${rel}: archived changes are immutable.`
   if (under(rel, C) && rel.endsWith('/frozen.json')) return `${rel}: written only by \`sdd freeze\`.`
+  if (under(rel, C) && rel.endsWith('/state.json')) return `${rel}: written only by \`sdd start\`, \`checkpoint\`, \`set-pr\` and \`finish\`.`
   const isAdr = under(rel, A) && rel !== A
   const adrSt = isAdr ? await look.adrStatus(rel) : undefined
   if (adrSt === 'accepted' || adrSt === 'superseded' || adrSt === 'deprecated') {
@@ -212,7 +213,7 @@ export function checkBash(cmd: string, role: Role, cfg: Cfg, bases: string[]): s
     if (!hit || hit.rel.startsWith('..')) continue
     const r = hit.rel
     const isProtected =
-      [S, A, '.claude', `${C}/archive`].some(d => under(r, d)) || (under(r, C) && r.endsWith('/frozen.json'))
+      [S, A, '.claude', `${C}/archive`].some(d => under(r, d)) || (under(r, C) && (r.endsWith('/frozen.json') || r.endsWith('/state.json')))
     if (role === 'verifier') return `verifier is read-only (${r}).`
     if (role === 'implementer' && (under(r, T) || (under(r, C) && !r.endsWith('tasks.md')))) {
       return `Bash write touching ${r} is not allowed for the implementer. Report BLOCKED instead.`
@@ -229,6 +230,11 @@ const SDD_RULES: Record<string, Role[]> = {
   'set-status': ['lead'],
   sync: ['lead'],
   'adr-accept': ['lead'],
+  start: ['lead'],
+  checkpoint: ['lead'],
+  'set-pr': ['lead'],
+  resume: ['lead'],
+  finish: ['lead'],
   freeze: ['lead', 'acceptance-tester'],
   'delta-new': ['lead', 'spec-author'],
   'delta-stub': ['lead', 'spec-author'],

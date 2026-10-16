@@ -7,6 +7,10 @@ export type SddChange = {
   size: string
   adrs: string[]
   tasks: SddTask[]
+  /** From state.json: the stored workflow phase, the PR number and the change branch. */
+  phase?: string | null
+  pr?: number | null
+  branch?: string | null
 }
 
 export type SddCheck = { isOk: boolean; summary: string; lines: string[]; at: number; withTests: boolean }

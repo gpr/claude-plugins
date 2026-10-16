@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import datetime as _dt
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -633,6 +634,220 @@ class TestSync(SddCase):
         spec = self.read("specs/billing/spec.md")
         self.assertTrue(spec.startswith("# billing\n"))
         self.assertIn("### REQ-BILL-001: Invoice", spec)
+
+
+# ------------------------------------------------ branch / PR / resume ------
+FAKE_GH = """#!/bin/sh
+echo "$@" >> "$GH_LOG"
+case "$1 $2" in
+  "pr create") [ -n "$GH_FAIL" ] && { echo "gh: not authenticated" >&2; exit 1; }
+               echo "https://github.com/o/r/pull/7" ;;
+  "pr view")   echo "sdd/c1" ;;
+  "pr ready")  ;;
+esac
+"""
+
+
+class GitCase(unittest.TestCase):
+    """sdd.py against a real clone with a bare origin and a fake `gh` first on PATH."""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp(prefix="sdd-git-")).resolve()
+        self.origin = self.tmp / "origin.git"
+        self.root = self.tmp / "work"
+        bin_ = self.tmp / "bin"
+        bin_.mkdir()
+        (bin_ / "gh").write_text(FAKE_GH)
+        (bin_ / "gh").chmod(0o755)
+        self.log = self.tmp / "gh.log"
+        self.env = {**os.environ, "PATH": f"{bin_}:{os.environ['PATH']}", "GH_LOG": str(self.log),
+                    "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t",
+                    "GIT_COMMITTER_EMAIL": "t@t"}
+        self.env.pop("GH_FAIL", None)
+        self.git("init", "-q", "--bare", "-b", "main", str(self.origin), cwd=self.tmp)
+        self.git("clone", "-q", str(self.origin), str(self.root), cwd=self.tmp)
+        self.git("checkout", "-q", "-b", "main", cwd=self.root)
+        self.assertEqual(self.sdd("init")[0], 0)
+        self.git("add", "-A", cwd=self.root)
+        self.git("commit", "-qm", "init", cwd=self.root)
+        self.git("push", "-q", "-u", "origin", "main", cwd=self.root)
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def git(self, *args: str, cwd: Path | None = None) -> str:
+        p = subprocess.run(["git", *args], cwd=cwd or self.root, capture_output=True, text=True, env=self.env)
+        self.assertEqual(p.returncode, 0, p.stderr)
+        return p.stdout.strip()
+
+    def sdd(self, *args: str, cwd: Path | None = None) -> tuple[int, str]:
+        p = subprocess.run([sys.executable, str(SDD), *args], cwd=cwd or self.root,
+                           capture_output=True, text=True, env=self.env, timeout=60)
+        return p.returncode, p.stdout + p.stderr
+
+    def start(self, name: str = "c1") -> Path:
+        code, out = self.sdd("start", name, "--title", "Change one", "--pr-title", "feat: one")
+        self.assertEqual(code, 0, out)
+        return self.root / ".claude" / "worktrees" / f"sdd-{name}"
+
+    def state(self, wt: Path, name: str = "c1") -> dict:
+        return json.loads((wt / "changes" / name / "state.json").read_text())
+
+    def remote_subjects(self, branch: str) -> list[str]:
+        return self.git("log", "--format=%s", f"origin/{branch}", cwd=self.root).splitlines()
+
+
+class TestStart(GitCase):
+    def test_init_ignores_worktrees(self):
+        self.assertIn("/.claude/worktrees/", (self.root / ".gitignore").read_text().splitlines())
+
+    def test_start_makes_branch_worktree_state_and_draft_pr(self):
+        wt = self.start()
+        self.assertTrue((wt / "changes/c1/intent.md").exists())
+        st = self.state(wt)
+        self.assertEqual((st["phase"], st["branch"], st["base"], st["pr"]), ("spec", "sdd/c1", "main", 7))
+        self.assertEqual(self.git("rev-parse", "--abbrev-ref", "HEAD", cwd=wt), "sdd/c1")
+        self.git("fetch", "-q", "origin", "sdd/c1")
+        self.assertEqual(self.remote_subjects("sdd/c1")[:2], ["chore(sdd): record PR #7", "chore(sdd): start c1"])
+        self.assertIn("pr create --draft --base main --head sdd/c1 --title feat: one", self.log.read_text())
+        self.assertFalse((self.root / "changes/c1").exists(), "main checkout stays clean")
+
+    def test_start_without_gh_still_works_and_set_pr_records(self):
+        self.env["GH_FAIL"] = "1"
+        code, out = self.sdd("start", "c1", "--title", "One")
+        self.assertEqual(code, 0, out)
+        self.assertIn("PR missing", out)
+        wt = self.root / ".claude/worktrees/sdd-c1"
+        self.assertIsNone(self.state(wt)["pr"])
+        code, out = self.sdd("set-pr", "c1", "12", "--url", "https://x/pull/12", cwd=wt)
+        self.assertEqual(code, 0, out)
+        self.assertEqual(self.state(wt)["pr"], 12)
+        self.git("fetch", "-q", "origin", "sdd/c1")
+        self.assertEqual(self.remote_subjects("sdd/c1")[0], "chore(sdd): record PR #12")
+
+    def test_start_refuses_duplicates_and_uncommitted_config(self):
+        self.start()
+        self.assert_exit(self.sdd("start", "c1"), 1, "already exists")
+        self.git("rm", "-q", ".claude/sdd.json", cwd=self.root)
+        self.git("commit", "-qm", "drop cfg", cwd=self.root)
+        self.git("push", "-q", cwd=self.root)
+        self.assert_exit(self.sdd("start", "c2"), 1, "sdd.json")
+
+    def test_failed_push_leaves_nothing_behind_so_start_can_be_retried(self):
+        self.git("config", "remote.origin.pushurl", str(self.tmp / "nowhere.git"), cwd=self.root)
+        self.assertEqual(self.sdd("start", "c1", "--title", "One")[0], 1)
+        self.assertFalse((self.root / ".claude/worktrees/sdd-c1").exists())
+        self.assertEqual(self.git("branch", "--list", "sdd/c1", cwd=self.root), "")
+        self.git("config", "--unset", "remote.origin.pushurl", cwd=self.root)
+        self.start()
+
+    def assert_exit(self, res, code, needle):
+        self.assertEqual(res[0], code, res[1])
+        self.assertIn(needle, res[1])
+
+
+class TestCheckpoint(GitCase):
+    def test_checkpoint_sets_phase_commits_and_pushes(self):
+        wt = self.start()
+        (wt / "changes/c1/specs").mkdir(exist_ok=True)
+        (wt / "changes/c1/specs/auth.md").write_text("# Delta: auth\n")
+        code, out = self.sdd("checkpoint", "c1", "--phase", "gate1", "-m", "docs(sdd): c1 spec", cwd=wt)
+        self.assertEqual(code, 0, out)
+        self.assertEqual(self.state(wt)["phase"], "gate1")
+        self.git("fetch", "-q", "origin", "sdd/c1")
+        self.assertEqual(self.remote_subjects("sdd/c1")[0], "docs(sdd): c1 spec")
+
+    def test_checkpoint_nothing_to_commit_and_bad_phase(self):
+        wt = self.start()
+        code, out = self.sdd("checkpoint", "c1", cwd=wt)
+        self.assertEqual(code, 0, out)
+        self.assertIn("nothing to commit", out)
+        self.assertEqual(self.sdd("checkpoint", "c1", "--phase", "nope", cwd=wt)[0], 2)
+
+    def test_checkpoint_refuses_on_another_branch(self):
+        wt = self.start()
+        code, out = self.sdd("checkpoint", "c1", cwd=wt)  # sanity
+        self.git("checkout", "-q", "-b", "other", cwd=wt)
+        code, out = self.sdd("checkpoint", "c1", "-m", "x", cwd=wt)
+        self.assertEqual(code, 1, out)
+        self.assertIn("expected sdd/c1", out)
+
+
+class TestResume(GitCase):
+    def second_clone(self) -> Path:
+        other = self.tmp / "other"
+        self.git("clone", "-q", str(self.origin), str(other), cwd=self.tmp)
+        return other
+
+    def test_resume_from_a_fresh_clone_recreates_worktree_and_shows_phase(self):
+        wt = self.start()
+        self.assertEqual(self.sdd("checkpoint", "c1", "--phase", "plan", cwd=wt)[0], 0)
+        other = self.second_clone()
+        code, out = self.sdd("resume", "c1", cwd=other)
+        self.assertEqual(code, 0, out)
+        owt = other / ".claude/worktrees/sdd-c1"
+        self.assertTrue((owt / "changes/c1/state.json").exists())
+        self.assertIn(f"worktree {owt}", out)
+        self.assertIn("phase plan:", out)
+        self.assertIn("pr 7", out)
+        self.assertEqual(self.git("rev-parse", "--abbrev-ref", "HEAD", cwd=owt), "sdd/c1")
+
+    def test_resume_reuses_existing_worktree_and_pulls(self):
+        wt = self.start()
+        other = self.second_clone()
+        self.assertEqual(self.sdd("resume", "c1", cwd=other)[0], 0)
+        self.assertEqual(self.sdd("checkpoint", "c1", "--phase", "gate2", cwd=wt)[0], 0)
+        code, out = self.sdd("resume", "c1", cwd=other)
+        self.assertEqual(code, 0, out)
+        self.assertIn("phase gate2:", out)
+
+    def test_resume_by_pr_number(self):
+        self.start()
+        other = self.second_clone()
+        code, out = self.sdd("resume", "c1", "--pr", "7", cwd=other)
+        self.assertEqual(code, 0, out)
+        self.assertIn("pr view 7", self.log.read_text())
+
+    def test_resume_unknown_change_fails(self):
+        code, out = self.sdd("resume", "ghost")
+        self.assertEqual(code, 1, out)
+
+
+class TestFinishAndStatus(GitCase):
+    def test_status_json_and_check_warn_expose_state(self):
+        wt = self.start()
+        code, out = self.sdd("status", "--json", cwd=wt)
+        [c] = json.loads(out)["changes"]
+        self.assertEqual((c["phase"], c["pr"], c["branch"]), ("spec", 7, "sdd/c1"))
+        self.sdd("checkpoint", "c1", "--phase", "implement", cwd=wt)  # but status is draft
+        code, out = self.sdd("check", "c1", cwd=wt)
+        self.assertIn("WARN  state.json phase 'implement' does not fit status 'draft'", out)
+
+    def test_finish_ignores_archived_changes_whose_name_only_ends_the_same(self):
+        wt = self.start()
+        other = wt / "changes/archive/2099-01-01-add-c1"
+        other.mkdir(parents=True)
+        (other / "state.json").write_text(json.dumps({"branch": "sdd/add-c1", "phase": "sync"}))
+        code, out = self.sdd("finish", "c1", cwd=wt)
+        self.assertEqual(code, 1, out)
+        self.assertIn("no archived change 'c1'", out)
+
+    def test_finish_marks_done_pushes_and_readies_pr(self):
+        wt = self.start()
+        self.assertEqual(self.sdd("set-status", "c1", "verified", cwd=wt)[0], 0)
+        (wt / "changes/c1/specs/auth.md").write_text("# Delta: auth\n\n## ADDED\n\n" + ADDED_003)
+        (wt / "changes/c1/tasks.md").write_text(
+            "- [x] T1 (test) t — REQ-AUTH-003\n- [x] T2 (impl) i — REQ-AUTH-003 | blocked-by: T1\n")
+        code, out = self.sdd("sync", "c1", "--force", cwd=wt)
+        self.assertEqual(code, 0, out)
+        code, out = self.sdd("finish", "c1", cwd=wt)
+        self.assertEqual(code, 0, out)
+        self.assertIn("pr 7 ready for review", out)
+        self.assertIn("pr ready 7", self.log.read_text())
+        [arch] = (wt / "changes/archive").glob("*-c1")
+        self.assertEqual(json.loads((arch / "state.json").read_text())["phase"], "done")
+        self.git("fetch", "-q", "origin", "sdd/c1")
+        self.assertEqual(self.remote_subjects("sdd/c1")[0], "chore(sdd): sync c1")
 
 
 if __name__ == "__main__":

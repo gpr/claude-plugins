@@ -29,6 +29,8 @@ const FILE_CASES: [Role, string, 'allow' | 'deny'][] = [
   ['lead', 'adr/ADR-0001-x.md', 'deny'],
   ['lead', 'adr/ADR-0002-y.md', 'allow'],
   ['lead', 'changes/c1/frozen.json', 'deny'],
+  ['lead', 'changes/c1/state.json', 'deny'],
+  ['planner', 'changes/c1/state.json', 'deny'],
   ['lead', 'changes/archive/2026-01-01-c0/intent.md', 'deny'],
   ['lead', '.claude/sdd.json', 'allow'],
   ['spec-author', 'changes/c1/specs/auth.md', 'allow'],
@@ -90,6 +92,9 @@ describe('bash', () => {
     expect(bash('implementer', 'pytest -q tests/acceptance/test_a.py 2>&1 | tail -20')).toBe('allow')
     expect(bash('verifier', 'pytest -q tests/acceptance 2>/dev/null')).toBe('allow')
   })
+  test('state.json is protected from Bash writes too', () => {
+    expect(bash('implementer', 'echo {} > changes/c1/state.json')).toBe('deny')
+  })
   test('frozen.json and the archive are protected for every subagent', () => {
     expect(bash('acceptance-tester', 'echo {} > changes/c1/frozen.json')).toBe('deny')
     expect(bash('planner', 'rm -rf changes/archive/2026-01-01-c0')).toBe('deny')
@@ -128,6 +133,12 @@ describe('sdd subcommands', () => {
   test('check and context are open to everyone', () => {
     expect(checkSdd('check', 'verifier')).toBeUndefined()
     expect(checkSdd('context', 'implementer')).toBeUndefined()
+  })
+  test('branch, PR and resume subcommands are lead-only', () => {
+    for (const sub of ['start', 'checkpoint', 'set-pr', 'resume', 'finish']) {
+      expect(checkSdd(sub, 'lead')).toBeUndefined()
+      expect(checkSdd(sub, 'implementer')).toBeDefined()
+    }
   })
   test('missing subcommand is refused', () => expect(checkSdd(undefined, 'lead')).toBeDefined())
 })

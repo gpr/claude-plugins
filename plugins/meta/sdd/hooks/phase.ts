@@ -23,9 +23,13 @@ export function phasesOf(change: SddChange) {
   return FIX_ORDER.map(id => PHASES.find(p => p.id === id)!)
 }
 
-// Derived from the change's status, its tasks and the workflow agents running (types
-// without the `sdd:` prefix). Agents are session-wide, so they only refine within a status.
+// The phase `sdd checkpoint` stored in the change's state.json wins: it survives a restart
+// and a resume on another machine. Without one (older changes) it is derived from the
+// change's status, its tasks and the workflow agents running (types without the `sdd:`
+// prefix). Agents are session-wide, so they only refine within a status.
 export function phaseOf(change: SddChange, running: readonly string[]): PhaseId | undefined {
+  // only a phase this kind of change has (a fix lists no spec or Gate 1)
+  if (phasesOf(change).some(p => p.id === change.phase)) return change.phase as PhaseId
   const isRunning = (type: string) => running.includes(type)
   const open = (kind: string) => change.tasks.some(t => t.kind === kind && !t.done)
   switch (change.status) {

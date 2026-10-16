@@ -29,15 +29,15 @@ const agents = atom({ plugin: 'sdd', key: 'agents' } as const, [])
 const isBandHidden = atom({ plugin: 'sdd', key: 'isBandHidden' } as const, false)
 const lastDeny = atom({ plugin: 'sdd', key: 'lastDeny' } as const, '')
 
-const MUTATING = new Set(['init', 'new', 'set-status', 'delta-new', 'delta-stub', 'adr-new', 'adr-accept', 'freeze', 'sync'])
+const MUTATING = new Set(['init', 'new', 'set-status', 'delta-new', 'delta-stub', 'adr-new', 'adr-accept', 'freeze', 'sync', 'start', 'checkpoint', 'set-pr', 'resume', 'finish'])
 
 const TOOL_DESCRIPTION = `Runs the spec-driven workflow tool (sdd.py) in the project. Pass the subcommand and its arguments as \`args\`, e.g. ["check", "add-login"].
-Subcommands: init | config | status [<change>] | new <change> --title T | set-status <change> <draft|approved|implementing|verified|archived> | delta-new <change> <capability> | delta-stub <change> <REQ> [--remove] | adr-new <title> [--supersedes ADR-NNNN] | adr-accept <ADR> | check <change> [--tests] | context <change> <task> [--plan] | freeze <change> | verify-frozen <change> | sync <change> [--dry-run] [--force].
-Lead-only: init, new, set-status, sync, adr-accept. freeze: lead and acceptance-tester. delta-new, delta-stub, adr-new: lead and spec-author. Output is terse; ERROR lines name the file and the fix.`
+Subcommands: init | config | status [<change>] | new <change> --title T | set-status <change> <draft|approved|implementing|verified|archived> | delta-new <change> <capability> | delta-stub <change> <REQ> [--remove] | adr-new <title> [--supersedes ADR-NNNN] | adr-accept <ADR> | check <change> [--tests] | context <change> <task> [--plan] | freeze <change> | verify-frozen <change> | sync <change> [--dry-run] [--force] | start <change> --title T [--pr-title P] [--base B] | checkpoint <change> [--phase P] [-m MSG] | set-pr <change> <number> [--url U] | resume <change> [--pr N] | finish <change>.
+Lead-only: init, new, set-status, sync, adr-accept, start, checkpoint, set-pr, resume, finish. freeze: lead and acceptance-tester. delta-new, delta-stub, adr-new: lead and spec-author. Output is terse; ERROR lines name the file and the fix.`
 
 // Appended to the main conversation's system prompt: makes it the workflow's lead.
 const LEAD = `# sdd lead
-You are the lead of the spec-driven (sdd) workflow in this repo. For any request to change the codebase (feature, behavior change, bug fix) or to \`resume <change-id>\`, invoke the \`sdd:change\` skill with the request verbatim as its argument and follow it. Questions, explanations and reviews need no workflow: answer them directly. If you are a subagent, ignore this section.`
+You are the lead of the spec-driven (sdd) workflow in this repo. For any request to change the codebase (feature, behavior change, bug fix) or to \`resume <change-id>\` (also a change started elsewhere: it is fetched from its PR branch), invoke the \`sdd:change\` skill with the request verbatim as its argument and follow it. Questions, explanations and reviews need no workflow: answer them directly. If you are a subagent, ignore this section.`
 
 // ---------------------------------------------------------------- helpers --
 
@@ -90,7 +90,8 @@ async function runSdd($: $, args: string[], cwd: string) {
 }
 
 async function refreshChanges($: $) {
-  const cwd = await $.session.root()
+  // the cwd: after EnterWorktree it is the change's worktree, whose changes/ is the live one
+  const cwd = await $.session.cwd()
   let parsed: { root: string; changes: SddChange[]; archived: number }
   try {
     const out = await runSdd($, ['status', '--json'], cwd)
@@ -286,6 +287,7 @@ export const register: Register = on => {
         <Text>{top.id}</Text>
         <Text dimColor>
           {labelOf(phaseOf(top, running))} · {top.status} · {doneOf(top)}/{top.tasks.length} tasks
+          {top.pr ? ` · PR #${top.pr}` : ''}
           {check ? ` · check ${check.isOk ? 'ok' : 'fail'}` : ''}
           {running.length > 0 ? ` · ${running.join(', ')} running` : ''}
           {open.length > 1 ? ` · +${open.length - 1} open` : ''}
@@ -306,7 +308,7 @@ export const register: Register = on => {
     const types = running.map(a => a.type)
 
     const runCheck = async (id: string, withTests: boolean) => {
-      const cwd = await $.session.root()
+      const cwd = await $.session.cwd()
       const args = withTests ? ['check', id, '--tests'] : ['check', id]
       const out = await runSdd($, args, cwd)
       await recordCheck($, id, withTests, out.stdout, await $.clock.now())
@@ -327,6 +329,7 @@ export const register: Register = on => {
                 <Text color={c.status === 'verified' ? 'green' : undefined}>{c.status}</Text>
                 <Text dimColor>
                   {doneOf(c)}/{c.tasks.length} tasks{c.adrs.length > 0 ? ` · ${c.adrs.join(', ')}` : ''}
+                  {c.pr ? ` · PR #${c.pr}` : ''}
                 </Text>
               </Box>
               {phase && (

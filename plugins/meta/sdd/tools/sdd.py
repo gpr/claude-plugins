@@ -24,6 +24,14 @@ Commands
   verify-frozen <change>             fail if frozen acceptance tests were modified
   sync <change> [--dry-run] [--force]
                                      merge delta into living specs, accept ADRs, archive
+Branch / PR / resume (git + gh; the lead runs them)
+  start <change> --title T [--pr-title P] [--base B]
+                                     branch sdd/<change>, worktree, scaffold, push, draft PR
+  checkpoint <change> [--phase P] [-m MSG]
+                                     record the phase, commit everything, push
+  set-pr <change> <number> [--url U]  record a PR created by hand
+  resume <change> [--pr N]           fetch the branch, (re)create its worktree, show the phase
+  finish <change>                    after sync: phase done, commit, push, mark the PR ready
 Exit code: 0 ok, 1 errors found, 2 usage error.
 """
 from __future__ import annotations
@@ -34,11 +42,32 @@ import json
 import os
 import re
 import shutil
+import subprocess
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
 STATUSES = ["draft", "approved", "implementing", "verified", "archived"]
+# Workflow phases (same ids as hooks/phase.ts PHASES, plus `done`), with the statuses a
+# change may have while in each (a fix is still `draft` through plan and acceptance).
+PHASES = ["spec", "gate1", "plan", "gate2", "acceptance", "implement", "verify", "sync", "done"]
+PHASE_STATUSES = {
+    "spec": {"draft"}, "gate1": {"draft"}, "plan": {"draft", "approved"},
+    "gate2": {"draft", "approved"}, "acceptance": {"draft", "implementing"},
+    "implement": {"implementing"}, "verify": {"implementing"}, "sync": {"verified"},
+    "done": {"archived"},
+}
+PHASE_STEPS = {
+    "spec": "step 2: spec-author writes intent, delta, ADRs (files may be partial: sdd check)",
+    "gate1": "step 3: show Gate 1 to the user",
+    "plan": "step 4: planner writes plan.md and tasks.md",
+    "gate2": "step 5: sdd check, then set-status implementing",
+    "acceptance": "step 6: acceptance-tester for the open (test) tasks",
+    "implement": "step 7: implementers for the open (impl) tasks",
+    "verify": "step 8: verifier, then code-review",
+    "sync": "step 8.4: sdd sync, then sdd finish",
+    "done": "nothing left: the PR is ready for review",
+}
 ADR_RE = re.compile(r"ADR-\d{4}")
 TASK_RE = re.compile(r"^- \[( |x|X)\] (T\d+) \((test|impl|chore)\) (.*)$")
 BASE_RE = re.compile(r"^<!--\s*base:\s*([0-9a-f]{8})\s*-->\s*$")
@@ -72,6 +101,9 @@ CFG = {
     "acceptance_cmd": "pytest -q {files}",
     "unit_cmd": "pytest -q tests/unit",
     "req_id_pattern": "REQ-[A-Z0-9]+-[0-9]{3}",
+    "base_branch": "",               # empty: the remote's default branch, else main
+    "branch_prefix": "sdd/",
+    "worktree_dir": ".claude/worktrees",
 }
 DEFAULT_CFG = dict(CFG)
 _cfg_file = ROOT / ".claude" / "sdd.json"
@@ -258,6 +290,20 @@ def load_deltas(change: Path) -> list[Delta]:
     return out
 
 
+# ------------------------------------------------------------------- state --
+def load_state(change: Path) -> dict:
+    f = change / "state.json"
+    try:
+        return json.loads(f.read_text()) if f.exists() else {}
+    except ValueError:
+        return {}
+
+
+def save_state(change: Path, st: dict):
+    st["updated"] = _dt.date.today().isoformat()
+    atomic_write(change / "state.json", json.dumps(st, indent=2) + "\n")
+
+
 # ------------------------------------------------------------------ change --
 def change_dir(name: str) -> Path:
     p = CHANGES / name
@@ -345,6 +391,12 @@ def cmd_init(args):
         cfg = {k: v for k, v in DEFAULT_CFG.items() if k != "req_id_pattern"}
         atomic_write(_cfg_file, json.dumps(cfg, indent=2) + "\n")
         made.append(str(_cfg_file.relative_to(ROOT)) + " (edit acceptance_cmd / unit_cmd)")
+    ignore = ROOT / ".gitignore"
+    line = f"/{CFG['worktree_dir'].strip('/')}/"
+    old = ignore.read_text() if ignore.exists() else ""
+    if line not in old.splitlines():
+        atomic_write(ignore, old + ("" if not old or old.endswith("\n") else "\n") + line + "\n")
+        made.append(f".gitignore ({line})")
     print(f"root {ROOT}")
     print("created: " + (", ".join(made) if made else "nothing, already initialised"))
 
@@ -363,9 +415,11 @@ def cmd_status(args):
         for d in dirs:
             fm, body = read_fm(d / "intent.md")
             title = fm.get("title") or d.name
+            st = load_state(d)
             out.append({
                 "id": d.name, "title": title, "status": fm.get("status", "?"),
                 "size": fm.get("size", "change"),
+                "phase": st.get("phase"), "pr": st.get("pr"), "branch": st.get("branch"),
                 "adrs": fm.get("adrs", []) if isinstance(fm.get("adrs"), list) else [],
                 "tasks": [{"id": t["id"], "kind": t["kind"], "done": t["done"],
                            "reqs": t["reqs"]} for t in parse_tasks(d)],
@@ -377,8 +431,10 @@ def cmd_status(args):
         fm, _ = read_fm(d / "intent.md")
         tasks = parse_tasks(d)
         done = sum(t["done"] for t in tasks)
+        st = load_state(d)
+        extra = (f"  phase={st['phase']}" if st.get("phase") else "") + (f"  pr=#{st['pr']}" if st.get("pr") else "")
         print(f"{d.name}  status={fm.get('status', '?')}  tasks={done}/{len(tasks)}  "
-              f"size={fm.get('size', '?')}")
+              f"size={fm.get('size', '?')}{extra}")
         if args:
             for t in tasks:
                 print(f"  {'x' if t['done'] else ' '} {t['id']} ({t['kind']}) "
@@ -531,6 +587,9 @@ def collect(change: Path):
                     errs.append(f"{where}: no '#### Scenario:' (acceptance criteria required)")
     if not touched and fm.get("size") != "fix":
         warns.append("no spec delta in this change")
+    phase = load_state(change).get("phase")
+    if phase and (phase not in PHASES or fm.get("status") not in PHASE_STATUSES[phase]):
+        warns.append(f"state.json phase '{phase}' does not fit status '{fm.get('status')}'")
 
     tasks = parse_tasks(change)
     ids = [t["id"] for t in tasks]
@@ -758,12 +817,233 @@ def cmd_sync(args):
     print(f"synced {len(log)} change(s); ADRs accepted: {','.join(adr_list) or '-'}; "
           f"archived -> {dest.relative_to(ROOT)}")
 
+# ---------------------------------------------------- branch / PR / resume --
+def sh(cmd: list[str], cwd: Path | None = None) -> tuple[int, str]:
+    """Run a command, (exit code, stdout+stderr). 127 when the program is missing."""
+    try:
+        p = subprocess.run(cmd, cwd=cwd or ROOT, capture_output=True, text=True, timeout=120)
+    except (FileNotFoundError, subprocess.TimeoutExpired) as e:
+        return 127, str(e)
+    return p.returncode, (p.stdout + p.stderr).strip()
+
+
+def git(*args: str, cwd: Path | None = None) -> tuple[int, str]:
+    return sh(["git", *args], cwd)
+
+
+def git_ok(*args: str, cwd: Path | None = None) -> str:
+    code, out = git(*args, cwd=cwd)
+    if code != 0:
+        die(f"git {' '.join(args[:2])} failed: {out.splitlines()[-1] if out else code}", 1)
+    return out
+
+
+def base_branch(override: str | None = None) -> str:
+    if override or CFG["base_branch"]:
+        return override or CFG["base_branch"]
+    code, out = git("symbolic-ref", "--short", "refs/remotes/origin/HEAD")
+    return out.removeprefix("origin/") if code == 0 and out else "main"
+
+
+def pr_from(out: str) -> tuple[int | None, str]:
+    m = re.search(r"https?://\S+/pull/(\d+)", out)
+    return (int(m.group(1)), m.group(0)) if m else (None, "")
+
+
+def push(wt: Path):
+    code, out = git("push", "-u", "origin", "HEAD", cwd=wt)
+    if code != 0:
+        die(f"push failed: {out.splitlines()[-1] if out else code}", 1)
+
+
+def commit_all(wt: Path, msg: str) -> bool:
+    """Stage everything, commit if something is staged. True when a commit was made."""
+    git_ok("add", "-A", cwd=wt)
+    if git("diff", "--cached", "--quiet", cwd=wt)[0] == 0:
+        return False
+    git_ok("commit", "-m", msg, cwd=wt)
+    return True
+
+
+def opt(args: list[str], flag: str) -> str | None:
+    return args[args.index(flag) + 1] if flag in args and args.index(flag) + 1 < len(args) else None
+
+
+def cmd_start(args):
+    if not args or args[0].startswith("-"):
+        die("usage: start <change> --title T [--pr-title P] [--base B]")
+    name = args[0]
+    if not re.fullmatch(r"[a-z0-9][a-z0-9-]{1,60}", name):
+        die("change id must be kebab-case")
+    title = opt(args, "--title") or name
+    pr_title = opt(args, "--pr-title") or title
+    base = base_branch(opt(args, "--base"))
+    branch = CFG["branch_prefix"] + name
+    wt = ROOT / CFG["worktree_dir"] / f"sdd-{name}"
+    if wt.exists() or git("rev-parse", "--verify", "-q", f"refs/heads/{branch}")[0] == 0:
+        die(f"{branch} or {wt.relative_to(ROOT)} already exists; use `resume {name}`", 1)
+    git_ok("fetch", "origin", base)
+    if git("cat-file", "-e", f"origin/{base}:.claude/sdd.json")[0] != 0:
+        die(f"commit and push .claude/sdd.json (and .gitignore) to {base} first: the worktree starts from origin/{base}", 1)
+    git_ok("worktree", "add", str(wt), "-b", branch, f"origin/{base}")
+    try:
+        code, out = sh([sys.executable, str(Path(__file__).resolve()), "new", name, "--title", title], wt)
+        if code != 0:
+            die(out, 1)
+        d = wt / CFG["changes_dir"] / name
+        save_state(d, {"phase": "spec", "branch": branch, "base": base, "pr": None, "pr_url": None})
+        commit_all(wt, f"chore(sdd): start {name}")
+        push(wt)
+    except SystemExit:
+        # nothing is published yet: drop the half-made worktree and branch so a retry is clean
+        git("worktree", "remove", "--force", str(wt))
+        git("branch", "-D", branch)
+        raise
+    body = (f"Spec-driven change `{name}`: {title}\n\nDraft until `sdd finish`. "
+            f"Phase and PR are tracked in `{CFG['changes_dir']}/{name}/state.json`; "
+            f"continue with `/sdd:change resume {name}`.")
+    code, out = sh(["gh", "pr", "create", "--draft", "--base", base, "--head", branch,
+                    "--title", pr_title, "--body", body], wt)
+    num, url = pr_from(out) if code == 0 else (None, "")
+    if num:
+        st = load_state(d)
+        st.update(pr=num, pr_url=url)
+        save_state(d, st)
+        commit_all(wt, f"chore(sdd): record PR #{num}")
+        push(wt)
+    print(f"worktree {wt}")
+    print(f"branch {branch} (base {base})")
+    if num:
+        print(f"pr {num} {url}")
+    else:
+        print(f"PR missing ({(out.splitlines() or ['gh failed'])[-1][:120]}): create a draft PR for "
+              f"{branch}, then run `set-pr {name} <number>`")
+    print(f"next: EnterWorktree path={wt}")
+
+
+def require_branch(st: dict, name: str):
+    cur = git_ok("rev-parse", "--abbrev-ref", "HEAD")
+    if cur != st["branch"]:
+        die(f"on branch {cur}, expected {st['branch']}: enter the change's worktree (`resume {name}`)", 1)
+
+
+def worktree_cwd(name: str) -> tuple[Path, dict]:
+    """The change dir and state of a started change; refuses when HEAD is not its branch."""
+    d = change_dir(name)
+    st = load_state(d)
+    if not st.get("branch"):
+        die(f"{name} has no state.json; create changes with `start`", 1)
+    require_branch(st, name)
+    return d, st
+
+
+def cmd_checkpoint(args):
+    if not args or args[0].startswith("-"):
+        die("usage: checkpoint <change> [--phase P] [-m MSG]")
+    d, st = worktree_cwd(args[0])
+    phase = opt(args, "--phase")
+    if phase:
+        if phase not in PHASES:
+            die(f"phase must be one of {'|'.join(PHASES)}")
+        st["phase"] = phase
+        save_state(d, st)
+    msg = opt(args, "-m") or f"chore(sdd): {args[0]} {st.get('phase', 'checkpoint')}"
+    made = commit_all(ROOT, msg)
+    push(ROOT)
+    print(f"{'committed' if made else 'nothing to commit'}, pushed {st['branch']}, phase {st.get('phase')}")
+
+
+def cmd_set_pr(args):
+    if len(args) < 2 or not args[1].isdigit():
+        die("usage: set-pr <change> <number> [--url U]")
+    d, st = worktree_cwd(args[0])
+    st.update(pr=int(args[1]), pr_url=opt(args, "--url") or st.get("pr_url"))
+    save_state(d, st)
+    commit_all(ROOT, f"chore(sdd): record PR #{args[1]}")
+    push(ROOT)
+    print(f"{args[0]}: pr {args[1]}")
+
+
+def worktree_of(branch: str) -> Path | None:
+    _, out = git("worktree", "list", "--porcelain")
+    path = None
+    for line in out.splitlines():
+        if line.startswith("worktree "):
+            path = Path(line[9:])
+        elif line == f"branch refs/heads/{branch}":
+            return path
+    return None
+
+
+def cmd_resume(args):
+    if not args or args[0].startswith("-"):
+        die("usage: resume <change> [--pr N]")
+    name = args[0]
+    branch = None
+    if opt(args, "--pr"):
+        code, out = sh(["gh", "pr", "view", opt(args, "--pr"), "--json", "headRefName", "-q", ".headRefName"])
+        if code != 0 or not out:
+            die(f"gh pr view failed: {out[-120:]}", 1)
+        branch = out.splitlines()[-1]
+    else:
+        branch = load_state(CHANGES / name).get("branch") or CFG["branch_prefix"] + name
+    git_ok("fetch", "origin", branch)
+    wt = worktree_of(branch)
+    if wt is None:
+        wt = ROOT / CFG["worktree_dir"] / f"sdd-{name}"
+        if git("rev-parse", "--verify", "-q", f"refs/heads/{branch}")[0] == 0:
+            git_ok("worktree", "add", str(wt), branch)
+        else:
+            git_ok("worktree", "add", "--track", "-b", branch, str(wt), f"origin/{branch}")
+    code, out = git("pull", "--ff-only", "origin", branch, cwd=wt)
+    if code != 0:
+        die(f"cannot fast-forward {branch} in {wt}: {out.splitlines()[-1] if out else code}", 1)
+    d = wt / CFG["changes_dir"] / name
+    if not (d / "intent.md").exists():
+        die(f"{branch} has no change '{name}' ({CFG['changes_dir']}/{name}/intent.md)", 1)
+    st, fm = load_state(d), read_fm(d / "intent.md")[0]
+    phase = st.get("phase")
+    print(f"worktree {wt}")
+    print(f"branch {branch}")
+    print(f"pr {st.get('pr') or '-'} {st.get('pr_url') or ''}".rstrip())
+    print(f"status {fm.get('status', '?')}")
+    print(f"phase {phase or '-'}: {PHASE_STEPS.get(phase, 'no state.json: run `status` and derive the step')}")
+    print(f"next: EnterWorktree path={wt}")
+
+
+def cmd_finish(args):
+    if not args:
+        die("usage: finish <change>")
+    name = args[0]
+    hits = sorted(p for p in (CHANGES / "archive").glob(f"*-{name}")
+                  if re.fullmatch(rf"\d{{4}}-\d{{2}}-\d{{2}}-{re.escape(name)}", p.name))
+    if not hits:
+        die(f"no archived change '{name}'; run sync first", 1)
+    d = hits[-1]
+    st = load_state(d)
+    if not st.get("branch"):
+        die(f"{name} has no state.json", 1)
+    require_branch(st, name)
+    st["phase"] = "done"
+    save_state(d, st)
+    made = commit_all(ROOT, f"chore(sdd): sync {name}")
+    push(ROOT)
+    print(f"{'committed' if made else 'nothing to commit'}, pushed {st['branch']}")
+    if not st.get("pr"):
+        print("no PR recorded: mark it ready by hand")
+        return
+    code, out = sh(["gh", "pr", "ready", str(st["pr"])])
+    print(f"pr {st['pr']} ready for review" if code == 0 else
+          f"WARN could not mark PR #{st['pr']} ready ({out[-120:]}): do it by hand")
+
 
 COMMANDS = {
     "init": cmd_init, "config": cmd_config, "new": cmd_new, "status": cmd_status, "set-status": cmd_set_status,
     "delta-new": cmd_delta_new, "delta-stub": cmd_delta_stub, "adr-new": cmd_adr_new, "adr-accept": cmd_adr_accept,
     "check": cmd_check, "context": cmd_context, "freeze": cmd_freeze,
     "verify-frozen": cmd_verify_frozen, "sync": cmd_sync,
+    "start": cmd_start, "checkpoint": cmd_checkpoint, "set-pr": cmd_set_pr, "resume": cmd_resume,
+    "finish": cmd_finish,
 }
 
 if __name__ == "__main__":
