@@ -6,7 +6,7 @@ workflow's state live.
 
 ```
 request ─► lead (/sdd:change) ─► triage ──direct──► general-purpose / lead
-                                  │ fix ──► failing test on the existing REQ ─► implement ─► verify
+                                  │ fix ──► failing test on the existing REQ ║ plan ─► implement ─► verify
                                   ▼ change
                           sdd:spec-author ─► GATE 1 (you: intent, REQs, ADRs)
                                   ▼
@@ -82,8 +82,9 @@ creates `specs/ adr/ changes/ tests/acceptance/` and `.claude/sdd.json`: set
   guard refusal. `/sdd refresh` re-reads the state.
 - **`/sdd phase` pane.** The workflow's phases for the most active change (Spec, Gate 1,
   Plan, Gate 2, Acceptance tests, Implement, Verify, Sync; a `size: fix` change skips
-  Spec and Gate 1): done ones ticked, the current one marked with what happens in it,
-  plus the phase of every other open change. The phase is derived from the change's
+  Spec and Gate 1 and writes its tests alongside the plan, before Gate 2): done ones
+  ticked, the current one marked with what happens in it, plus the phase of every other
+  open change. The phase is derived from the change's
   status, its open test/impl tasks and which workflow agent is running.
 
 ## Determinism (why sdd.py exists)

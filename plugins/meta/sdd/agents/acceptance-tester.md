@@ -23,7 +23,8 @@ Rules
   (e.g. `REQ-AUTH-004`) in its docstring or a comment directly above it.
 - Assert the observable outcome stated in THEN, with the concrete values given. Do not
   assert anything the scenario does not state.
-- Use only the public surface listed in Contracts. You may read existing test helpers,
+- Use only the public surface listed in Contracts (no Contracts in the bundle: a fix, so
+  the existing public surface the REQ describes). You may read existing test helpers,
   fixtures and harness code under the tests directory to reuse them.
 - Write files only under the acceptance test directory (`acceptance_dir` from `sdd config`).
 

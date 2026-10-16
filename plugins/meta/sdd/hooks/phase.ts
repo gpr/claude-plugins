@@ -14,11 +14,13 @@ export const PHASES = [
 
 export type PhaseId = (typeof PHASES)[number]['id']
 
-// A fix has no spec delta: it starts at its test task.
-const FIX_SKIPS: ReadonlySet<PhaseId> = new Set(['spec', 'gate1'])
+// A fix has no spec delta and its contract is the existing code: its acceptance tests are
+// written alongside the plan, before Gate 2.
+const FIX_ORDER: readonly PhaseId[] = ['plan', 'acceptance', 'gate2', 'implement', 'verify', 'sync']
 
 export function phasesOf(change: SddChange) {
-  return change.size === 'fix' ? PHASES.filter(p => !FIX_SKIPS.has(p.id)) : [...PHASES]
+  if (change.size !== 'fix') return [...PHASES]
+  return FIX_ORDER.map(id => PHASES.find(p => p.id === id)!)
 }
 
 // Derived from the change's status, its tasks and the workflow agents running (types
@@ -28,9 +30,12 @@ export function phaseOf(change: SddChange, running: readonly string[]): PhaseId 
   const open = (kind: string) => change.tasks.some(t => t.kind === kind && !t.done)
   switch (change.status) {
     case 'draft':
-      // A fix starts with the lead's test task and goes from draft to implementing at
-      // Gate 2: it is planned once the planner has added its impl tasks.
-      if (change.size === 'fix') return isRunning('planner') || !change.tasks.some(t => t.kind === 'impl') ? 'plan' : 'gate2'
+      // A fix starts with the lead's test task; planner and acceptance-tester run together,
+      // and it goes from draft to implementing at Gate 2 once both are done.
+      if (change.size === 'fix') {
+        if (isRunning('planner') || !change.tasks.some(t => t.kind === 'impl')) return 'plan'
+        return isRunning('acceptance-tester') || open('test') ? 'acceptance' : 'gate2'
+      }
       return isRunning('spec-author') ? 'spec' : 'gate1'
     case 'approved':
       return isRunning('planner') || change.tasks.length === 0 ? 'plan' : 'gate2'
