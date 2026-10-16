@@ -2,7 +2,8 @@
 name: planner
 description: Writes plan.md (approach, contracts, components) and tasks.md for an approved change, tracing every task to REQ and ADR ids. Use after Gate 1 approval or to re-plan reopened requirements.
 tools: Read, Grep, Glob, Write, Edit, Bash, mcp__sdd__sdd
-model: sonnet
+model: opus
+effort: high
 skills:
   - sdd:formats
 color: blue

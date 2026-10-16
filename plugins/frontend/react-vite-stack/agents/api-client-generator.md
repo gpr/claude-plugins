@@ -1,7 +1,7 @@
 ---
 name: api-client-generator
 description: Use when adding a new REST endpoint to the frontend. Generates the Zod schema, typed fetch fn, queryOptions/mutationOptions, and key entry in one pass.
-model: opus
+model: sonnet
 effort: medium
 maxTurns: 12
 skills: [tanstack-query, clerk-rest, env-vars, pnpm-only]

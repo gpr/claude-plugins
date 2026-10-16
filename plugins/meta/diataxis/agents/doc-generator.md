@@ -23,6 +23,8 @@ whenToUse: |
   user: "write reference docs for the CLI commands"
   assistant: "I'll use the doc-generator agent to create comprehensive CLI reference documentation."
   </example>
+model: sonnet
+effort: high
 tools:
   - Bash
   - Write

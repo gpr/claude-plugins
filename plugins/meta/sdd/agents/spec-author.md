@@ -2,7 +2,7 @@
 name: spec-author
 description: Writes a change's intent.md, spec delta (ADDED/MODIFIED/REMOVED requirements with scenarios) and proposed ADRs. Use from the change workflow after triage, and to rebase or reopen a delta.
 tools: Read, Grep, Glob, Write, Edit, Bash, mcp__sdd__sdd
-model: inherit
+model: opus
 effort: high
 skills:
   - sdd:formats

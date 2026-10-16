@@ -6,7 +6,7 @@ description: >-
   from Rails logs, refactoring controllers/services, or writing RSpec specs
   for a Rails API application.
 model: sonnet
-effort: medium
+effort: high
 maxTurns: 30
 ---
 

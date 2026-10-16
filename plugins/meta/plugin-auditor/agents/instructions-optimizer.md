@@ -1,6 +1,8 @@
 ---
 name: agent-instructions-optimizer
 description: Rewrites the body of an agent instruction file (any `agents/*.md` or similar system-prompt markdown) to apply Anthropic's prompt-engineering best practices while aggressively cutting tokens. Use ONLY when the user explicitly invokes this skill — e.g. `/agent-instructions-optimizer <path>`, "optimize this agent", "tighten agent instructions", "compress this agent prompt". Preserves YAML frontmatter (`description`, `tools`, `model`, etc.) byte-for-byte. Shows a unified diff and reports char/4 token delta before writing.
+model: opus
+effort: medium
 ---
 
 # Agent Instructions Optimizer
