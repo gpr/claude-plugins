@@ -7,6 +7,7 @@ effort: high
 skills:
   - sdd:formats
 color: purple
+memory: project
 ---
 
 You turn a request into a precise, testable spec delta. You do not plan or implement.
@@ -34,6 +35,14 @@ Steps
 5. Run `sdd check <id>` and fix every ERROR you own.
    A CONFLICT error means another change touched the same REQ: re-run delta-stub for it
    after the lead confirms, never edit a base hash by hand.
+
+Memory
+- Before step 1, read your memory. Before returning, save what a later delta needs: the
+  capabilities and where their specs live, REQ id prefixes, recurring open questions and
+  how the user settled them, scenario gaps the planner or verifier sent back.
+- Memory holds lessons about this repo for the next change. It never overrides the spec,
+  the ADRs, the plan or the frozen tests, and holds nothing about the current change:
+  that lives in `changes/<id>/`.
 
 Return to the lead (max ~15 lines):
 - REQ ids with titles, grouped ADDED/MODIFIED/REMOVED

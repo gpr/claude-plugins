@@ -84,6 +84,14 @@ export function relTo(path: string, bases: string[]): { rel: string; base: strin
 
 const under = (rel: string, dir: string) => rel === dir || rel.startsWith(`${dir}/`)
 
+/**
+ * A workflow agent's own `memory:` directories. Claude Code names them after the agent type
+ * with non-alphanumerics folded to `-` (`sdd:planner` -> `sdd-planner`).
+ */
+export function memoryDirs(role: Role): string[] {
+  return [`.claude/agent-memory/sdd-${role}`, `.claude/agent-memory-local/sdd-${role}`]
+}
+
 function changeOf(rel: string, cfg: Cfg): string | undefined {
   const parts = rel.split('/')
   const c = cfg.changes_dir.split('/')
@@ -119,6 +127,7 @@ export async function checkPath(
   }
   if (role === 'lead') return undefined
   // every subagent
+  if (role !== 'other' && memoryDirs(role).some(d => under(rel, d))) return undefined
   if (under(rel, '.claude')) return `${rel}: subagents cannot change workflow configuration.`
   const ch = changeOf(rel, cfg)
   const name = rel.split('/').pop() ?? ''
@@ -167,7 +176,7 @@ export async function checkPath(
       }
       return undefined
     case 'verifier':
-      return 'verifier is read-only.'
+      return 'verifier is read-only (its memory directory aside).'
     default:
       return undefined // other subagents (Explore, general-purpose): the rules above only
   }
