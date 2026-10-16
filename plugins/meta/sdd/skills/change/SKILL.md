@@ -32,7 +32,7 @@ Apply this rule, in order, and state the result in one line:
   security posture) -> **full change** with ADR, even if behavior is unchanged.
 - Code diverges from an existing REQ (bug) -> **fix**: no spec delta, but a failing
   acceptance test first. `sdd new <id>`, set `size: fix` in intent.md, write one test task
-  referencing the existing REQ, then go to step 4.
+  referencing the existing REQ, then go to step 4 (it runs step 6 alongside).
 - Anything else (refactor, rename, dependency bump, docs, config) -> **direct**: delegate
   to `general-purpose` (or do it yourself if trivial), run the unit tests, done.
 
@@ -53,15 +53,21 @@ Ask: approve / change something / stop.
 
 ## 4. Plan and tasks
 Delegate to `planner` with the change id. It writes plan.md and tasks.md.
+For a `size: fix`, the contract is the existing code, so the test does not wait for the
+plan: in the same message, also delegate T1 to `acceptance-tester` (step 6). Tell the
+planner to leave T1's line as is and make its impl tasks `blocked-by: T1`.
 
 ## 5. Gate 2 - automated coherence (light)
 Run `sdd check <id>`. If it fails, resume the planner (or spec-author for spec errors)
 with the exact ERROR lines. Max 2 rounds, then show the user the remaining errors.
 Also confirm plan.md `## Contracts` is filled: the acceptance tests depend on it.
+For a fix, wait for both agents instead: T1 ticked and frozen (`sdd verify-frozen <id>`
+passes).
 Show the user only: task count, contracts summary (one line each), and any WARN lines.
 They may still object; otherwise continue. `sdd set-status <id> implementing`.
 
 ## 6. Acceptance tests first (ATDD)
+A fix already did this step alongside step 4; skip to step 7.
 For each `(test)` task (parallel if several): delegate to `acceptance-tester` with
 the `sdd context <id> <Tn>` output pasted in the prompt. It writes the tests, confirms they
 fail for the right reason, ticks its task and runs `sdd freeze <id>`.

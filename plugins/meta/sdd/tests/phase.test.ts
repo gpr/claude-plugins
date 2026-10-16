@@ -19,7 +19,9 @@ const CASES: [string, SddChange, string[], string | undefined][] = [
   ['draft fix skips the spec', change('draft', [], 'fix'), [], 'plan'],
   ['draft fix with only its test task', change('draft', [task('T1', 'test', false)], 'fix'), [], 'plan'],
   ['draft fix while planner runs', change('draft', [task('T1', 'test', false), task('T2', 'impl', false)], 'fix'), ['planner'], 'plan'],
-  ['draft fix, planned', change('draft', [task('T1', 'test', false), task('T2', 'impl', false)], 'fix'), [], 'gate2'],
+  ['draft fix, planned, test open', change('draft', [task('T1', 'test', false), task('T2', 'impl', false)], 'fix'), [], 'acceptance'],
+  ['draft fix, planned, tester running', change('draft', [task('T1', 'test', true), task('T2', 'impl', false)], 'fix'), ['acceptance-tester'], 'acceptance'],
+  ['draft fix, planned and tested', change('draft', [task('T1', 'test', true), task('T2', 'impl', false)], 'fix'), [], 'gate2'],
   ['approved without tasks', change('approved'), [], 'plan'],
   ['approved while planner runs', change('approved', [task('T1', 'test', false)]), ['planner'], 'plan'],
   ['approved with tasks', change('approved', [task('T1', 'test', false)]), [], 'gate2'],
@@ -37,7 +39,7 @@ for (const [name, c, running, want] of CASES) {
   })
 }
 
-test('a fix lists no spec or Gate 1 step', () => {
-  expect(phasesOf(change('draft', [], 'fix')).map(p => p.id)).toEqual(['plan', 'gate2', 'acceptance', 'implement', 'verify', 'sync'])
+test('a fix lists no spec or Gate 1 step, and its tests come before Gate 2', () => {
+  expect(phasesOf(change('draft', [], 'fix')).map(p => p.id)).toEqual(['plan', 'acceptance', 'gate2', 'implement', 'verify', 'sync'])
   expect(phasesOf(change('draft')).length).toBe(8)
 })

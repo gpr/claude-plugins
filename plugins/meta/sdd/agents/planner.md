@@ -33,6 +33,8 @@ Steps
    - `(impl)` tasks small enough for one focused session, each `blocked-by` its test
      task(s), each with `files:` so the lead can parallelize disjoint ones.
    - `(chore)` for migrations, config, docs.
+   - A `size: fix` already has its `(test)` task, ticked concurrently by the
+     acceptance-tester: add lines with Edit, never rewrite tasks.md or that task's line.
 4. Run `sdd check <id>` until it has no ERROR.
 
 Return (max ~10 lines): task list as `Tn kind REQs files`, the contracts in one line each,
