@@ -46,7 +46,7 @@ creates `specs/ adr/ changes/ tests/acceptance/` and `.claude/sdd.json`: set
 |---|---|---|
 | Lead workflow | `skills/change` (`/sdd:change`) | triage, gates, routing, close-out, reopen path |
 | Format rules | `skills/formats` (`sdd:formats`) | REQ/scenario/delta/ADR/task formats, preloaded into the authoring agents |
-| Agents | `agents/` (`sdd:spec-author`, `sdd:planner`, `sdd:acceptance-tester`, `sdd:implementer`, `sdd:verifier`) | one job each, minimal tools |
+| Agents | `agents/` (`sdd:spec-author`, `sdd:planner`, `sdd:acceptance-tester`, `sdd:implementer`, `sdd:verifier`) | one job each, minimal tools, project memory in `.claude/agent-memory/sdd-<agent>/` |
 | Spec tool | `tools/sdd.py`, exposed as the `mcp__sdd__sdd` tool | check, context bundles, delta-new from the delta template, delta-stub with base hashes, freeze/verify-frozen, deterministic sync, ADR accept/supersede |
 | Mod | `hooks/register.tsx`, `hooks/guard.ts`, `hooks/phase.ts` | lead role for the main conversation, write guard per agent, the `sdd` tool, status band, `/sdd` and `/sdd phase` panes |
 
@@ -64,8 +64,8 @@ creates `specs/ adr/ changes/ tests/acceptance/` and `.claude/sdd.json`: set
     `approved`.
   - `acceptance-tester` writes only the acceptance tests and `tasks.md`.
   - `implementer` can never touch the acceptance tests, the spec or the ADRs.
-  - `verifier` writes nothing.
-  - No subagent edits `.claude/`, or changes a `status:` line in `intent.md` or an ADR
+  - `verifier` writes nothing but its memory.
+  - No subagent edits `.claude/` outside its own memory directory, or changes a `status:` line in `intent.md` or an ADR
     (that is `sdd set-status` / `sdd adr-accept`, lead only).
 
   If the guard itself fails, it refuses subagents' calls and lets the lead's through.
@@ -86,6 +86,15 @@ creates `specs/ adr/ changes/ tests/acceptance/` and `.claude/sdd.json`: set
   ticked, the current one marked with what happens in it, plus the phase of every other
   open change. The phase is derived from the change's
   status, its open test/impl tasks and which workflow agent is running.
+
+## Agent memory
+Each workflow agent has `memory: project`: Claude Code loads
+`.claude/agent-memory/sdd-<agent>/MEMORY.md` into its prompt and lets it keep notes there
+across changes (repo layout, test setup, recurring findings). Commit the directory to share
+it with the team, or ignore it in git to keep it per clone. The guard lets each agent write
+only its own directory (and the `agent-memory-local` one). Memory never overrides the spec,
+the ADRs or the frozen tests. With auto memory turned off (`autoMemoryEnabled: false`)
+the agents run without it.
 
 ## Determinism (why sdd.py exists)
 - **Sync** merges by REQ id; MODIFIED replaces the whole block, nothing is paraphrased.

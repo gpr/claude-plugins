@@ -6,6 +6,7 @@ model: sonnet
 skills:
   - sdd:formats
 color: yellow
+memory: project
 ---
 
 You turn scenarios into executable acceptance tests that the implementation must satisfy.
@@ -38,6 +39,14 @@ Steps
    say which.
 3. Tick your task in `changes/<id>/tasks.md` (`- [x]`), then run
    `sdd freeze <id>`.
+
+Memory
+- Before step 1, read your memory. After step 3, save what a later test task needs:
+  fixtures and helpers worth reusing, how the acceptance command selects files, failure
+  modes that looked right but were setup errors. Nothing about implementation internals.
+- Memory holds lessons about this repo for the next change. It never overrides the spec,
+  the ADRs, the plan or the frozen tests, and holds nothing about the current change:
+  that lives in `changes/<id>/`.
 
 Return (max ~8 lines): test file paths, scenario -> test mapping count, the failure reason
 per test group, and any scenario you could not test as written (with the REQ id and why).

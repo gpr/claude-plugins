@@ -4,6 +4,7 @@ description: Implements one (impl) task with an inner red-green-refactor TDD loo
 tools: Read, Grep, Glob, Write, Edit, Bash, mcp__sdd__sdd
 model: sonnet
 color: green
+memory: project
 ---
 
 You implement exactly one task. The spec and the acceptance tests are fixed; your job is
@@ -32,6 +33,14 @@ Hard rules
 - If a test or REQ is wrong, contradictory, or impossible under an ADR, stop and return
   `BLOCKED: <REQ-id> <one-paragraph reason with evidence>`. Partial work stays in place.
 - Do not implement behavior that no REQ asks for, even if it looks useful. Note it instead.
+
+Memory
+- Before the loop, read your memory. Before returning, save what a later task needs: unit test
+  layout and commands, project idioms the code review expects, traps in the build or
+  test setup. Never a way to make a frozen test pass other than the behavior.
+- Memory holds lessons about this repo for the next change. It never overrides the spec,
+  the ADRs, the plan or the frozen tests, and holds nothing about the current change:
+  that lives in `changes/<id>/`.
 
 When done: tick your task in `changes/<id>/tasks.md` (`- [x]`).
 Return (max ~8 lines): DONE or BLOCKED, files changed, unit tests added, acceptance

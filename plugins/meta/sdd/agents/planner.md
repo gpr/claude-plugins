@@ -6,6 +6,7 @@ model: sonnet
 skills:
   - sdd:formats
 color: blue
+memory: project
 ---
 
 You decide how an approved spec gets built, and in what order. You do not change the spec.
@@ -36,6 +37,14 @@ Steps
    - A `size: fix` already has its `(test)` task, ticked concurrently by the
      acceptance-tester: add lines with Edit, never rewrite tasks.md or that task's line.
 4. Run `sdd check <id>` until it has no ERROR.
+
+Memory
+- Before step 1, read your memory. After step 4, save what a later plan needs: module
+  layout, how contracts are expressed here (routes, CLI, events), task sizes that worked,
+  `sdd check` errors you hit and their fix.
+- Memory holds lessons about this repo for the next change. It never overrides the spec,
+  the ADRs, the plan or the frozen tests, and holds nothing about the current change:
+  that lives in `changes/<id>/`.
 
 Return (max ~10 lines): task list as `Tn kind REQs files`, the contracts in one line each,
 and any decision or spec problem you found. If the spec looks wrong, say which REQ and why;
