@@ -75,8 +75,8 @@ Each plugin is versioned independently by cocogitto (`cog.toml`, workflows in `.
 - Local dry run: `cog bump --auto --dry-run` (needs cocogitto 7.x; tags come from `git fetch --tags`).
 - CI pins `cocogitto-action@v4.2.0` (installs cog 7.0.0) and fails unless `cog --version` is 7.x. Don't use the floating `v4` tag: it installs 6.x, which can't read `[monorepo.packages]`.
 - A repo ruleset rejects pushes updating more than 5 refs, so `scripts/release/push-tags.sh` pushes new tags in batches of 5.
-- The release workflow pushes to `main` with `GITHUB_TOKEN`; if `main` ever requires PRs, give the Actions bot a ruleset bypass.
-- `GITHUB_TOKEN` cannot get the `workflows` permission, so GitHub rejects any new tag whose `.github/workflows/` differs from `main`. `bootstrap-tags.sh` therefore never seeds tags on a commit older than the last workflow change.
+- `main` requires PRs, so the release workflow pushes with a GitHub App token (`actions/create-github-app-token`; variable `RELEASE_APP_ID`, secret `RELEASE_APP_PRIVATE_KEY`). The app needs Contents read/write and must be on the `main` ruleset's bypass list.
+- Without the app's Workflows permission, GitHub rejects any new tag whose `.github/workflows/` differs from `main`. `bootstrap-tags.sh` therefore never seeds tags on a commit older than the last workflow change.
 
 ## Plugin Components
 
