@@ -2,6 +2,14 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## sdd-0.5.0 - 2026-10-16
+#### Features
+- (**sdd**) branch, worktree and draft PR per change, resumable phase (#19) - (bbd5405) - Grégory R.
+#### Performance Improvements
+- pin model and effort per agent purpose - (eed7493) - Claude, *Claude Opus 5.5*
+
+- - -
+
 ## sdd-0.4.0 - 2026-10-16
 #### Features
 - (**sdd**) give the workflow agents project memory (#17) - (d4f8c96) - Grégory R.
