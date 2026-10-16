@@ -733,6 +733,14 @@ class TestStart(GitCase):
         self.git("push", "-q", cwd=self.root)
         self.assert_exit(self.sdd("start", "c2"), 1, "sdd.json")
 
+    def test_failed_push_leaves_nothing_behind_so_start_can_be_retried(self):
+        self.git("config", "remote.origin.pushurl", str(self.tmp / "nowhere.git"), cwd=self.root)
+        self.assertEqual(self.sdd("start", "c1", "--title", "One")[0], 1)
+        self.assertFalse((self.root / ".claude/worktrees/sdd-c1").exists())
+        self.assertEqual(self.git("branch", "--list", "sdd/c1", cwd=self.root), "")
+        self.git("config", "--unset", "remote.origin.pushurl", cwd=self.root)
+        self.start()
+
     def assert_exit(self, res, code, needle):
         self.assertEqual(res[0], code, res[1])
         self.assertIn(needle, res[1])
@@ -814,6 +822,15 @@ class TestFinishAndStatus(GitCase):
         self.sdd("checkpoint", "c1", "--phase", "implement", cwd=wt)  # but status is draft
         code, out = self.sdd("check", "c1", cwd=wt)
         self.assertIn("WARN  state.json phase 'implement' does not fit status 'draft'", out)
+
+    def test_finish_ignores_archived_changes_whose_name_only_ends_the_same(self):
+        wt = self.start()
+        other = wt / "changes/archive/2099-01-01-add-c1"
+        other.mkdir(parents=True)
+        (other / "state.json").write_text(json.dumps({"branch": "sdd/add-c1", "phase": "sync"}))
+        code, out = self.sdd("finish", "c1", cwd=wt)
+        self.assertEqual(code, 1, out)
+        self.assertIn("no archived change 'c1'", out)
 
     def test_finish_marks_done_pushes_and_readies_pr(self):
         wt = self.start()

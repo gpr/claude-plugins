@@ -886,13 +886,19 @@ def cmd_start(args):
     if git("cat-file", "-e", f"origin/{base}:.claude/sdd.json")[0] != 0:
         die(f"commit and push .claude/sdd.json (and .gitignore) to {base} first: the worktree starts from origin/{base}", 1)
     git_ok("worktree", "add", str(wt), "-b", branch, f"origin/{base}")
-    code, out = sh([sys.executable, str(Path(__file__).resolve()), "new", name, "--title", title], wt)
-    if code != 0:
-        die(out, 1)
-    d = wt / CFG["changes_dir"] / name
-    save_state(d, {"phase": "spec", "branch": branch, "base": base, "pr": None, "pr_url": None})
-    commit_all(wt, f"chore(sdd): start {name}")
-    push(wt)
+    try:
+        code, out = sh([sys.executable, str(Path(__file__).resolve()), "new", name, "--title", title], wt)
+        if code != 0:
+            die(out, 1)
+        d = wt / CFG["changes_dir"] / name
+        save_state(d, {"phase": "spec", "branch": branch, "base": base, "pr": None, "pr_url": None})
+        commit_all(wt, f"chore(sdd): start {name}")
+        push(wt)
+    except SystemExit:
+        # nothing is published yet: drop the half-made worktree and branch so a retry is clean
+        git("worktree", "remove", "--force", str(wt))
+        git("branch", "-D", branch)
+        raise
     body = (f"Spec-driven change `{name}`: {title}\n\nDraft until `sdd finish`. "
             f"Phase and PR are tracked in `{CFG['changes_dir']}/{name}/state.json`; "
             f"continue with `/sdd:change resume {name}`.")
@@ -915,15 +921,19 @@ def cmd_start(args):
     print(f"next: EnterWorktree path={wt}")
 
 
+def require_branch(st: dict, name: str):
+    cur = git_ok("rev-parse", "--abbrev-ref", "HEAD")
+    if cur != st["branch"]:
+        die(f"on branch {cur}, expected {st['branch']}: enter the change's worktree (`resume {name}`)", 1)
+
+
 def worktree_cwd(name: str) -> tuple[Path, dict]:
     """The change dir and state of a started change; refuses when HEAD is not its branch."""
     d = change_dir(name)
     st = load_state(d)
     if not st.get("branch"):
         die(f"{name} has no state.json; create changes with `start`", 1)
-    cur = git_ok("rev-parse", "--abbrev-ref", "HEAD")
-    if cur != st["branch"]:
-        die(f"on branch {cur}, expected {st['branch']}: enter the change's worktree (`resume {name}`)", 1)
+    require_branch(st, name)
     return d, st
 
 
@@ -1005,16 +1015,15 @@ def cmd_finish(args):
     if not args:
         die("usage: finish <change>")
     name = args[0]
-    hits = sorted((CHANGES / "archive").glob(f"*-{name}"))
+    hits = sorted(p for p in (CHANGES / "archive").glob(f"*-{name}")
+                  if re.fullmatch(rf"\d{{4}}-\d{{2}}-\d{{2}}-{re.escape(name)}", p.name))
     if not hits:
         die(f"no archived change '{name}'; run sync first", 1)
     d = hits[-1]
     st = load_state(d)
     if not st.get("branch"):
         die(f"{name} has no state.json", 1)
-    cur = git_ok("rev-parse", "--abbrev-ref", "HEAD")
-    if cur != st["branch"]:
-        die(f"on branch {cur}, expected {st['branch']}", 1)
+    require_branch(st, name)
     st["phase"] = "done"
     save_state(d, st)
     made = commit_all(ROOT, f"chore(sdd): sync {name}")

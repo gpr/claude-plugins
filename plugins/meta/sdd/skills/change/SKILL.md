@@ -30,7 +30,8 @@ number. Direct-path work has no change id and none of this.
   commits everything and pushes. Phase ids: `spec gate1 plan gate2 acceptance implement
   verify sync done`. Pass `--phase` when the step you just finished moves the change to
   the next phase; omit it for further commits within a phase.
-- Never `git commit` or `git push` yourself for a change; never write `state.json`.
+- Never `git commit` or `git push` yourself for a change (merging isolated implementer
+  branches is the one exception); never write `state.json`.
 
 ## Resume
 `resume <id>` continues a change from this or another machine:
