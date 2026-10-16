@@ -17,7 +17,7 @@ changes/<change>/intent.md      why, scope, non-goals, success criteria (front m
 changes/<change>/specs/<capability>.md   delta against the living spec
 changes/<change>/plan.md        how: approach, contracts, components
 changes/<change>/tasks.md       checklist, the only file edited during implementation
-changes/<change>/state.json     phase, branch, base, PR number, requires (written only by `sdd start`/`checkpoint`; never edit)
+changes/<change>/state.json     phase, branch, base, PR number, requires (written only by `sdd.py`; never edit)
 adr/ADR-NNNN-<slug>.md          one decision per file
 tests/acceptance/               acceptance tests, tagged with REQ ids
 ```

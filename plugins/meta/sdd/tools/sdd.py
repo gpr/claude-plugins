@@ -890,14 +890,22 @@ def parse_requires(raw: list[str], name: str) -> list[str]:
     return out
 
 
+def is_archive_of(dirname: str, change: str) -> bool:
+    """True for the archive directory `sync` makes for `change` (<date>-<change>)."""
+    return re.fullmatch(rf"\d{{4}}-\d{{2}}-\d{{2}}-{re.escape(change)}", dirname) is not None
+
+
 def archived_in(ref: str, dep: str) -> str | None:
-    """Name of dep's archive directory in `ref` (a git ref), else None."""
+    """Path of dep's archive directory in `ref` (a git ref), else None."""
     code, out = git("ls-tree", "--name-only", ref, f"{CFG['changes_dir']}/archive/")
-    pat = re.compile(rf"\d{{4}}-\d{{2}}-\d{{2}}-{re.escape(dep)}")
     for line in out.splitlines() if code == 0 else []:
-        if pat.fullmatch(line.rsplit("/", 1)[-1]):
+        if is_archive_of(line.rsplit("/", 1)[-1], dep):
             return line
     return None
+
+
+def base_of(st: dict) -> str:
+    return st.get("base") or base_branch()
 
 
 def state_at(ref: str, path: str) -> dict | None:
@@ -911,8 +919,14 @@ def state_at(ref: str, path: str) -> dict | None:
 def dep_states(name: str, requires: list[str], base: str, wt: Path) -> list[dict]:
     """State of every required change, transitively, deepest first. `ok`: merged into the
     base and in wt's branch; `missing`: merged into the base, not yet in the branch; `ready`:
-    finished, its PR not merged; `open`: still being worked on; `unknown`: no branch found."""
-    git_ok("fetch", "origin", base)
+    finished (`finish` ran), its PR not merged; `open`: still being worked on, even if already
+    synced; `unknown`: no branch found."""
+    batch = [f"{CFG['branch_prefix']}{d}" for d in requires]
+    if git("fetch", "origin", base, *batch)[0] == 0:
+        fetched = set(batch)
+    else:  # a missing branch fails the whole fetch: base alone, the others one by one
+        git_ok("fetch", "origin", base)
+        fetched = set()
     out: list[dict] = []
     seen: set[str] = set()
 
@@ -925,25 +939,25 @@ def dep_states(name: str, requires: list[str], base: str, wt: Path) -> list[dict
             seen.add(dep)
             row = {"dep": dep, "state": "unknown", "detail": f"no branch {CFG['branch_prefix']}{dep}", "pr": None}
             if archived_in(f"origin/{base}", dep):
-                in_wt = (wt / CFG["changes_dir"] / "archive").is_dir() and any(
-                    re.fullmatch(rf"\d{{4}}-\d{{2}}-\d{{2}}-{re.escape(dep)}", p.name)
-                    for p in (wt / CFG["changes_dir"] / "archive").iterdir())
+                arch_dir = wt / CFG["changes_dir"] / "archive"
+                in_wt = arch_dir.is_dir() and any(is_archive_of(p.name, dep) for p in arch_dir.iterdir())
                 row.update(state="ok" if in_wt else "missing",
                            detail="merged" if in_wt else f"merged into {base}, not in this branch")
             else:
                 branch = f"{CFG['branch_prefix']}{dep}"
                 nxt: list[str] = []
-                if git("fetch", "origin", branch)[0] == 0:
+                if branch in fetched or git("fetch", "origin", branch)[0] == 0:
                     ref = f"origin/{branch}"
                     arch = archived_in(ref, dep)
                     st = (state_at(ref, f"{arch}/state.json") if arch
                           else state_at(ref, f"{CFG['changes_dir']}/{dep}/state.json")) or {}
                     pr = f" pr #{st['pr']}" if st.get("pr") else ""
                     row["pr"] = st.get("pr")
-                    if arch:
+                    if arch and st.get("phase") == "done":
                         row.update(state="ready", detail=f"finished{pr}, awaits merge into {base}")
                     else:
-                        row.update(state="open", detail=f"phase {st.get('phase') or '?'}{pr}")
+                        row.update(state="open", detail=f"phase {st.get('phase') or '?'}{pr}"
+                                   + (" (synced, `finish` not run)" if arch else ""))
                     nxt = st.get("requires", [])
                 walk(nxt, chain + [dep])
             out.append(row)
@@ -967,12 +981,19 @@ def blocked(rows: list[dict]) -> bool:
     return any(r["state"] in ("open", "ready", "unknown") for r in rows)
 
 
+def missing(rows: list[dict]) -> bool:
+    return any(r["state"] == "missing" for r in rows)
+
+
 def bring_in_base(wt: Path, base: str):
+    if git("status", "--porcelain", cwd=wt)[1]:
+        die(f"uncommitted changes in {wt}: commit or stash them (or `checkpoint`), then retry", 1)
     code, out = git("merge", "--no-edit", f"origin/{base}", cwd=wt)
     if code != 0:
         files = git("diff", "--name-only", "--diff-filter=U", cwd=wt)[1].replace("\n", " ")
         git("merge", "--abort", cwd=wt)
-        die(f"merging origin/{base} into the change branch failed ({files or out.splitlines()[-1]}): "
+        die(f"merging origin/{base} into the change branch failed "
+            f"({files or (out.splitlines() or ['no output'])[-1]}): "
             f"merge it by hand in {wt}, then run `checkpoint` again", 1)
     push(wt)
     print(f"merged origin/{base} into the branch (required changes arrived)")
@@ -993,7 +1014,8 @@ def cmd_start(args):
     dep_rows = dep_states(name, requires, base, ROOT) if requires else []  # dies on a cycle, before any side effect
     if wt.exists() or git("rev-parse", "--verify", "-q", f"refs/heads/{branch}")[0] == 0:
         die(f"{branch} or {wt.relative_to(ROOT)} already exists; use `resume {name}`", 1)
-    git_ok("fetch", "origin", base)
+    if not requires:  # otherwise dep_states fetched the base already
+        git_ok("fetch", "origin", base)
     if git("cat-file", "-e", f"origin/{base}:.claude/sdd.json")[0] != 0:
         die(f"commit and push .claude/sdd.json (and .gitignore) to {base} first: the worktree starts from origin/{base}", 1)
     git_ok("worktree", "add", str(wt), "-b", branch, f"origin/{base}")
@@ -1030,8 +1052,8 @@ def cmd_start(args):
     else:
         print(f"PR missing ({(out.splitlines() or ['gh failed'])[-1][:120]}): create a draft PR for "
               f"{branch}, then run `set-pr {name} <number>`")
-    if requires:
-        for line in dep_lines([r for r in dep_rows if r["state"] != "ok"]):
+    if blocked(dep_rows):  # `missing`/`ok` don't matter: the branch was just cut from origin/<base>
+        for line in dep_lines([r for r in dep_rows if r["state"] in ("open", "ready", "unknown")]):
             print(f"WARN requires {line}")
         print("WARN spec work may go on; plan and later phases wait until they are merged")
     print(f"next: EnterWorktree path={wt}")
@@ -1062,13 +1084,14 @@ def cmd_checkpoint(args):
         if phase not in PHASES:
             die(f"phase must be one of {'|'.join(PHASES)}")
         if st.get("requires") and PHASES.index(phase) >= PHASES.index("plan"):
-            rows = dep_states(args[0], st["requires"], st.get("base") or base_branch(), ROOT)
+            base = base_of(st)
+            rows = dep_states(args[0], st["requires"], base, ROOT)
             if blocked(rows):
                 die("required changes are not merged: " + "; ".join(dep_lines(rows)) +
                     f". Next: {dep_next(rows)}", 1)
-            if any(r["state"] == "missing" for r in rows):
+            if missing(rows):
                 commit_all(ROOT, f"chore(sdd): {args[0]} checkpoint before merging base")
-                bring_in_base(ROOT, st.get("base") or base_branch())
+                bring_in_base(ROOT, base)
         st["phase"] = phase
         save_state(d, st)
     msg = opt(args, "-m") or f"chore(sdd): {args[0]} {st.get('phase', 'checkpoint')}"
@@ -1096,12 +1119,13 @@ def cmd_requires(args):
         print(",".join(st.get("requires", [])) or "-")
         return
     st["requires"] = [] if "--clear" in args else parse_requires(args[1:], args[0])
-    if st["requires"]:
-        dep_states(args[0], st["requires"], st.get("base") or base_branch(), ROOT)  # dies on a cycle
+    rows = dep_states(args[0], st["requires"], base_of(st), ROOT) if st["requires"] else []  # dies on a cycle
     save_state(d, st)
     commit_all(ROOT, f"chore(sdd): {args[0]} requires {','.join(st['requires']) or 'nothing'}")
     push(ROOT)
     print(f"{args[0]}: requires {','.join(st['requires']) or '-'}")
+    for line in dep_lines([r for r in rows if r["state"] in ("open", "ready", "unknown")]):
+        print(f"WARN requires {line}")
 
 
 def cmd_deps(args):
@@ -1111,15 +1135,15 @@ def cmd_deps(args):
     if not st.get("requires"):
         print(f"OK {args[0]}: requires nothing")
         return
-    rows = dep_states(args[0], st["requires"], st.get("base") or base_branch(), ROOT)
+    rows = dep_states(args[0], st["requires"], base_of(st), ROOT)
     for line in dep_lines(rows):
         print(line)
-    bad = blocked(rows) or any(r["state"] == "missing" for r in rows)
-    if blocked(rows):
+    stuck = blocked(rows)
+    if stuck:
         print(f"next: {dep_next(rows)}")
-    elif bad:
+    elif missing(rows):
         print("next: `checkpoint --phase <p>` or `resume` merges the base in")
-    sys.exit(1 if bad else 0)
+    sys.exit(1 if stuck or missing(rows) else 0)
 
 
 def worktree_of(branch: str) -> Path | None:
@@ -1167,15 +1191,16 @@ def cmd_resume(args):
     print(f"status {fm.get('status', '?')}")
     print(f"phase {phase or '-'}: {PHASE_STEPS.get(phase, 'no state.json: run `status` and derive the step')}")
     if st.get("requires"):
-        rows = dep_states(name, st["requires"], st.get("base") or base_branch(), wt)
+        base = base_of(st)
+        rows = dep_states(name, st["requires"], base, wt)
         for line in dep_lines(rows):
             print(line)
         if blocked(rows):
-            print(f"blocked: required changes are not merged into {st.get('base') or base_branch()}")
+            print(f"blocked: required changes are not merged into {base}")
             print(f"next: {dep_next(rows)}, then `resume {name}` again")
             sys.exit(1)
-        if any(r["state"] == "missing" for r in rows):
-            bring_in_base(wt, st.get("base") or base_branch())
+        if missing(rows):
+            bring_in_base(wt, base)
     print(f"next: EnterWorktree path={wt}")
 
 
@@ -1184,7 +1209,7 @@ def cmd_finish(args):
         die("usage: finish <change>")
     name = args[0]
     hits = sorted(p for p in (CHANGES / "archive").glob(f"*-{name}")
-                  if re.fullmatch(rf"\d{{4}}-\d{{2}}-\d{{2}}-{re.escape(name)}", p.name))
+                  if is_archive_of(p.name, name))
     if not hits:
         die(f"no archived change '{name}'; run sync first", 1)
     d = hits[-1]

@@ -895,7 +895,7 @@ class TestDeps(GitCase):
 
     def test_requires_command_sets_shows_and_clears(self):
         wt = self.start()
-        self.assertIn("-", self.sdd("requires", "c1", cwd=wt)[1])
+        self.assertEqual(self.sdd("requires", "c1", cwd=wt)[1].strip(), "-")
         code, out = self.sdd("requires", "c1", "xx,yy", "zz", cwd=wt)
         self.assertEqual(code, 0, out)
         self.assertEqual(self.state(wt)["requires"], ["xx", "yy", "zz"])
@@ -947,6 +947,49 @@ class TestDeps(GitCase):
         code, out = self.sdd("checkpoint", "c2", "--phase", "plan", cwd=wt2)
         self.assertEqual(code, 0, out)
         self.assertEqual(self.state(wt2, "c2")["phase"], "plan")
+
+    def test_synced_but_not_finished_dep_is_still_open(self):
+        wt = self.started_with()
+        d = self.start("dep")
+        self.assertEqual(self.sdd("set-status", "dep", "verified", cwd=d)[0], 0)
+        (d / "changes/dep/specs/auth.md").write_text("# Delta: auth\n\n## ADDED\n\n" + ADDED_003)
+        (d / "changes/dep/tasks.md").write_text(
+            "- [x] T1 (test) t — REQ-AUTH-003\n- [x] T2 (impl) i — REQ-AUTH-003 | blocked-by: T1\n")
+        self.assertEqual(self.sdd("sync", "dep", "--force", cwd=d)[0], 0)
+        self.git("add", "-A", cwd=d)
+        self.git("commit", "-qm", "sync", cwd=d)
+        self.git("push", "-q", cwd=d)
+        code, out = self.sdd("deps", "c1", cwd=wt)
+        self.assertEqual(code, 1, out)
+        self.assertIn("open dep phase spec pr #7 (synced, `finish` not run)", out)
+        self.assertIn("next: resume dep", out)
+
+    def test_start_does_not_warn_about_a_dep_merged_while_main_checkout_is_stale(self):
+        self.finish_change("dep")
+        self.merge_into_main("dep")
+        self.git("reset", "-q", "--hard", "HEAD~1", cwd=self.root)  # local main behind origin
+        code, out = self.sdd("start", "c1", "--title", "C", "--requires", "dep")
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("WARN", out)
+
+    def test_requires_command_warns_about_unmerged_and_unknown(self):
+        wt = self.start()
+        self.start("dep")
+        code, out = self.sdd("requires", "c1", "dep", "lgoin", cwd=wt)
+        self.assertEqual(code, 0, out)
+        self.assertIn("WARN requires open dep phase spec", out)
+        self.assertIn("WARN requires unknown lgoin no branch sdd/lgoin", out)
+
+    def test_resume_refuses_to_merge_base_over_uncommitted_changes(self):
+        wt = self.started_with()
+        self.finish_change("dep")
+        self.merge_into_main("dep")
+        (wt / "scratch.txt").write_text("wip\n")
+        code, out = self.sdd("resume", "c1")
+        self.assertEqual(code, 1, out)
+        self.assertIn("uncommitted changes", out)
+        self.assertEqual((wt / "scratch.txt").read_text(), "wip\n")
+        self.assertFalse(list((wt / "changes/archive").glob("*-dep")))
 
     def test_base_merge_conflict_is_aborted_cleanly(self):
         wt = self.started_with()
