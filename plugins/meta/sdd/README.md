@@ -7,7 +7,7 @@ workflow's state live.
 ```
 request ─► lead (/sdd:change) ─► triage ──direct──► general-purpose / lead
                                   │ fix ──► failing test on the existing REQ ║ plan ─► implement ─► verify
-                                  ▼ change
+                                  ▼ change: sdd start (branch sdd/<id>, worktree, draft PR)
                           sdd:spec-author ─► GATE 1 (you: intent, REQs, ADRs)
                                   ▼
                             sdd:planner ─► GATE 2 (sdd check, automatic)
@@ -19,7 +19,10 @@ request ─► lead (/sdd:change) ─► triage ──direct──► general-pu
                            sdd:verifier ─► PASS ─► code-review (findings ─► implementer / reopen)
                                   ▼
                               sdd sync (delta → specs/, ADRs accepted, archive)
+                                  ▼
+                              sdd finish (commit, push, PR ready)
 ```
+Each artifact is committed and pushed with `sdd checkpoint`, which also stores the phase.
 
 ## Install
 
@@ -50,6 +53,30 @@ creates `specs/ adr/ changes/ tests/acceptance/` and `.claude/sdd.json`: set
 | Spec tool | `tools/sdd.py`, exposed as the `mcp__sdd__sdd` tool | check, context bundles, delta-new from the delta template, delta-stub with base hashes, freeze/verify-frozen, deterministic sync, ADR accept/supersede |
 | Mod | `hooks/register.tsx`, `hooks/guard.ts`, `hooks/phase.ts` | lead role for the main conversation, write guard per agent, the `sdd` tool, status band, `/sdd` and `/sdd phase` panes |
 
+## Branches, PRs and resume
+For a full change or a fix the lead runs `sdd start <id>` before any artifact exists:
+- branch `sdd/<id>` from `origin/<base>`, a worktree in `.claude/worktrees/sdd-<id>` (the
+  lead moves into it with `EnterWorktree`), the scaffolded change pushed, and a **draft PR**
+  opened with `gh`. If `gh` is missing or fails, the lead opens the PR and records it with
+  `sdd set-pr <id> <number>`.
+- `changes/<id>/state.json` stores `phase`, `branch`, `base`, `pr`, `pr_url`. Only `sdd.py`
+  writes it; the guard refuses every other write. Phases: `spec gate1 plan gate2 acceptance
+  implement verify sync done`. The band and `/sdd phase` show the stored phase (older
+  changes without it keep the derived one) and `sdd check` warns when phase and status
+  disagree.
+- After every artifact outcome (spec, plan, each test task, each impl task, each fix) the
+  lead runs `sdd checkpoint <id> [--phase P] -m "<message>"`: store the phase, commit all,
+  push. It refuses to run off the change's branch.
+- **Continue a change**: `/sdd:change resume <id>` runs `sdd resume <id>` (or `--pr <n>`):
+  `git fetch` the PR branch, create or reuse the worktree, fast-forward it, print the stored
+  phase and the step to continue at. The lead enters the worktree and carries on.
+- `sdd finish <id>` after `sync`: phase `done`, commit, push, `gh pr ready`. Merging stays
+  with you. The worktree is kept.
+
+Needs a git remote named `origin` with `.claude/sdd.json` committed on the base branch;
+`gh` (authenticated) only for the PR steps. Config keys: `base_branch` (default: the
+remote's default branch), `branch_prefix` (`sdd/`), `worktree_dir` (`.claude/worktrees`).
+
 ## The mod
 - **Lead role.** A `prompt.compose` hook appends an `sdd:lead` section to the main
   conversation's system prompt: change requests go through `sdd:change`, questions are
@@ -57,7 +84,7 @@ creates `specs/ adr/ changes/ tests/acceptance/` and `.claude/sdd.json`: set
 - **Guard, in-process.** Every Edit/Write/MultiEdit/NotebookEdit/Bash call is checked
   against the calling agent, identified by the call's `agentId`:
   - Nobody edits `specs/` by hand: it changes only through `sdd sync`.
-  - Nobody edits accepted ADRs, `frozen.json` or archived changes.
+  - Nobody edits accepted ADRs, `frozen.json`, `state.json` or archived changes.
   - `spec-author` writes only the intent, the delta and proposed ADRs, and only while
     the change is `draft`.
   - `planner` writes only `plan.md` and `tasks.md`, while the change is `draft` or
@@ -71,7 +98,7 @@ creates `specs/ adr/ changes/ tests/acceptance/` and `.claude/sdd.json`: set
   If the guard itself fails, it refuses subagents' calls and lets the lead's through.
 - **`sdd` tool.** Agents call `mcp__sdd__sdd` with `args` instead of a script path, and
   the tool applies role rules per subcommand:
-  - lead only: `sync`, `set-status`, `new`, `init`, `adr-accept`
+  - lead only: `sync`, `set-status`, `new`, `init`, `adr-accept`, `start`, `checkpoint`, `set-pr`, `resume`, `finish`
   - lead and acceptance-tester: `freeze`
   - lead and spec-author: `delta-new`, `delta-stub`, `adr-new`
 - **Band above the prompt.** Shows the most active open change, its phase, its status, task
@@ -119,6 +146,9 @@ python3 -m unittest discover -s plugins/meta/sdd/tests -p 'test_*.py'   # sdd.py
 ```
 
 ## Known limits
+- `resume` fast-forwards only: a diverged local branch needs a manual fix.
+- Parallel implementer worktrees (`isolation: "worktree"`) started from inside the change's
+  worktree are untested with nested worktrees; run implementers sequentially if it fails.
 - The Bash check is heuristic. `verify-frozen`, run by the verifier and ideally in CI,
   is the real enforcement for tests.
 - Parallel implementers in worktrees still need the lead to merge their branches.

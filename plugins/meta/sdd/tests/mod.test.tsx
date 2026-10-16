@@ -52,6 +52,8 @@ test('the band shows the most active change and its progress', async ($, on) => 
         title: 'Add login',
         status: 'implementing',
         size: 'change',
+        phase: 'verify',
+        pr: 42,
         adrs: ['ADR-0002'],
         tasks: [
           { id: 'T1', kind: 'test', done: true, reqs: ['REQ-AUTH-001'] },
@@ -61,6 +63,7 @@ test('the band shows the most active change and its progress', async ($, on) => 
     ],
   }
   on('session.root', () => ({ value: '/repo' }))
+  on('session.cwd', () => ({ value: '/repo' }))
   on('process.run', (_$, e) => {
     expect(e.argv.slice(-2)).toEqual(['status', '--json'])
     return { value: { exitCode: 0, stdout: JSON.stringify(status), stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
@@ -76,7 +79,7 @@ test('the band shows the most active change and its progress', async ($, on) => 
       props: { hasSurvey: false, isWorking: false, maxRows: 3, bodyColumns: 100, ...SITE },
     })
     expect(await ui.find({ type: 'Text', text: 'add-login' })).toBeDefined()
-    expect(await ui.find({ type: 'Text', text: /Implement · implementing · 1\/2 tasks/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /Verify · implementing · 1\/2 tasks.*PR #42/ })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: /\+1 open/ })).toBeDefined()
     expect(await ui.find({ key: 'open' })).toBeDefined()
     await ui.unmount()
@@ -102,6 +105,7 @@ test('the phase pane marks the current phase of the most active change', async (
     ],
   }
   on('session.root', () => ({ value: '/repo' }))
+  on('session.cwd', () => ({ value: '/repo' }))
   on('process.run', () => ({
     value: { exitCode: 0, stdout: JSON.stringify(status), stderr: '', isStdoutTruncated: false, isStderrTruncated: false },
   }))
