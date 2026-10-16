@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## sdd-0.3.0 - 2026-10-16
+#### Features
+- (**sdd**) write a fix's acceptance tests alongside its plan - (59ce04c) - Claude, *Claude Opus 5.5*
+
+- - -
+
 ## sdd-0.2.0 - 2026-10-16
 #### Features
 - (**sdd**) add delta template and sdd delta-new - (d927de3) - Claude, *Claude Opus 5.5*
