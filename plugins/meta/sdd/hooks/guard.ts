@@ -233,6 +233,7 @@ const SDD_RULES: Record<string, Role[]> = {
   start: ['lead'],
   checkpoint: ['lead'],
   'set-pr': ['lead'],
+  requires: ['lead'],
   resume: ['lead'],
   finish: ['lead'],
   freeze: ['lead', 'acceptance-tester'],

@@ -11,6 +11,8 @@ export type SddChange = {
   phase?: string | null
   pr?: number | null
   branch?: string | null
+  /** From state.json: changes that must be merged into the base before this one continues. */
+  requires?: string[]
 }
 
 export type SddCheck = { isOk: boolean; summary: string; lines: string[]; at: number; withTests: boolean }
