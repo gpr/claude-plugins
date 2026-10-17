@@ -61,3 +61,35 @@ export function infoOf(id: PhaseId | undefined) {
 export function labelOf(id: PhaseId | undefined): string {
   return infoOf(id)?.label ?? 'unknown'
 }
+
+// The position of a change's phase in its own workflow (a fix's order differs), -1 without one.
+export function stepOf(change: SddChange, running: readonly string[] = []): number {
+  const id = phaseOf(change, running)
+  return phasesOf(change).findIndex(p => p.id === id)
+}
+
+const RANK: Record<string, number> = { implementing: 0, verified: 1, approved: 2, draft: 3 }
+
+// Most active first: by status, then furthest in its own workflow, then most tasks (a planned
+// change before an unplanned one). Running agents are session-wide and name no change, so the
+// ranking ignores them.
+export function byActivity(changes: readonly SddChange[]): SddChange[] {
+  return changes
+    .map(c => ({ c, rank: RANK[c.status] ?? 9, step: stepOf(c), n: c.tasks.length }))
+    .sort((a, b) => a.rank - b.rank || b.step - a.step || b.n - a.n)
+    .map(x => x.c)
+}
+
+// Changes grouped by phase (agents ignored, as in byActivity), the most advanced phase first and
+// changes without one last. Each group keeps the input's order.
+export function byPhase(changes: readonly SddChange[]): [PhaseId | undefined, SddChange[]][] {
+  const groups = new Map<PhaseId | undefined, SddChange[]>()
+  for (const c of changes) {
+    const id = phaseOf(c, [])
+    const group = groups.get(id)
+    if (group) group.push(c)
+    else groups.set(id, [c])
+  }
+  const at = (id: PhaseId | undefined) => (id === undefined ? -1 : PHASES.findIndex(p => p.id === id))
+  return [...groups].sort(([a], [b]) => at(b) - at(a))
+}
