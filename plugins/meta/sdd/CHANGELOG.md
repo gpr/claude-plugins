@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## sdd-0.6.0 - 2026-10-17
+#### Features
+- (**sdd**) change dependencies, resume waits for required changes (#20) - (67fd30f) - Grégory R.
+
+- - -
+
 ## sdd-0.5.0 - 2026-10-16
 #### Features
 - (**sdd**) branch, worktree and draft PR per change, resumable phase (#19) - (bbd5405) - Grégory R.
