@@ -39,15 +39,15 @@ Shown when at least one change is open, unless hidden:
 sdd  add-login  Implement · implementing · 2/5 tasks · PR #42 · check ok · implementer running · +1 open   [Open] [Hide]
 ```
 
-The fields are: the most active open change, its phase label, status, tasks done/total, PR, the last check result, which workflow agents are running, and how many other changes are open. **Open** opens the status pane. **Hide** hides the band until the next `/sdd`.
+The fields are: the active change, its phase label, status, tasks done/total, PR, the last check result, which workflow agents are running, and how many other changes are open. **Open** opens the status pane. **Hide** hides the band until the next `/sdd`.
 
-"Most active" means ordered by status (`implementing`, `verified`, `approved`, `draft`), then by how far the change is in its own workflow, then by the number of tasks.
+The active change is the one whose branch (`sdd/<id>`, made by `sdd start`) is checked out in the session's directory. Without one, it is the most active open change: ordered by status (`implementing`, `verified`, `approved`, `draft`), then by how far the change is in its own workflow, then by the number of tasks.
 
 ## Status pane (`/sdd`)
 
 - Header: open count, running agents, archived count.
-- The most active change: id, status, PR; its phase label and hint; a 12-cell progress bar; its next five open tasks (`[ ] T3 impl REQ-AUTH-004 +1`); its ADRs; `requires`; the last check, with its ERROR/WARN lines (up to 12).
-- The other open changes, grouped by phase, most advanced first, with changes that have no phase last. One line each: status, tasks, PR, requires, check result, plus the ERROR lines of a failed check.
+- The active change in full: id, status, PR, branch; its title; its phase label and hint; a 12-cell progress bar; every task, done ones dimmed, with all its REQs (`[ ] T3 impl REQ-AUTH-004 REQ-AUTH-005`); its ADRs; `requires`; the last check, with its ERROR/WARN lines (up to 12).
+- The other open changes in status groups (`implementing`, `verified`, `approved`, `draft`, then any other status), folded at first. A folded group is one line: `▸ approved (3) add-login, add-sso, fix-typo · 1 check failed`. Press the header, or its digit (`1` for the first group) while the pane has focus, to unfold it (`▾`). An unfolded group lists its changes one line each: phase, tasks, PR, requires, check result, plus the ERROR lines of a failed check. Groups stay unfolded for the session.
 - Running workflow agents with their description.
 - The last guard refusal.
 
@@ -55,7 +55,7 @@ With no open change it says how to start one.
 
 ## Phase pane (`/sdd phase`)
 
-The steps of the most active change's workflow (a fix has its own order, see [Phases](phases-and-states.md#order-for-a-fix)): `✓` done, `▶` current with its hint, `·` to come. Then the phase of every other open change.
+The steps of the active change's workflow (a fix has its own order, see [Phases](phases-and-states.md#order-for-a-fix)): `✓` done, `▶` current with its hint, `·` to come. Then the phase of every other open change.
 
 ## Refresh
 
