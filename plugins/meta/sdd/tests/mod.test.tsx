@@ -175,3 +175,49 @@ test('the main conversation is the lead: its system prompt ends with the lead se
   expect(sections[1].scope).toBe('session')
   expect(sections[1].text).toContain('`sdd:change`')
 })
+
+test('the pane details the most advanced change and groups the others by phase, without buttons', async ($, on) => {
+  const task = (n: number, done: boolean) => ({ id: `T${n}`, kind: 'test', done, reqs: ['REQ-P-001', 'REQ-P-002'] })
+  const status = {
+    root: '/repo',
+    archived: 1,
+    changes: [
+      { id: 'agent-runtime', title: 'x', status: 'approved', size: 'change', adrs: ['ADR-0005'], tasks: [] },
+      { id: 'leader-agent', title: 'x', status: 'approved', size: 'change', adrs: [], tasks: [] },
+      {
+        id: 'platform-foundation',
+        title: 'x',
+        status: 'approved',
+        size: 'change',
+        adrs: ['ADR-0001'],
+        tasks: Array.from({ length: 8 }, (_, i) => task(i + 1, i === 0)),
+      },
+    ],
+  }
+  on('session.root', () => ({ value: '/repo' }))
+  on('session.cwd', () => ({ value: '/repo' }))
+  on('process.run', () => ({
+    value: { exitCode: 0, stdout: JSON.stringify(status), stderr: '', isStdoutTruncated: false, isStderrTruncated: false },
+  }))
+  on('agent.list', () => ({ value: [] }))
+  await $.command.run({ command: 'sdd', args: 'refresh', origin: { kind: 'composer' }, presentation: { isFullscreen: false, columns: 100 } })
+
+  for (const surface of SURFACES) {
+    const ui = await $.ui.mount({
+      plugin: 'sdd',
+      surface,
+      component: 'Pane',
+      requestId: 'sdd',
+      props: { title: 'Spec-driven workflow', isFocused: false, bodyColumns: 80, placement: 'dock', ...SITE },
+    })
+    expect(await ui.find({ type: 'Text', text: /▶ platform-foundation/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /1\/8 tasks/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /T2 test REQ-P-001 \+1/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /\+2 more open/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /T8 test/ })).toBeUndefined()
+    // the planning hint once for the group, not once per change
+    expect(await ui.find({ type: 'Text', text: /agent-runtime.*approved · no tasks yet/ })).toBeDefined()
+    expect(await ui.find({ type: 'Button' })).toBeUndefined()
+    await ui.unmount()
+  }
+})
