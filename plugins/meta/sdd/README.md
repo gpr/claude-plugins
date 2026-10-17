@@ -115,9 +115,10 @@ remote's default branch), `branch_prefix` (`sdd/`), `worktree_dir` (`.claude/wor
   progress, the last check result, which workflow agents are running, and how many other
   changes are open. It hides itself when nothing is open.
 - **`/sdd` pane.** The most active change in full (phase and hint, progress bar, its next
-  five open tasks, ADRs, the last check with its ERROR lines), then the other open changes
-  one line each, grouped by phase, then running agents and the last guard refusal.
-  `/sdd refresh` re-reads the state.
+  five open tasks, ADRs, requires, the last check with its ERROR lines), then the other open
+  changes one line each, grouped by phase, most advanced first (requires, check result and a
+  failed check's ERROR lines), then running agents and the last guard refusal.
+  `/sdd check <change> [--tests]` runs a check without the model; `/sdd refresh` re-reads the state.
 - **`/sdd phase` pane.** The workflow's phases for the most active change (Spec, Gate 1,
   Plan, Gate 2, Acceptance tests, Implement, Verify, Sync; a `size: fix` change skips
   Spec and Gate 1 and writes its tests alongside the plan, before Gate 2): done ones

@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { phaseOf, phasesOf } from '../hooks/phase'
+import { byActivity, byPhase, phaseOf, phasesOf, stepOf } from '../hooks/phase'
 import type { SddChange, SddTask } from '../types'
 
 const task = (id: string, kind: SddTask['kind'], done: boolean): SddTask => ({ id, kind, done, reqs: ['REQ-A-001'] })
@@ -52,4 +52,41 @@ for (const [name, c, running, want] of [...CASES, ...STORED]) {
 test('a fix lists no spec or Gate 1 step, and its tests come before Gate 2', () => {
   expect(phasesOf(change('draft', [], 'fix')).map(p => p.id)).toEqual(['plan', 'acceptance', 'gate2', 'implement', 'verify', 'sync'])
   expect(phasesOf(change('draft')).length).toBe(8)
+})
+
+const named = (id: string, c: SddChange): SddChange => ({ ...c, id })
+// a fix at Gate 2 (tests done) and one still in acceptance: Gate 2 comes later in a fix
+const fixAtGate2 = named('fix-gate2', change('draft', [task('T1', 'test', true), task('T2', 'impl', false)], 'fix'))
+const fixInAcceptance = named('fix-acceptance', change('draft', [task('T1', 'test', false), task('T2', 'impl', false)], 'fix'))
+
+test('stepOf counts in the change\'s own workflow', () => {
+  expect(stepOf(fixInAcceptance)).toBe(1)
+  expect(stepOf(fixAtGate2)).toBe(2)
+  expect(stepOf(change('approved', [task('T1', 'test', false)]))).toBe(3)
+  expect(stepOf(change('?'))).toBe(-1)
+})
+
+test('byActivity: status first, then the furthest in its own workflow, then the most tasks', () => {
+  const unplanned = named('unplanned', change('approved'))
+  const planned = named('planned', change('approved', [task('T1', 'test', false)]))
+  const bigger = named('bigger', change('approved', [task('T1', 'test', false), task('T2', 'impl', false)]))
+  const building = named('building', change('implementing', [task('T1', 'test', false)]))
+  expect(byActivity([unplanned, planned, bigger, building]).map(c => c.id)).toEqual(['building', 'bigger', 'planned', 'unplanned'])
+  expect(byActivity([fixInAcceptance, fixAtGate2]).map(c => c.id)).toEqual(['fix-gate2', 'fix-acceptance'])
+})
+
+test('byPhase groups by phase, most advanced first, without a phase last', () => {
+  const groups = byPhase([
+    named('a', change('approved')),
+    named('b', change('verified')),
+    named('c', change('?')),
+    named('d', change('approved')),
+    named('e', change('implementing', [task('T1', 'test', true)])),
+  ])
+  expect(groups.map(([id, cs]) => [id, cs.map(c => c.id)])).toEqual([
+    ['sync', ['b']],
+    ['verify', ['e']],
+    ['plan', ['a', 'd']],
+    [undefined, ['c']],
+  ])
 })

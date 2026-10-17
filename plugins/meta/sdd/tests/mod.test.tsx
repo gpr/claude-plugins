@@ -183,7 +183,7 @@ test('the pane details the most advanced change and groups the others by phase, 
     archived: 1,
     changes: [
       { id: 'agent-runtime', title: 'x', status: 'approved', size: 'change', adrs: ['ADR-0005'], tasks: [] },
-      { id: 'leader-agent', title: 'x', status: 'approved', size: 'change', adrs: [], tasks: [] },
+      { id: 'leader-agent', title: 'x', status: 'approved', size: 'change', adrs: [], tasks: [], requires: ['agent-runtime'] },
       {
         id: 'platform-foundation',
         title: 'x',
@@ -194,13 +194,24 @@ test('the pane details the most advanced change and groups the others by phase, 
       },
     ],
   }
+  const failed = 'ERROR intent.md: REQ-L-001 has no scenario\nFAIL leader-agent: 1 error\n'
   on('session.root', () => ({ value: '/repo' }))
   on('session.cwd', () => ({ value: '/repo' }))
-  on('process.run', () => ({
-    value: { exitCode: 0, stdout: JSON.stringify(status), stderr: '', isStdoutTruncated: false, isStderrTruncated: false },
+  on('process.run', (_$, e) => ({
+    value: {
+      exitCode: e.argv.includes('check') ? 1 : 0,
+      stdout: e.argv.includes('check') ? failed : JSON.stringify(status),
+      stderr: '',
+      isStdoutTruncated: false,
+      isStderrTruncated: false,
+    },
   }))
   on('agent.list', () => ({ value: [] }))
-  await $.command.run({ command: 'sdd', args: 'refresh', origin: { kind: 'composer' }, presentation: { isFullscreen: false, columns: 100 } })
+  on('clock.now', () => ({ value: 0 }))
+  const presentation = { isFullscreen: false, columns: 100 }
+  await $.command.run({ command: 'sdd', args: 'refresh', origin: { kind: 'composer' }, presentation })
+  const ran = await $.command.run({ command: 'sdd', args: 'check leader-agent', origin: { kind: 'composer' }, presentation })
+  expect(JSON.stringify(ran)).toContain('FAIL leader-agent')
 
   for (const surface of SURFACES) {
     const ui = await $.ui.mount({
@@ -216,8 +227,35 @@ test('the pane details the most advanced change and groups the others by phase, 
     expect(await ui.find({ type: 'Text', text: /\+2 more open/ })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: /T8 test/ })).toBeUndefined()
     // the planning hint once for the group, not once per change
+    expect(await ui.findAll({ type: 'Text', text: /^ — planner writes plan\.md/ })).toHaveLength(1)
     expect(await ui.find({ type: 'Text', text: /agent-runtime.*approved · no tasks yet/ })).toBeDefined()
+    // another change keeps its dependencies and the reason its check failed
+    expect(await ui.find({ type: 'Text', text: /requires agent-runtime/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /check fail/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /REQ-L-001 has no scenario/ })).toBeDefined()
     expect(await ui.find({ type: 'Button' })).toBeUndefined()
+    await ui.unmount()
+  }
+})
+
+test('with no open change the pane still shows the last guard refusal', async ($, on) => {
+  on('session.root', () => ({ value: '/repo' }))
+  on('session.cwd', () => ({ value: '/repo' }))
+  on('fs.read', () => {
+    throw new Error('ENOENT')
+  })
+  await $.tool.call({ tool: 'Edit', file_path: '/repo/specs/auth/spec.md', old_string: 'a', new_string: 'b' })
+
+  for (const surface of SURFACES) {
+    const ui = await $.ui.mount({
+      plugin: 'sdd',
+      surface,
+      component: 'Pane',
+      requestId: 'sdd',
+      props: { title: 'Spec-driven workflow', isFocused: false, bodyColumns: 80, placement: 'dock', ...SITE },
+    })
+    expect(await ui.find({ type: 'Text', text: /No open change/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /last guard refusal: lead: .*sdd sync/ })).toBeDefined()
     await ui.unmount()
   }
 })
