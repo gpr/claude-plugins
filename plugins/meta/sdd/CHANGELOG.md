@@ -2,6 +2,14 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## sdd-0.6.1 - 2026-10-17
+#### Bug Fixes
+- (**sdd**) clearer /sdd pane, no buttons - (578b6e1) - Claude, *Claude Opus 5.5*
+#### Refactoring
+- (**sdd**) pane review fixes, ordering in phase.ts, /sdd check - (5e26829) - Claude, *Claude Opus 5.5*
+
+- - -
+
 ## sdd-0.6.0 - 2026-10-17
 #### Features
 - (**sdd**) change dependencies, resume waits for required changes (#20) - (67fd30f) - Grégory R.
