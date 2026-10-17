@@ -13,24 +13,45 @@ generated:
 
 # How the workflow fits together
 
+```mermaid
+flowchart TD
+    R([request]) --> T{"lead: triage"}
+    T -- direct --> D["general-purpose or lead<br/>then unit tests"] --> DONE1([done])
+    T -- "full change" --> S1["sdd start<br/>branch, worktree, draft PR"]
+    T -- fix --> S2["sdd start, size: fix"]
+
+    S1 --> SA["spec-author<br/>intent, delta, ADRs"]
+    SA --> G1{{"GATE 1<br/>you review"}}
+    G1 -- change --> SA
+    G1 -- approve --> PL["planner<br/>plan.md, tasks.md"]
+
+    S2 --> PL2["planner"] & AT2["acceptance-tester<br/>test on the existing REQ"]
+    PL2 & AT2 --> G2
+
+    PL --> G2{{"GATE 2<br/>sdd check, automatic"}}
+    G2 -- "full change" --> AT["acceptance-tester<br/>failing tests, then sdd freeze"]
+    AT --> IM
+    G2 -- fix --> IM["implementer(s)<br/>inner TDD"]
+    IM --> VE["verifier<br/>frozen, suites, trace, diff"]
+    VE -- PASS --> CR["code-review"]
+    VE -- "FAIL: code" --> IM
+    CR -- "bug in a REQ's behavior" --> IM
+    CR -- clean --> SY["sdd sync<br/>delta into specs/, ADRs accepted, archive"]
+    SY --> FI["sdd finish<br/>PR ready"] --> M([you merge])
+
+    AT -. "scenario untestable" .-> RO
+    IM -. "BLOCKED: REQ" .-> RO
+    VE -. "FAIL: spec" .-> RO
+    CR -. "needs behavior no REQ has" .-> RO
+    RO["reopen: status draft"] -.-> SA
+
+    classDef gate fill:#fde68a,stroke:#b45309,color:#000
+    classDef you fill:#bbf7d0,stroke:#15803d,color:#000
+    class G1,G2 gate
+    class R,M you
 ```
-request ─► lead (/sdd:change) ─► triage ──direct──► general-purpose / lead
-                                  │ fix ──► failing test on the existing REQ ║ plan ─► implement ─► verify
-                                  ▼ change: sdd start (branch sdd/<id>, worktree, draft PR)
-                          sdd:spec-author ─► GATE 1 (you: intent, REQs, ADRs)
-                                  ▼
-                            sdd:planner ─► GATE 2 (sdd check, automatic)
-                                  ▼
-                      sdd:acceptance-tester ─► sdd freeze
-                                  ▼
-                        sdd:implementer(s)  (inner TDD; BLOCKED ─► reopen spec ─► GATE 1)
-                                  ▼
-                           sdd:verifier ─► PASS ─► code-review (findings ─► implementer / reopen)
-                                  ▼
-                              sdd sync (delta → specs/, ADRs accepted, archive)
-                                  ▼
-                              sdd finish (commit, push, PR ready)
-```
+
+Solid arrows are the normal path and dotted arrows the failure path. Each box ends with an `sdd checkpoint` (commit and push).
 
 ## The spec is the contract, not the code
 

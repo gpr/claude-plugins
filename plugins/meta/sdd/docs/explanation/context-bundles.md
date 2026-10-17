@@ -17,6 +17,24 @@ generated:
 
 ## What each task gets
 
+```mermaid
+flowchart LR
+    subgraph files ["change files"]
+        T[tasks.md]
+        D["delta / living spec<br/>REQ blocks"]
+        AD["ADRs<br/>Decision only"]
+        PC["plan.md<br/>Contracts"]
+        PF["plan.md<br/>whole"]
+        FZ["tests/acceptance<br/>frozen paths"]
+    end
+    T & D & AD --> CT["context T1<br/>(test task)"]
+    PC --> CT
+    T & D & AD --> CI["context T2 --plan<br/>(impl task)"]
+    FZ & PF --> CI
+    CT --> ATS([acceptance-tester])
+    CI --> IMP([implementer])
+```
+
 | Part | test task | impl task | impl task with `--plan` |
 |---|---|---|---|
 | the task line and the lines of tasks it is blocked by | ✓ | ✓ | ✓ |

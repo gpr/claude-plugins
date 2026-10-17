@@ -34,6 +34,20 @@ generated:
 
 3. The lead enters the worktree, runs `sdd status <id>`, and continues at the step the phase names. If the files say more was done than the phase (a step finished without a checkpoint), the files win.
 
+What `sdd resume` can end with, and where to go next:
+
+```mermaid
+flowchart TD
+    R["sdd resume &lt;id&gt;"] --> F{fast-forward ok?}
+    F -- no --> DV["cannot fast-forward<br/>→ fix the diverged branch"]
+    F -- yes --> Q{requires?}
+    Q -- none --> E["next: EnterWorktree<br/>→ continue at the phase"]
+    Q -- "some unmerged" --> BL["blocked<br/>→ resume the dep or merge its PR"]
+    Q -- "all merged" --> MB{"base merge<br/>needed and clean?"}
+    MB -- "not needed / clean" --> E
+    MB -- conflict --> CF["merge failed (files)<br/>→ merge by hand"]
+```
+
 ## If it says `blocked`
 
 ```

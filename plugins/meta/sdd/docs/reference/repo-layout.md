@@ -33,6 +33,23 @@ tests/acceptance/                        acceptance tests tagged with REQ ids
 .claude/agent-memory-local/sdd-<agent>/  per-agent memory kept out of git
 ```
 
+How a change's files move at `sdd sync`:
+
+```mermaid
+flowchart LR
+    subgraph open ["changes/&lt;id&gt;/ (open)"]
+        I[intent.md]
+        DL["specs/&lt;cap&gt;.md<br/>delta"]
+        PT[plan.md, tasks.md]
+        FJ[frozen.json, state.json]
+    end
+    DL -- "ADDED / MODIFIED / REMOVED<br/>by REQ id" --> LS["specs/&lt;cap&gt;/spec.md"]
+    I -- "adrs: [...]" --> ADR["adr/ADR-NNNN: proposed → accepted"]
+    open -- "moved whole" --> AR["changes/archive/&lt;date&gt;-&lt;id&gt;/"]
+```
+
+Acceptance tests stay where they are in `tests/acceptance/` and become part of the regression suite.
+
 ## Who writes what
 
 | Path | Written by |

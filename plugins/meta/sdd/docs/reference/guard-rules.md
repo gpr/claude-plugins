@@ -32,6 +32,31 @@ The role is looked up from the call's `agentId` with `$.agent.list()` and cached
 
 The path is resolved against the session cwd, then the project root (the root `sdd.py` reports). A subagent writing outside both is refused (`<path> is outside the project.`); the lead is not.
 
+The checks run in this order (`checkPath`). The first one that matches decides:
+
+```mermaid
+flowchart TD
+    W([write to path]) --> P{"specs/, archive, frozen.json,<br/>state.json, or a non-proposed ADR?"}
+    P -- yes --> X1[refuse: everyone]
+    P -- no --> L{"role = lead?"}
+    L -- yes --> A1[allow]
+    L -- no --> M{"own memory dir?"}
+    M -- yes --> A2[allow]
+    M -- no --> C{"under .claude/?"}
+    C -- yes --> X2[refuse]
+    C -- no --> S{"changes a status: line<br/>in intent.md or an ADR?"}
+    S -- yes --> X3["refuse: set-status /<br/>adr-accept only"]
+    S -- no --> R{"per-role table<br/>(below)"}
+    R -- "path and status fit the role" --> A3[allow]
+    R -- otherwise --> X4[refuse]
+    classDef ok fill:#bbf7d0,stroke:#15803d,color:#000
+    classDef no fill:#fecaca,stroke:#b91c1c,color:#000
+    class A1,A2,A3 ok
+    class X1,X2,X3,X4 no
+```
+
+The status-line check only refuses a `status:` value that differs from the current one, so rewriting a file that keeps its status passes.
+
 ### Everyone, the lead included
 
 | Path | Rule |

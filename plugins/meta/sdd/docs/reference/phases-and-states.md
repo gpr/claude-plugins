@@ -21,7 +21,19 @@ A change has two independent markers:
 
 ## Statuses
 
-`draft` → `approved` → `implementing` → `verified` → `archived`
+```mermaid
+stateDiagram-v2
+    direction LR
+    [*] --> draft: sdd new / start
+    draft --> approved: set-status (Gate 1)
+    draft --> implementing: set-status (fix, Gate 2)
+    approved --> implementing: set-status (Gate 2)
+    implementing --> verified: set-status (verifier PASS)
+    verified --> archived: sdd sync
+    approved --> draft: reopen
+    implementing --> draft: reopen
+    archived --> [*]
+```
 
 | Status | Set by | Meaning |
 |---|---|---|
@@ -53,7 +65,17 @@ A change has two independent markers:
 
 A change with `size: fix` in `intent.md` skips Spec and Gate 1, and writes its acceptance test alongside the plan, before Gate 2:
 
-`plan` → `acceptance` → `gate2` → `implement` → `verify` → `sync`
+```mermaid
+flowchart LR
+    subgraph fix ["size: fix"]
+        direction LR
+        b3[plan] --> b5[acceptance] --> b4[gate2] --> b6[implement] --> b7[verify] --> b8[sync] --> b9[done]
+    end
+    subgraph full ["full change"]
+        direction LR
+        a1[spec] --> a2[gate1] --> a3[plan] --> a4[gate2] --> a5[acceptance] --> a6[implement] --> a7[verify] --> a8[sync] --> a9[done]
+    end
+```
 
 ### Derived phase
 
@@ -84,6 +106,23 @@ The band and panes show the stored phase. For a change without one (made before 
 ## Dependency states
 
 `sdd deps`, `resume` and `checkpoint --phase plan|...` classify each required change, transitively:
+
+```mermaid
+flowchart TD
+    Q{"archive of dep on<br/>origin/&lt;base&gt;?"}
+    Q -- yes --> W{"archive in this<br/>branch too?"}
+    W -- yes --> OK[ok]
+    W -- no --> MI["missing<br/>(base gets merged in)"]
+    Q -- no --> B{"branch &lt;prefix&gt;dep<br/>on origin?"}
+    B -- no --> UN[unknown]
+    B -- yes --> F{"archived on its branch<br/>and phase done?"}
+    F -- yes --> RE[ready]
+    F -- no --> OP[open]
+    classDef pass fill:#bbf7d0,stroke:#15803d,color:#000
+    classDef block fill:#fecaca,stroke:#b91c1c,color:#000
+    class OK,MI pass
+    class RE,OP,UN block
+```
 
 | State | Meaning | Blocks? |
 |---|---|---|

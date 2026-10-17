@@ -28,6 +28,22 @@ Two open changes may modify the same requirement. When the spec-author runs `del
 ERROR specs/greeting.md REQ-GREET-001: CONFLICT base f1452e6a != current 52566f36 (living spec changed since this delta was written)
 ```
 
+```mermaid
+sequenceDiagram
+    participant A as change A
+    participant S as specs/greeting/spec.md
+    participant B as change B
+    A->>S: delta-stub REQ-GREET-001
+    S-->>A: copy + base f1452e6a
+    B->>S: delta-stub REQ-GREET-001
+    S-->>B: copy + base f1452e6a
+    A->>S: sync (base matches)
+    Note over S: REQ-GREET-001 now hashes 52566f36
+    B->>S: check / sync
+    S-->>B: CONFLICT base f1452e6a != current 52566f36
+    Note over B: re-stub, re-edit, Gate 1 for that REQ
+```
+
 Without this, the second sync would silently overwrite the first change's work. The hash ignores trailing whitespace, so reformatting alone is not a conflict. Agents are told never to edit a hash: a conflict is real information, and the fix is to re-stub and re-review that REQ.
 
 ## Traceability is checked, not hoped for

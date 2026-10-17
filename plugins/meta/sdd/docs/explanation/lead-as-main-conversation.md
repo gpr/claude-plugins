@@ -16,6 +16,19 @@ generated:
 
 With the plugin enabled, you just describe a change and the workflow runs. That works because the mod's `prompt.compose` hook appends a short `sdd:lead` section to the main conversation's system prompt. The section says: send change requests (and `resume <id>`) to the `sdd:change` skill verbatim, and answer questions, explanations and reviews directly.
 
+```mermaid
+flowchart LR
+    subgraph sp ["main conversation system prompt"]
+        CC["Claude Code default prompt<br/>(kept as is)"]
+        LS["sdd:lead section<br/>(appended by prompt.compose)"]
+    end
+    U([your message]) --> Q{change request<br/>or resume?}
+    Q -- yes --> SK["sdd:change skill<br/>loaded on demand"]
+    Q -- "no: question,<br/>review, explanation" --> ANS[answered directly]
+    SK --> AG["workflow agents<br/>spec-author ... verifier"]
+    sp -.-> Q
+```
+
 ## Why not a lead agent?
 
 Claude Code can make a plugin agent the session's main agent. But that agent's prompt **replaces** Claude Code's whole default system prompt, which would mean losing tool guidance, safety rules and environment context. Appending a section keeps all of that and adds only the routing.

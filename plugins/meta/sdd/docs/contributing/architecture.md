@@ -47,6 +47,39 @@ plugins/meta/sdd/
 
 ## Data flow
 
+```mermaid
+sequenceDiagram
+    participant Ag as agent (agentId)
+    participant R as register.tsx
+    participant G as guard.ts
+    participant Py as tools/sdd.py
+    participant St as state atoms
+    participant UI as band / panes
+
+    Ag->>R: tool.call mcp__sdd__sdd {args}
+    R->>R: roleFor(agentId) via $.agent.list()
+    R->>G: checkSdd(args[0], role)
+    alt refused
+        G-->>Ag: deny [sdd] ...
+    else allowed
+        R->>Py: python3 sdd.py args (cwd)
+        Py-->>R: stdout, exit code
+        R->>St: recordCheck / refreshChanges (status --json)
+        R-->>Ag: result
+    end
+
+    Ag->>R: tool.call Edit {file_path}
+    R->>G: checkPath(rel, role, cfg, lookup)
+    alt reason
+        R->>UI: toast, lastDeny
+        R-->>Ag: deny [sdd-guard] reason
+    else allowed
+        R->>R: next(e): the edit runs
+        R->>St: refreshChanges if under changes/
+    end
+    St-->>UI: ui.render reads atoms, phase.ts orders them
+```
+
 1. An agent calls `mcp__sdd__sdd` with `args`. `register.tsx` maps its `agentId` to a role, `checkSdd` allows or refuses, then it runs `python3 tools/sdd.py <args>` in the session cwd.
 2. Any write tool or Bash call goes through the guard hook: role, root and cwd bases, config, then `checkPath` / `checkBash`.
 3. The band and panes read state atoms filled by `sdd status --json` (`refreshChanges`) and `$.agent.list()` (`refreshAgents`). They render with `phase.ts`.
