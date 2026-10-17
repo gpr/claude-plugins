@@ -80,16 +80,26 @@ export function byActivity(changes: readonly SddChange[]): SddChange[] {
     .map(x => x.c)
 }
 
-// Changes grouped by phase (agents ignored, as in byActivity), the most advanced phase first and
-// changes without one last. Each group keeps the input's order.
-export function byPhase(changes: readonly SddChange[]): [PhaseId | undefined, SddChange[]][] {
-  const groups = new Map<PhaseId | undefined, SddChange[]>()
+// The order of the status groups: the work in progress first.
+export const STATUS_ORDER = ['implementing', 'verified', 'approved', 'draft'] as const
+
+// Changes grouped by status in STATUS_ORDER, unknown statuses last; each group keeps the input's order.
+export function byStatus(changes: readonly SddChange[]): [string, SddChange[]][] {
+  const groups = new Map<string, SddChange[]>()
   for (const c of changes) {
-    const id = phaseOf(c, [])
-    const group = groups.get(id)
+    const group = groups.get(c.status)
     if (group) group.push(c)
-    else groups.set(id, [c])
+    else groups.set(c.status, [c])
   }
-  const at = (id: PhaseId | undefined) => (id === undefined ? -1 : PHASES.findIndex(p => p.id === id))
-  return [...groups].sort(([a], [b]) => at(b) - at(a))
+  const at = (s: string) => {
+    const i = (STATUS_ORDER as readonly string[]).indexOf(s)
+    return i === -1 ? STATUS_ORDER.length : i
+  }
+  return [...groups].sort(([a], [b]) => at(a) - at(b))
+}
+
+// The change being worked on: the one whose branch is checked out in the session's cwd,
+// else the most active. `changes` is already in byActivity order.
+export function activeOf(changes: readonly SddChange[], branch: string): SddChange | undefined {
+  return (branch !== '' && changes.find(c => c.branch === branch)) || changes[0]
 }

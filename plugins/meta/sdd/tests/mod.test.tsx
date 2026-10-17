@@ -65,6 +65,7 @@ test('the band shows the most active change and its progress', async ($, on) => 
   on('session.root', () => ({ value: '/repo' }))
   on('session.cwd', () => ({ value: '/repo' }))
   on('process.run', (_$, e) => {
+    if (e.argv[0] === 'git') return { value: { exitCode: 0, stdout: 'main\n', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
     expect(e.argv.slice(-2)).toEqual(['status', '--json'])
     return { value: { exitCode: 0, stdout: JSON.stringify(status), stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
   })
@@ -172,8 +173,8 @@ test('the main conversation is the lead: its system prompt ends with the lead se
     traits: [],
   })
   expect(sections.map(s => s.id)).toEqual(['intro', 'sdd:lead'])
-  expect(sections[1].scope).toBe('session')
-  expect(sections[1].text).toContain('`sdd:change`')
+  expect(sections[1]?.scope).toBe('session')
+  expect(sections[1]?.text).toContain('`sdd:change`')
 })
 
 test('the bundle tool runs `sdd.py bundle` and relays its output', async ($, on) => {
@@ -217,7 +218,7 @@ test('the bundle tool refuses a fix on specs from a subagent', async ($, on) => 
   expect(JSON.stringify(ran)).toContain('lead only')
 })
 
-test('the pane details the most advanced change and groups the others by phase, without buttons', async ($, on) => {
+test('the pane shows the active change in full and the others in folded status groups', async ($, on) => {
   const task = (n: number, done: boolean) => ({ id: `T${n}`, kind: 'test', done, reqs: ['REQ-P-001', 'REQ-P-002'] })
   const status = {
     root: '/repo',
@@ -225,9 +226,10 @@ test('the pane details the most advanced change and groups the others by phase, 
     changes: [
       { id: 'agent-runtime', title: 'x', status: 'approved', size: 'change', adrs: ['ADR-0005'], tasks: [] },
       { id: 'leader-agent', title: 'x', status: 'approved', size: 'change', adrs: [], tasks: [], requires: ['agent-runtime'] },
+      { id: 'old-idea', title: 'x', status: 'draft', size: 'change', adrs: [], tasks: [] },
       {
         id: 'platform-foundation',
-        title: 'x',
+        title: 'Platform foundation',
         status: 'approved',
         size: 'change',
         adrs: ['ADR-0001'],
@@ -238,15 +240,12 @@ test('the pane details the most advanced change and groups the others by phase, 
   const failed = 'ERROR intent.md: REQ-L-001 has no scenario\nFAIL leader-agent: 1 error\n'
   on('session.root', () => ({ value: '/repo' }))
   on('session.cwd', () => ({ value: '/repo' }))
-  on('process.run', (_$, e) => ({
-    value: {
-      exitCode: e.argv.includes('check') ? 1 : 0,
-      stdout: e.argv.includes('check') ? failed : JSON.stringify(status),
-      stderr: '',
-      isStdoutTruncated: false,
-      isStderrTruncated: false,
-    },
-  }))
+  const out = (stdout: string, exitCode = 0) => ({
+    value: { exitCode, stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false },
+  })
+  on('process.run', (_$, e) =>
+    e.argv[0] === 'git' ? out('main\n') : e.argv.includes('check') ? out(failed, 1) : out(JSON.stringify(status)),
+  )
   on('agent.list', () => ({ value: [] }))
   on('clock.now', () => ({ value: 0 }))
   const presentation = { isFullscreen: false, columns: 100 }
@@ -262,19 +261,62 @@ test('the pane details the most advanced change and groups the others by phase, 
       requestId: 'sdd',
       props: { title: 'Spec-driven workflow', isFocused: false, bodyColumns: 80, placement: 'dock', ...SITE },
     })
+    // the active change in full: every task with every REQ
     expect(await ui.find({ type: 'Text', text: /▶ platform-foundation/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /Platform foundation/ })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: /1\/8 tasks/ })).toBeDefined()
-    expect(await ui.find({ type: 'Text', text: /T2 test REQ-P-001 \+1/ })).toBeDefined()
-    expect(await ui.find({ type: 'Text', text: /\+2 more open/ })).toBeDefined()
-    expect(await ui.find({ type: 'Text', text: /T8 test/ })).toBeUndefined()
-    // the planning hint once for the group, not once per change
-    expect(await ui.findAll({ type: 'Text', text: /^ — planner writes plan\.md/ })).toHaveLength(1)
-    expect(await ui.find({ type: 'Text', text: /agent-runtime.*approved · no tasks yet/ })).toBeDefined()
-    // another change keeps its dependencies and the reason its check failed
+    expect(await ui.find({ type: 'Text', text: /\[x\] T1 test/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /\[ \] T8 test REQ-P-001 REQ-P-002/ })).toBeDefined()
+    // the others folded, by status, the failed check counted on its header
+    expect(await ui.find({ key: 'fold-approved', text: /▸ approved \(2\) agent-runtime, leader-agent.*1 check failed/ })).toBeDefined()
+    expect(await ui.find({ key: 'fold-draft', text: /▸ draft \(1\) old-idea/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /requires agent-runtime/ })).toBeUndefined()
+    // unfolding shows each change, its requires and why its check failed
+    await ui.press({ key: 'fold-approved' })
+    expect(await ui.find({ key: 'fold-approved', text: /▾ approved \(2\)/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /agent-runtime Plan · no tasks yet/ })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: /requires agent-runtime/ })).toBeDefined()
-    expect(await ui.find({ type: 'Text', text: /check fail/ })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: /REQ-L-001 has no scenario/ })).toBeDefined()
-    expect(await ui.find({ type: 'Button' })).toBeUndefined()
+    expect(await ui.find({ type: 'Text', text: /old-idea Gate 1/ })).toBeUndefined()
+    await ui.press({ key: 'fold-approved' })
+    expect(await ui.find({ type: 'Text', text: /requires agent-runtime/ })).toBeUndefined()
+    await ui.unmount()
+  }
+})
+
+test('the active change is the one whose branch is checked out', async ($, on) => {
+  const status = {
+    root: '/repo',
+    archived: 0,
+    changes: [
+      { id: 'busy', title: 'x', status: 'implementing', size: 'change', adrs: [], tasks: [] },
+      { id: 'mine', title: 'x', status: 'draft', size: 'change', adrs: [], tasks: [], branch: 'sdd/mine' },
+    ],
+  }
+  on('session.root', () => ({ value: '/repo' }))
+  on('session.cwd', () => ({ value: '/repo' }))
+  on('process.run', (_$, e) => ({
+    value: {
+      exitCode: 0,
+      stdout: e.argv[0] === 'git' ? 'sdd/mine\n' : JSON.stringify(status),
+      stderr: '',
+      isStdoutTruncated: false,
+      isStderrTruncated: false,
+    },
+  }))
+  on('agent.list', () => ({ value: [] }))
+  await $.command.run({ command: 'sdd', args: 'refresh', origin: { kind: 'composer' }, presentation: { isFullscreen: false, columns: 100 } })
+
+  for (const surface of SURFACES) {
+    const ui = await $.ui.mount({
+      plugin: 'sdd',
+      surface,
+      component: 'Pane',
+      requestId: 'sdd',
+      props: { title: 'Spec-driven workflow', isFocused: false, bodyColumns: 80, placement: 'dock', ...SITE },
+    })
+    expect(await ui.find({ type: 'Text', text: /▶ mine/ })).toBeDefined()
+    expect(await ui.find({ key: 'fold-implementing', text: /implementing \(1\) busy/ })).toBeDefined()
     await ui.unmount()
   }
 })

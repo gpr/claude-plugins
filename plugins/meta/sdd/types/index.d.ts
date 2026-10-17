@@ -29,6 +29,10 @@ declare module 'claude-code' {
       agents: SddAgent[]
       isBandHidden: boolean
       lastDeny: string
+      /** The git branch checked out in the session's cwd ('' outside git). */
+      branch: string
+      /** The status groups of the /sdd pane the person unfolded. */
+      expanded: string[]
     }
   }
 }

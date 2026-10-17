@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { byActivity, byPhase, phaseOf, phasesOf, stepOf } from '../hooks/phase'
+import { activeOf, byActivity, byStatus, phaseOf, phasesOf, stepOf } from '../hooks/phase'
 import type { SddChange, SddTask } from '../types'
 
 const task = (id: string, kind: SddTask['kind'], done: boolean): SddTask => ({ id, kind, done, reqs: ['REQ-A-001'] })
@@ -75,18 +75,29 @@ test('byActivity: status first, then the furthest in its own workflow, then the 
   expect(byActivity([fixInAcceptance, fixAtGate2]).map(c => c.id)).toEqual(['fix-gate2', 'fix-acceptance'])
 })
 
-test('byPhase groups by phase, most advanced first, without a phase last', () => {
-  const groups = byPhase([
+test('byStatus groups work in progress first, unknown statuses last', () => {
+  const groups = byStatus([
     named('a', change('approved')),
     named('b', change('verified')),
     named('c', change('?')),
     named('d', change('approved')),
-    named('e', change('implementing', [task('T1', 'test', true)])),
+    named('e', change('implementing')),
+    named('f', change('draft')),
   ])
-  expect(groups.map(([id, cs]) => [id, cs.map(c => c.id)])).toEqual([
-    ['sync', ['b']],
-    ['verify', ['e']],
-    ['plan', ['a', 'd']],
-    [undefined, ['c']],
+  expect(groups.map(([s, cs]) => [s, cs.map(c => c.id)])).toEqual([
+    ['implementing', ['e']],
+    ['verified', ['b']],
+    ['approved', ['a', 'd']],
+    ['draft', ['f']],
+    ['?', ['c']],
   ])
+})
+
+test('activeOf: the change on the checked-out branch, else the first', () => {
+  const a = named('a', change('implementing'))
+  const b = { ...named('b', change('draft')), branch: 'sdd/b' }
+  expect(activeOf([a, b], 'sdd/b')?.id).toBe('b')
+  expect(activeOf([a, b], 'main')?.id).toBe('a')
+  expect(activeOf([a, b], '')?.id).toBe('a')
+  expect(activeOf([], 'sdd/b')).toBeUndefined()
 })

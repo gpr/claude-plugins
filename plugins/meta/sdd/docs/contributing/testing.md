@@ -29,7 +29,7 @@ Run from the repository root.
    claude plugin test plugins/meta/sdd
    ```
    - `tests/guard.test.ts`: file-write rules per role, Bash heuristics, status lines, `SDD_RULES`, `roleOf`. Every rule change gets a case.
-   - `tests/phase.test.ts`: `phaseOf` per status/size/tasks/agents, fix order, `stepOf`, `byActivity`, `byPhase`.
+   - `tests/phase.test.ts`: `phaseOf` per status/size/tasks/agents, fix order, `stepOf`, `byActivity`, `byStatus`, `activeOf`.
    - `tests/mod.test.tsx`: the guard in a session, the lead section in the system prompt, band and pane rendering on terminal and desktop.
 
 3. **Manifest and wiring**:

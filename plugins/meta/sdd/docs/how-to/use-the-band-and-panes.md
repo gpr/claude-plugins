@@ -14,8 +14,8 @@ generated:
 
 ## See the current state
 
-- Glance at the band above the prompt. It shows the most active change, its phase, status, task progress, PR, last check and running agents.
-- `/sdd` for detail: next open tasks, ADRs, dependencies, the last check's errors, other open changes by phase.
+- Glance at the band above the prompt. It shows the active change (the one whose `sdd/<id>` branch is checked out, else the most active), its phase, status, task progress, PR, last check and running agents.
+- `/sdd` for detail: every task of the active change, its ADRs, dependencies, the last check's errors. The other open changes sit in folded status groups: press a header, or its digit while the pane has focus, to unfold it.
 - `/sdd phase` to see which workflow step the change is in and what happens there.
 
 There's no need to ask the lead for a recap. It's told to point you to the panes.

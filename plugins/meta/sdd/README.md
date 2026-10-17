@@ -142,15 +142,19 @@ remote's default branch), `branch_prefix` (`sdd/`), `worktree_dir` (`.claude/wor
 - **`bundle` tool.** `mcp__sdd__bundle` takes `target` (`specs` or a change id) and `fix`.
   Checking is open to every role; `fix` on `specs` is lead-only, `fix` on a change is
   lead or spec-author.
-- **Band above the prompt.** Shows the most active open change, its phase, its status, task
+- **Band above the prompt.** Shows the active change (as in the `/sdd` pane), its phase, its status, task
   progress, the last check result, which workflow agents are running, and how many other
   changes are open. It hides itself when nothing is open.
-- **`/sdd` pane.** The most active change in full (phase and hint, progress bar, its next
-  five open tasks, ADRs, requires, the last check with its ERROR lines), then the other open
-  changes one line each, grouped by phase, most advanced first (requires, check result and a
-  failed check's ERROR lines), then running agents and the last guard refusal.
-  `/sdd check <change> [--tests]` runs a check without the model; `/sdd refresh` re-reads the state.
-- **`/sdd phase` pane.** The workflow's phases for the most active change (Spec, Gate 1,
+- **`/sdd` pane.** The active change in full: the one whose branch (`sdd/<id>`) is checked
+  out in the session's directory, else the most active. It shows its title, phase and hint,
+  a progress bar, every task with its REQs, ADRs, requires, and the last check with its
+  ERROR lines. The other open changes sit in status groups (implementing, verified,
+  approved, draft), folded to one line each (`▸ approved (6) a, b, …`, plus how many checks
+  failed). Press a header, or its digit while the pane has focus, to unfold it: one line per
+  change with its phase, tasks, PR, requires, check result and a failed check's ERROR lines.
+  Then running agents and the last guard refusal. `/sdd check <change> [--tests]` runs a
+  check without the model; `/sdd refresh` re-reads the state.
+- **`/sdd phase` pane.** The workflow's phases for the active change (Spec, Gate 1,
   Plan, Gate 2, Acceptance tests, Implement, Verify, Sync; a `size: fix` change skips
   Spec and Gate 1 and writes its tests alongside the plan, before Gate 2): done ones
   ticked, the current one marked with what happens in it, plus the phase of every other
