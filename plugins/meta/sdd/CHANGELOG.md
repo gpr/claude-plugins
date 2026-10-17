@@ -2,6 +2,15 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## sdd-0.8.0 - 2026-10-17
+#### Features
+- (**sdd**) /sdd pane shows the active change in full, others in folding status groups - (5f7b76f) - Claude, *Claude Opus 5.5*
+#### Documentation
+- (**sdd**) name byStatus and activeOf in the contributing docs - (09d6534) - Claude, *Claude Opus 5.5*
+- (**sdd**) describe the active change and folding status groups in the pane docs - (3ae37f3) - Claude, *Claude Opus 5.5*
+
+- - -
+
 ## sdd-0.7.0 - 2026-10-17
 #### Features
 - (**sdd**) OKF bundles for specs and changes, invariants, bundle tool - (e1ee85d) - Claude, *Claude Sonnet 5.5*
