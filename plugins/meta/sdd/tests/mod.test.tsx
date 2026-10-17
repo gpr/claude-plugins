@@ -199,6 +199,15 @@ test('`sdd bundle --fix` follows the same role rules as the bundle tool', async 
   expect(JSON.stringify(ran)).toContain('lead or spec-author only')
 })
 
+test('`sdd bundle --fix specs` cannot dodge the lead-only rule by argument order', async ($, on) => {
+  on('session.root', () => ({ value: '/repo' }))
+  on('session.cwd', () => ({ value: '/repo' }))
+  on('agent.list', () => ({ value: [{ id: 'a1', type: 'sdd:spec-author', description: '', status: 'running' }] }))
+  on('process.run', () => ({ value: { exitCode: 0, stdout: '', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }))
+  const ran = await $.tool.call({ tool: 'mcp__sdd__sdd', args: ['bundle', '--fix', 'specs'], agentId: 'a1' })
+  expect(JSON.stringify(ran)).toContain('lead only')
+})
+
 test('the bundle tool refuses a fix on specs from a subagent', async ($, on) => {
   on('session.root', () => ({ value: '/repo' }))
   on('session.cwd', () => ({ value: '/repo' }))

@@ -34,7 +34,7 @@ const lastDeny = atom({ plugin: 'sdd', key: 'lastDeny' } as const, '')
 const MUTATING = new Set(['init', 'new', 'set-status', 'delta-new', 'delta-stub', 'adr-new', 'adr-accept', 'freeze', 'sync', 'start', 'checkpoint', 'set-pr', 'requires', 'resume', 'finish', 'bundle'])
 
 const TOOL_DESCRIPTION = `Runs the spec-driven workflow tool (sdd.py) in the project. Pass the subcommand and its arguments as \`args\`, e.g. ["check", "add-login"].
-Subcommands: init | config | status [<change>] | new <change> --title T | set-status <change> <draft|approved|implementing|verified|archived> | delta-new <change> <capability>[/<concept>] | delta-new <change> invariants/<category>[/<concept>] | delta-stub <change> <REQ|INV> [--remove] | adr-new <title> [--supersedes ADR-NNNN] | adr-accept <ADR> | check <change> [--tests] | context <change> <task> [--plan] | freeze <change> | verify-frozen <change> | sync <change> [--dry-run] [--force] | start <change> --title T [--pr-title P] [--base B] [--requires a,b] | requires <change> [<dep>... | --clear] | deps <change> | checkpoint <change> [--phase P] [-m MSG] | set-pr <change> <number> [--url U] | resume <change> [--pr N] | finish <change>.
+Subcommands: init | config | status [<change>] | new <change> --title T | set-status <change> <draft|approved|implementing|verified|archived> | delta-new <change> <capability>[/<concept>] | delta-new <change> invariants/<category>[/<concept>] | delta-stub <change> <REQ|INV> [--remove] | adr-new <title> [--supersedes ADR-NNNN] | adr-accept <ADR> | check <change> [--tests] | context <change> <task> [--plan] | freeze <change> | verify-frozen <change> | sync <change> [--dry-run] [--force] | bundle <specs|change> [--fix] | start <change> --title T [--pr-title P] [--base B] [--requires a,b] | requires <change> [<dep>... | --clear] | deps <change> | checkpoint <change> [--phase P] [-m MSG] | set-pr <change> <number> [--url U] | resume <change> [--pr N] | finish <change>.
 Lead-only: init, new, set-status, sync, adr-accept, start, checkpoint, set-pr, requires, resume, finish. deps is read-only. freeze: lead and acceptance-tester. delta-new, delta-stub, adr-new: lead and spec-author. Output is terse; ERROR lines name the file and the fix. Bundle validation and repair of specs/ and changes/<id>/ is the separate \`bundle\` tool (also reachable as \`sdd bundle <specs|change> [--fix]\`, with the same role rules).`
 
 const BUNDLE_DESCRIPTION = `Checks an OKF bundle of the spec-driven workflow and, with \`fix\`, repairs it. \`target\` is "specs" (the living specs/<capability>/ and specs/invariants/<category>/ concepts, their indexes and log) or a change id (changes/<id>/: intent, plan, tasks, spec and invariant deltas, index). Checks: layout, front matter, kebab-case names, REQ/INV in the right tree, sorted blocks, stale indexes, missing sources, concepts over the block limit. Output: FIXED/WARN/ERROR lines, then OK or FAIL. \`fix\` repairs what is marked [fixable] (migrates the legacy spec.md and flat delta layout too) and is idempotent. Check is open to every role; fix on "specs" is lead-only, fix on a change is lead or spec-author.`
@@ -197,7 +197,14 @@ export const register: Register = on => {
     const raw = (e as unknown as { args?: unknown }).args
     const args = Array.isArray(raw) ? raw.map(String) : []
     const role = await roleFor($, e.agentId)
-    const refusal = args[0] === 'bundle' ? checkBundle(args[1], args.includes('--fix'), role) : checkSdd(args[0], role)
+    // the target is the one positional argument, wherever `--fix` sits (sdd.py strips it from any position)
+    const bundleTarget = args.slice(1).filter(a => a !== '--fix')
+    const refusal =
+      args[0] === 'bundle'
+        ? bundleTarget.length === 1
+          ? checkBundle(bundleTarget[0], args.includes('--fix'), role)
+          : 'usage: bundle <specs|change> [--fix]'
+        : checkSdd(args[0], role)
     if (refusal !== undefined) return { deny: `[sdd] ${refusal}` }
 
     const cwd = await $.session.cwd()

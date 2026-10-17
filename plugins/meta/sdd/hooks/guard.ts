@@ -252,7 +252,8 @@ export function checkSdd(sub: string | undefined, role: Role): string | undefine
 /**
  * Deny reason for the `bundle` tool, or undefined. Checking is open to every role. `--fix` on
  * the living `specs` bundle is lead-only (only the lead's call may write specs/); on a change it
- * is open to the lead and the spec-author, who owns the change's delta files.
+ * is open to the lead and the spec-author: it only touches front matter, delta locations and the
+ * generated index, never the text of a requirement.
  */
 export function checkBundle(target: string | undefined, fix: boolean, role: Role): string | undefined {
   if (target === undefined || target === '') return 'give the target: "specs" or a change id.'

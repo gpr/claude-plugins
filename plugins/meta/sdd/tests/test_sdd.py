@@ -1119,6 +1119,12 @@ class TestBundle(SddCase):
         self.assert_ok(self.sdd("bundle", "specs", "--fix"))
         self.assertFalse((self.root / "specs/auth/old.md").exists())
 
+    def test_concept_with_prose_but_no_blocks_is_not_deleted(self):
+        self.living()
+        self.write("specs/auth/notes.md", "# notes\n\nSome hand-written prose.\n")
+        self.assert_fails(self.sdd("bundle", "specs", "--fix"), "holds prose")
+        self.assertTrue((self.root / "specs/auth/notes.md").exists())
+
     def test_unfixable_problems_stay_errors(self):
         self.living()
         self.write("specs/auth/dup.md", "### REQ-AUTH-001: Again\nx\n")

@@ -782,7 +782,10 @@ def check_specs(rep: Report):
             if not is_inv(b.req) and not b.has_scenario:
                 rep.issue("WARN", f"{rel(f)} {b.req}: no '#### Scenario:'")
         if not concept.blocks:
-            rep.issue("ERROR", f"{rel(f)}: concept has no requirement blocks", lambda f=f: f.unlink())
+            if any(l.strip() and not l.startswith("#") for l in concept.pre):
+                rep.issue("ERROR", f"{rel(f)}: no requirement blocks but it holds prose, move or delete it by hand")
+            else:
+                rep.issue("ERROR", f"{rel(f)}: concept has no requirement blocks (fix deletes it)", lambda f=f: f.unlink())
             continue
         if ids != sorted(ids):
             fixes.append("order")
