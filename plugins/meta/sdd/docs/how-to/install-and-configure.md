@@ -31,7 +31,7 @@ generated:
    ```
 
    ```
-   created: specs/, adr/, changes/, tests/acceptance/, .claude/sdd.json (edit acceptance_cmd / unit_cmd), .gitignore (/.claude/worktrees/)
+   created: specs/, adr/, changes/, tests/acceptance/, .claude/sdd.json (edit acceptance_cmd / unit_cmd), specs/index.md, specs/log.md, .gitignore (/.claude/worktrees/)
    ```
 
 3. Edit `.claude/sdd.json` for your stack. The two keys you almost always change:

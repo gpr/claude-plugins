@@ -1,8 +1,8 @@
 ---
 type: Reference
 title: sdd tool and its role rules
-description: The mcp__sdd__sdd tool's input, output, and which role may run each subcommand (SDD_RULES).
-tags: [sdd, reference, tool, roles, guard]
+description: The mcp__sdd__sdd and mcp__sdd__bundle tools' input, output, and which role may run each subcommand (SDD_RULES and checkBundle).
+tags: [sdd, reference, tool, roles, guard, bundle]
 sources:
   - resource: ../../hooks/guard.ts
   - resource: ../../hooks/register.tsx
@@ -13,7 +13,7 @@ generated:
 
 # sdd tool and its role rules
 
-The mod registers one tool, `sdd` (seen by agents as `mcp__sdd__sdd`), at session start.
+The mod registers two tools at session start: `sdd` (seen by agents as `mcp__sdd__sdd`) and `bundle` (`mcp__sdd__bundle`, [below](#the-bundle-tool)).
 
 ## Input
 
@@ -42,9 +42,24 @@ The caller's role comes from the tool call's `agentId` (see [Guard rules](guard-
 | `freeze` | ✓ | | | ✓ | | | |
 | `delta-new`, `delta-stub`, `adr-new` | ✓ | ✓ | | | | | |
 | `config`, `status`, `check`, `context`, `verify-frozen`, `deps` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `bundle <target>` (check only) | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `bundle specs --fix` | ✓ | | | | | | |
+| `bundle <change> --fix` | ✓ | ✓ | | | | | |
 
-A refusal reads ``[sdd] `sdd <sub>` is run by <roles> only, not <role>.``
+A refusal reads ``[sdd] `sdd <sub>` is run by <roles> only, not <role>.`` `bundle` is not in `SDD_RULES`: `checkBundle` decides it, from the target and the `--fix` flag (`--fix` may sit anywhere in `args`). Refusals: ``[sdd] `bundle specs --fix` is run by the lead only, not <role>.``, ``[sdd] `bundle <id> --fix` is run by lead or spec-author only, not <role>.``, `bundle` with other than one target is `usage: bundle <specs|change> [--fix]`.
 
 If the tool's handler throws, the call is refused with `[sdd] the sdd tool failed unexpectedly; retry once, then tell the lead.`
 
-These rules are stated in three places that must agree: `SDD_RULES` in `hooks/guard.ts`, `TOOL_DESCRIPTION` in `hooks/register.tsx`, and the README. See [Keep in sync](../contributing/keep-in-sync.md).
+## The bundle tool
+
+`mcp__sdd__bundle` runs `sdd.py bundle <target> [--fix]` ([what it checks](bundles.md#bundle-checks)). Same working directory, Python requirement and output format as the `sdd` tool.
+
+```json
+{ "target": "add-login", "fix": true }
+```
+
+`target` (required): `specs` or a change id. `fix` (optional, default false): repair what is marked `[fixable]`. The role rule is the one in the table above: checking is open to all, `--fix` on `specs` is lead-only (only the lead may write `specs/`), `--fix` on a change is lead or spec-author (it touches front matter, delta locations and the generated index, never a requirement's text). A call without `target` is refused: `give the target: "specs" or a change id.` A throwing handler is refused with `[sdd] the bundle tool failed unexpectedly; retry once, then tell the lead.` After a `fix`, the band and panes refresh.
+
+The spec-author has this tool; it runs it on its change before handing back.
+
+These rules are stated in three places that must agree: `SDD_RULES` and `checkBundle` in `hooks/guard.ts`, `TOOL_DESCRIPTION` and `BUNDLE_DESCRIPTION` in `hooks/register.tsx`, and the README. See [Keep in sync](../contributing/keep-in-sync.md).

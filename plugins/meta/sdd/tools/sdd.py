@@ -1173,7 +1173,7 @@ def cmd_sync(args):
         die("ADR problems", 1)
     for line in log:
         print(line)
-    emptied = sorted(c.path for c in concepts.values() if not c.blocks)
+    emptied = sorted(c.path for c in concepts.values() if not c.blocks and c.path.exists())
     if dry:
         print(f"DRY-RUN ok, {len(log)} change(s), concepts emptied: {len(emptied)}, "
               f"ADRs to accept: {','.join(adr_list) or '-'}")

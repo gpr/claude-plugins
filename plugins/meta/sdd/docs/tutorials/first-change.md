@@ -69,13 +69,13 @@ Type:
 The lead runs `sdd init`:
 
 ```
-created: specs/, adr/, changes/, tests/acceptance/, .claude/sdd.json (edit acceptance_cmd / unit_cmd), .gitignore (/.claude/worktrees/)
+created: specs/, adr/, changes/, tests/acceptance/, .claude/sdd.json (edit acceptance_cmd / unit_cmd), specs/index.md, specs/log.md, .gitignore (/.claude/worktrees/)
 ```
 
-The defaults (`pytest -q {files}` and `pytest -q tests/unit`) suit this project, so leave `.claude/sdd.json` as it is. Commit and push it, since each change will start from `origin/main`:
+The defaults (`pytest -q {files}` and `pytest -q tests/unit`) suit this project, so leave `.claude/sdd.json` as it is. Commit and push it with the empty `specs/` bundle (`specs/index.md`, `specs/log.md`), since each change will start from `origin/main`:
 
 ```
-git add .claude/sdd.json .gitignore && git commit -qm "chore: set up sdd" && git push -q
+git add .claude/sdd.json .gitignore specs && git commit -qm "chore: set up sdd" && git push -q
 ```
 
 ## 4. Ask for the change
@@ -95,7 +95,7 @@ next: EnterWorktree path=...
 
 ## 5. Gate 1: review the spec
 
-The spec-author writes `changes/greet-by-name/intent.md` and a delta like:
+The spec-author writes `changes/greet-by-name/intent.md` and a delta in `changes/greet-by-name/specs/greet/greeting.md` (one short concept file for the `greet` capability), like:
 
 ```markdown
 ## ADDED
@@ -109,7 +109,7 @@ The CLI MUST print `Hello, <name>!` when run with `--name <name>`.
 - THEN stdout is `Hello, Ada!` and the exit code is 0
 ```
 
-Your wording will differ. The lead then shows you a compact summary (why, outcome, non-goals, each REQ and scenario name) and asks you to approve, change something, or stop.
+Your wording will differ. The spec-author also runs `bundle` with `fix` on the change, which regenerates the change's `index.md`. The lead then shows you a compact summary (why, outcome, non-goals, each REQ and scenario name) and asks you to approve, change something, or stop.
 
 This is the one review that needs your full attention. Check that there is a REQ for the default behavior too (`Hello!` without `--name`). If there isn't, answer:
 
@@ -164,7 +164,7 @@ ADDED    REQ-GREET-002
 synced 2 change(s); ADRs accepted: -; archived -> changes/archive/2026-10-17-greet-by-name
 ```
 
-Open `specs/greet/spec.md` in the worktree. It now holds your two requirements, word for word as you approved them.
+Open `specs/greet/greeting.md` in the worktree. It now holds your two requirements, word for word as you approved them. `specs/greet/index.md` lists them, and `specs/log.md` has a new line: `- 2026-10-17 greet-by-name: ADDED REQ-GREET-001; ADDED REQ-GREET-002`.
 
 Finally `sdd finish` marks the phase `done` and pushes. With GitHub it would mark the PR ready for review. Here it says to do that by hand.
 

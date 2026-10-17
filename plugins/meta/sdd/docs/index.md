@@ -14,7 +14,8 @@ Documentation for the `sdd` Claude Code plugin, a spec-driven multi-agent workfl
 ## How-to guides
 
 * [Install and configure sdd](how-to/install-and-configure.md) - project-scope install, `sdd init`, test commands, publish the config.
-* [Write a spec delta and an ADR](how-to/write-a-delta-and-adr.md) - add, modify and remove REQs; record or supersede a decision.
+* [Write a spec delta and an ADR](how-to/write-a-delta-and-adr.md) - add, modify, remove and regroup REQs and invariants; record or supersede a decision.
+* [Migrate to the OKF layout](how-to/migrate-to-okf-layout.md) - move `spec.md` files and flat deltas to concepts with `bundle --fix`.
 * [Resume a change](how-to/resume-a-change.md) - continue by id or PR number; blocked, diverged and conflicting resumes.
 * [Make a change depend on another](how-to/manage-dependencies.md) - `--requires`, `deps`, unblocking, clearing.
 * [Reopen a spec](how-to/reopen-a-spec.md) - when an agent reports BLOCKED or a scenario is untestable.
@@ -26,11 +27,12 @@ Documentation for the `sdd` Claude Code plugin, a spec-driven multi-agent workfl
 ## Reference
 
 * [sdd subcommands](reference/cli.md) - every `sdd.py` subcommand, its effect and its role, plus the `check` rules.
-* [sdd tool and its role rules](reference/sdd-tool-roles.md) - `mcp__sdd__sdd` input, output and `SDD_RULES`.
+* [sdd tool and its role rules](reference/sdd-tool-roles.md) - `mcp__sdd__sdd` and `mcp__sdd__bundle` input, output and roles.
 * [Guard rules](reference/guard-rules.md) - who may write what, Bash heuristics, failure policy.
 * [Workflow agents](reference/agents.md) - the five agents: job, input, output, tools, model, memory.
 * [Phases, statuses and state.json](reference/phases-and-states.md) - phase ids, statuses, fix order, derived phase, dependency states.
-* [File formats](reference/file-formats.md) - REQ blocks, deltas, base markers, intent, ADR, plan, task lines, test tagging.
+* [File formats](reference/file-formats.md) - REQ and INV blocks, concepts, deltas, base markers, intent, ADR, plan, task lines, test tagging.
+* [OKF bundles](reference/bundles.md) - the layout of `specs/` and of a change, front matter per type, bundle checks and fixes, migration.
 * [Repository layout](reference/repo-layout.md) - the files sdd creates and who writes each.
 * [Configuration](reference/configuration.md) - `.claude/sdd.json` keys, project root, requirements.
 * [Slash commands, band and panes](reference/slash-commands.md) - `/sdd:change`, `/sdd`, the band and both panes.
