@@ -24,6 +24,8 @@ request ─► lead (/sdd:change) ─► triage ──direct──► general-pu
 ```
 Each artifact is committed and pushed with `sdd checkpoint`, which also stores the phase.
 
+Full documentation (tutorials, how-to guides, reference, explanation): [docs/index.md](docs/index.md).
+
 ## Install
 
 ```
