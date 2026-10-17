@@ -33,3 +33,6 @@
   for subagents.
 - File formats (REQ blocks, delta sections, `<!-- base: -->`, task lines) are parsed by
   `sdd.py` and described in `skills/formats/SKILL.md`. Change both together.
+- `docs/` is an OKF v0.2 bundle (Diátaxis). Each "change together" set above also has a
+  page in `docs/reference/`; `docs/contributing/keep-in-sync.md` maps them. Update it in the
+  same commit and add a dated entry to `docs/log.md`.
