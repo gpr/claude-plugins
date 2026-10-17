@@ -14,7 +14,7 @@ import {
   WRITE_TOOLS,
 } from './guard'
 import type { Cfg, Lookup, Role } from './guard'
-import { infoOf, labelOf, phaseOf, phasesOf } from './phase'
+import { byActivity, byPhase, infoOf, labelOf, phaseOf, phasesOf, stepOf } from './phase'
 
 type $ = EngineInterface
 
@@ -126,8 +126,16 @@ async function recordCheck($: $, change: string, withTests: boolean, stdout: str
 
 const isOpen = (c: SddChange) => c.status !== 'archived'
 const doneOf = (c: SddChange) => c.tasks.filter(t => t.done).length
-const RANK: Record<string, number> = { implementing: 0, verified: 1, approved: 2, draft: 3 }
-const byActivity = (a: SddChange, b: SddChange) => (RANK[a.status] ?? 9) - (RANK[b.status] ?? 9)
+
+const TASKS_SHOWN = 5
+const BAR = 12
+const barOf = (done: number, total: number) => {
+  // floor: the bar fills only when every task is done
+  const full = total === 0 ? 0 : Math.floor((done / total) * BAR)
+  return '█'.repeat(full) + '░'.repeat(BAR - full)
+}
+const tasksOf = (c: SddChange) => (c.tasks.length === 0 ? 'no tasks yet' : `${doneOf(c)}/${c.tasks.length} tasks`)
+const reqsOf = (reqs: string[]) => (reqs.length === 0 ? '' : reqs.length === 1 ? reqs[0] : `${reqs[0]} +${reqs.length - 1}`)
 
 // ------------------------------------------------------------------ hooks --
 
@@ -169,8 +177,9 @@ export const register: Register = on => {
     })
     await $.command.register({
       name: 'sdd',
-      description: 'Spec-driven workflow: open the status pane (`/sdd phase` for the phase pane, `/sdd refresh`)',
-      argumentHint: '[phase|refresh]',
+      description:
+        'Spec-driven workflow: open the status pane (`/sdd phase` for the phase pane, `/sdd refresh`, `/sdd check <change> [--tests]`)',
+      argumentHint: '[phase|refresh|check <change> [--tests]]',
     })
     void refreshChanges($)
     $.clock.every(4_000, () => void refreshAgents($))
@@ -183,6 +192,14 @@ export const register: Register = on => {
     await refreshChanges($)
     const arg = e.args.trim()
     if (arg === 'refresh') return { text: 'sdd: status refreshed.' }
+    const [verb, id, ...flags] = arg.split(/\s+/)
+    if (verb === 'check') {
+      if (!id) return { text: 'sdd: usage: /sdd check <change> [--tests]' }
+      const withTests = flags.includes('--tests')
+      const out = await runSdd($, withTests ? ['check', id, '--tests'] : ['check', id], await $.session.cwd())
+      await recordCheck($, id, withTests, out.stdout, await $.clock.now())
+      return { text: out.stdout.trimEnd() || out.stderr.trim() || `(exit ${out.exitCode})` }
+    }
     if (arg === 'phase') {
       await $.ui.open({ id: PHASE_PANE, title: 'sdd phase' })
       return { text: 'sdd: phase pane opened.' }
@@ -316,7 +333,7 @@ export const register: Register = on => {
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     if (e.props.hasSurvey || (await read($, isBandHidden))) return next(e)
-    const open = ((await read($, changes)) ?? []).filter(isOpen).sort(byActivity)
+    const open = byActivity(((await read($, changes)) ?? []).filter(isOpen))
     const top = open[0]
     if (top === undefined) return next(e)
 
@@ -342,92 +359,122 @@ export const register: Register = on => {
   })
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
-    const { Box, Button, Text } = $.ui.resolve(e)
-    const all = ((await read($, changes)) ?? []).filter(isOpen).sort(byActivity)
+    const { Box, Text } = $.ui.resolve(e)
+    const all = byActivity(((await read($, changes)) ?? []).filter(isOpen))
     const results = (await read($, checks)) ?? {}
     const running = (await read($, agents)) ?? []
     const nArchived = (await read($, archived)) ?? 0
     const denied = (await read($, lastDeny)) ?? ''
     const types = running.map(a => a.type)
 
-    const runCheck = async (id: string, withTests: boolean) => {
-      const cwd = await $.session.cwd()
-      const args = withTests ? ['check', id, '--tests'] : ['check', id]
-      const out = await runSdd($, args, cwd)
-      await recordCheck($, id, withTests, out.stdout, await $.clock.now())
-    }
+    // The most active change in full; the others one line each, grouped by phase.
+    const [top, ...rest] = all
+    const phase = top && infoOf(phaseOf(top, types))
+    const check = top && results[top.id]
+    const pending = top ? top.tasks.filter(t => !t.done) : []
+    const checkLines = (id: string, lines: string[]) =>
+      lines.map((l, i) => (
+        <Text key={`l-${id}-${i}`} dimColor>
+          {'    '}
+          {l}
+        </Text>
+      ))
 
     return (
       <Box flexDirection="column" gap={1}>
-        {all.length === 0 && (
-          <Text dimColor>No open change. Start one with /sdd:change &lt;what you want&gt;.</Text>
+        <Text dimColor>
+          {all.length} open · {running.length === 0 ? 'no agent running' : `${running.length} running`} · {nArchived} archived
+        </Text>
+
+        {top === undefined && <Text dimColor>No open change. Start one with /sdd:change &lt;what you want&gt;.</Text>}
+
+        {top && (
+          <Box flexDirection="column">
+            <Text>
+              <Text bold color="cyan">▶ {top.id}</Text>
+              <Text dimColor> {top.status}{top.pr ? ` · PR #${top.pr}` : ''}</Text>
+            </Text>
+            {phase && (
+              <Text>
+                {'  '}
+                <Text bold>{phase.label}</Text>
+                <Text dimColor> — {phase.hint}</Text>
+              </Text>
+            )}
+            {top.tasks.length > 0 && (
+              <Text>
+                {'  '}
+                <Text color="green">{barOf(doneOf(top), top.tasks.length)}</Text> {tasksOf(top)}
+              </Text>
+            )}
+            {pending.slice(0, TASKS_SHOWN).map(t => (
+              <Text key={`t-${t.id}`}>
+                {'    '}[ ] {t.id} {t.kind} <Text dimColor>{reqsOf(t.reqs)}</Text>
+              </Text>
+            ))}
+            {pending.length > TASKS_SHOWN && <Text dimColor>{'    '}+{pending.length - TASKS_SHOWN} more open</Text>}
+            {top.adrs.length > 0 && <Text dimColor>{'  '}ADRs: {top.adrs.join(', ')}</Text>}
+            {top.requires && top.requires.length > 0 && <Text color="yellow">{'  '}requires: {top.requires.join(', ')}</Text>}
+            {check && (
+              <Text color={check.isOk ? 'green' : 'red'}>
+                {'  '}last {check.withTests ? 'check --tests' : 'check'}: {check.summary}
+              </Text>
+            )}
+            {check && checkLines(top.id, check.lines)}
+          </Box>
         )}
-        {all.map(c => {
-          const check = results[c.id]
-          const phase = infoOf(phaseOf(c, types))
+
+        {byPhase(rest).map(([id, cs]) => {
+          const info = infoOf(id)
           return (
-            <Box key={`c-${c.id}`} flexDirection="column">
-              <Box flexDirection="row" gap={1}>
-                <Text bold>{c.id}</Text>
-                <Text color={c.status === 'verified' ? 'green' : undefined}>{c.status}</Text>
-                <Text dimColor>
-                  {doneOf(c)}/{c.tasks.length} tasks{c.adrs.length > 0 ? ` · ${c.adrs.join(', ')}` : ''}
-                  {c.pr ? ` · PR #${c.pr}` : ''}
-                </Text>
-              </Box>
-              {c.requires && c.requires.length > 0 && <Text dimColor>requires: {c.requires.join(', ')}</Text>}
-              {phase && (
-                <Text dimColor>
-                  {phase.label}: {phase.hint}
-                </Text>
-              )}
-              {c.tasks.map(t => (
-                <Text key={`t-${c.id}-${t.id}`} dimColor={t.done}>
-                  {t.done ? '[x]' : '[ ]'} {t.id} {t.kind} {t.reqs.join(' ')}
-                </Text>
-              ))}
-              {check && (
-                <Text color={check.isOk ? 'green' : 'red'}>
-                  {check.withTests ? 'check --tests: ' : 'check: '}
-                  {check.summary}
-                </Text>
-              )}
-              {check?.lines.map((l, i) => (
-                <Text key={`l-${c.id}-${i}`} dimColor>
-                  {l}
-                </Text>
-              ))}
-              <Box flexDirection="row" gap={1}>
-                <Button key={`check-${c.id}`} label="Check" onPress={() => runCheck(c.id, false)} />
-                <Button key={`tests-${c.id}`} label="Check + tests" onPress={() => runCheck(c.id, true)} />
-              </Box>
+            <Box key={`g-${id ?? 'none'}`} flexDirection="column">
+              <Text>
+                <Text bold>{info?.label ?? 'Other'}</Text>
+                {info && <Text dimColor> — {info.hint}</Text>}
+              </Text>
+              {cs.map(c => {
+                const r = results[c.id]
+                return (
+                  <Box key={`c-${c.id}`} flexDirection="column">
+                    <Text>
+                      {'  '}
+                      {c.id}
+                      <Text dimColor>
+                        {' '}
+                        {c.status} · {tasksOf(c)}
+                        {c.pr ? ` · PR #${c.pr}` : ''}
+                      </Text>
+                      {c.requires && c.requires.length > 0 && <Text color="yellow"> · requires {c.requires.join(', ')}</Text>}
+                      {r && <Text color={r.isOk ? 'green' : 'red'}> · check {r.isOk ? 'ok' : 'fail'}</Text>}
+                    </Text>
+                    {r && !r.isOk && checkLines(c.id, r.lines)}
+                  </Box>
+                )
+              })}
             </Box>
           )
         })}
-        <Box flexDirection="column">
-          <Text bold>Workflow agents</Text>
-          {running.length === 0 ? (
-            <Text dimColor>none running</Text>
-          ) : (
-            running.map(a => (
+
+        {running.length > 0 && (
+          <Box flexDirection="column">
+            <Text bold>Running</Text>
+            {running.map(a => (
               <Text key={`a-${a.id}`}>
+                {'  '}
                 {a.type} <Text dimColor>{a.description}</Text>
               </Text>
-            ))
-          )}
-        </Box>
-        {denied !== '' && <Text dimColor>last guard refusal: {denied}</Text>}
-        <Box flexDirection="row" gap={1}>
-          <Text dimColor>{nArchived} archived</Text>
-          <Button key="refresh" label="Refresh" onPress={() => refreshChanges($)} />
-        </Box>
+            ))}
+          </Box>
+        )}
+        {denied !== '' && <Text color="yellow">last guard refusal: {denied}</Text>}
+        <Text dimColor>/sdd check &lt;change&gt; [--tests] · /sdd refresh · /sdd phase</Text>
       </Box>
     )
   })
 
   on('ui.render', { component: 'Pane', requestId: PHASE_PANE }, async ($, e) => {
     const { Box, Text } = $.ui.resolve(e)
-    const open = ((await read($, changes)) ?? []).filter(isOpen).sort(byActivity)
+    const open = byActivity(((await read($, changes)) ?? []).filter(isOpen))
     const running = ((await read($, agents)) ?? []).map(a => a.type)
     const top = open[0]
     if (top === undefined) {
@@ -435,8 +482,7 @@ export const register: Register = on => {
     }
 
     const steps = phasesOf(top)
-    const current = phaseOf(top, running)
-    const at = steps.findIndex(p => p.id === current)
+    const at = stepOf(top, running)
 
     return (
       <Box flexDirection="column" gap={1}>

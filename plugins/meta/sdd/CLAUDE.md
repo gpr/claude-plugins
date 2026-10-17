@@ -38,3 +38,6 @@
   OKF layout; `collect` (`sdd check`) and `sync` call it, and the `bundle` mod tool in
   `register.tsx` wraps it with `checkBundle` (guard.ts). A new layout rule is a check there
   plus, if repairable, a fixer, with a case in `TestBundle`; fixes must stay idempotent.
+- `docs/` is an OKF v0.2 bundle (Diátaxis). Each "change together" set above also has a
+  page in `docs/reference/`; `docs/contributing/keep-in-sync.md` maps them. Update it in the
+  same commit and add a dated entry to `docs/log.md`.

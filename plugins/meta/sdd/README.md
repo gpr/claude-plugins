@@ -24,6 +24,8 @@ request ─► lead (/sdd:change) ─► triage ──direct──► general-pu
 ```
 Each artifact is committed and pushed with `sdd checkpoint`, which also stores the phase.
 
+Full documentation (tutorials, how-to guides, reference, explanation): [docs/index.md](docs/index.md).
+
 ## Install
 
 ```
@@ -143,9 +145,11 @@ remote's default branch), `branch_prefix` (`sdd/`), `worktree_dir` (`.claude/wor
 - **Band above the prompt.** Shows the most active open change, its phase, its status, task
   progress, the last check result, which workflow agents are running, and how many other
   changes are open. It hides itself when nothing is open.
-- **`/sdd` pane.** Lists every open change with its next step and tasks, the last check
-  with its ERROR lines, Check and Check + tests buttons, running agents, and the last
-  guard refusal. `/sdd refresh` re-reads the state.
+- **`/sdd` pane.** The most active change in full (phase and hint, progress bar, its next
+  five open tasks, ADRs, requires, the last check with its ERROR lines), then the other open
+  changes one line each, grouped by phase, most advanced first (requires, check result and a
+  failed check's ERROR lines), then running agents and the last guard refusal.
+  `/sdd check <change> [--tests]` runs a check without the model; `/sdd refresh` re-reads the state.
 - **`/sdd phase` pane.** The workflow's phases for the most active change (Spec, Gate 1,
   Plan, Gate 2, Acceptance tests, Implement, Verify, Sync; a `size: fix` change skips
   Spec and Gate 1 and writes its tests alongside the plan, before Gate 2): done ones
