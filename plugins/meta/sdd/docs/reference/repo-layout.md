@@ -14,13 +14,18 @@ generated:
 
 # Repository layout
 
-Default directory names; each is configurable (see [Configuration](configuration.md)).
+Default directory names; each is configurable (see [Configuration](configuration.md)). `specs/` and each change are OKF bundles: see [OKF bundles](bundles.md).
 
 ```
-specs/<capability>/spec.md               living spec: what the system does now
+specs/index.md, specs/log.md             generated: index of the bundle, one line per sync
+specs/<capability>/index.md              generated: the capability's concepts and REQ ids
+specs/<capability>/<concept>.md          living spec: what the system does now, a few REQs
+specs/invariants/<category>/<concept>.md living invariants: rules that always hold, a few INVs
 adr/ADR-NNNN-<slug>.md                   one decision per file
+changes/<id>/index.md                    generated: the change's files and delta ids
 changes/<id>/intent.md                   why, scope, non-goals; front matter status/size/adrs
-changes/<id>/specs/<capability>.md       delta against the living spec
+changes/<id>/specs/<capability>/<concept>.md             spec delta, mirrors the living path
+changes/<id>/specs/invariants/<category>/<concept>.md    invariant delta
 changes/<id>/plan.md                     approach, contracts, components, risks
 changes/<id>/tasks.md                    task checklist
 changes/<id>/frozen.json                 hashes of the frozen acceptance tests
@@ -39,11 +44,11 @@ How a change's files move at `sdd sync`:
 flowchart LR
     subgraph open ["changes/&lt;id&gt;/ (open)"]
         I[intent.md]
-        DL["specs/&lt;cap&gt;.md<br/>delta"]
+        DL["specs/&lt;cap&gt;/&lt;concept&gt;.md<br/>delta"]
         PT[plan.md, tasks.md]
         FJ[frozen.json, state.json]
     end
-    DL -- "ADDED / MODIFIED / REMOVED<br/>by REQ id" --> LS["specs/&lt;cap&gt;/spec.md"]
+    DL -- "ADDED / MODIFIED / REMOVED / MOVED<br/>by REQ or INV id" --> LS["specs/&lt;cap&gt;/&lt;concept&gt;.md<br/>+ index.md, log.md"]
     I -- "adrs: [...]" --> ADR["adr/ADR-NNNN: proposed → accepted"]
     open -- "moved whole" --> AR["changes/archive/&lt;date&gt;-&lt;id&gt;/"]
 ```
@@ -54,10 +59,11 @@ Acceptance tests stay where they are in `tests/acceptance/` and become part of t
 
 | Path | Written by |
 |---|---|
-| `specs/**` | `sdd sync` only |
+| `specs/**` | `sdd sync`; `sdd bundle specs --fix` (lead) for layout, front matter and indexes |
 | `adr/*` (proposed) | spec-author, via `sdd adr-new` then Edit |
 | ADR `status:` | `sdd adr-accept` / `sdd sync` |
 | `intent.md` body, delta | spec-author, while `draft` |
+| `changes/<id>/index.md` | `sdd new`, `delta-new`, `delta-stub`, `bundle <id> --fix` |
 | `intent.md` `status:` | `sdd set-status` / `sdd sync` |
 | `plan.md`, `tasks.md` | planner, while `draft` or `approved` |
 | task ticks in `tasks.md` | acceptance-tester and implementer, each its own task |

@@ -40,6 +40,7 @@ flowchart LR
 | the task line and the lines of tasks it is blocked by | ✓ | ✓ | ✓ |
 | the REQ blocks it cites: the delta's version if the change touches it, else the living one | ✓ | ✓ | ✓ |
 | the `## Decision` paragraph of each ADR it cites, with its status | ✓ | ✓ | ✓ |
+| the id and title of every invariant in force that the task does not cite (`## Invariants in force`) | | ✓ | ✓ |
 | the plan's `## Contracts` section | ✓ | | (in the full plan) |
 | the paths of the frozen acceptance tests for its REQs | | ✓ | ✓ |
 | the whole plan | | | ✓ |

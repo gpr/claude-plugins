@@ -29,7 +29,9 @@ Checks, in order (stop at the first hard failure and report it):
    - behavior added that no REQ asks for, or that a Non-goal excludes;
    - a REQ whose test passes but whose implementation is a special case for the test
      (hard-coded values, test-detection) instead of the behavior;
-   - acceptance tests that assert less than their scenario's THEN.
+   - acceptance tests that assert less than their scenario's THEN;
+   - code that breaks an invariant in force: the titles are in `sdd context <id> <task>`
+     of an impl task, the text in `specs/invariants/` and the change's invariant delta.
    Each finding: file:line, REQ/ADR id, why. No style nits.
 
 Memory

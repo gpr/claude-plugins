@@ -20,19 +20,19 @@ The lead (the main conversation) delegates each artifact to one agent. Built-in 
 
 | Agent | Job | Input from the lead | Writes | Model / effort | Preloaded skill |
 |---|---|---|---|---|---|
-| `sdd:spec-author` | `intent.md`, the spec delta, proposed ADRs | change id, the request verbatim, Explore findings | intent, delta, ADRs (draft only) | opus / high | `sdd:formats` |
+| `sdd:spec-author` | `intent.md`, the spec and invariant deltas (short concepts), proposed ADRs | change id, the request verbatim, Explore findings | intent, delta, ADRs (draft only) | opus / high | `sdd:formats` |
 | `sdd:planner` | `plan.md` (Approach, Contracts, Components, Risks) and `tasks.md` | change id (on re-plan: affected REQ ids) | plan, tasks | opus / high | `sdd:formats` |
 | `sdd:acceptance-tester` | failing acceptance tests from the scenarios, then `freeze` | `sdd context <id> <Tn>` bundle | `tests/acceptance/`, its task tick | sonnet / medium | `sdd:formats` |
 | `sdd:implementer` | one `(impl)` task, inner red-green-refactor TDD | `sdd context <id> <Tn> --plan` bundle | source code and unit tests, its task tick | sonnet / medium | — |
 | `sdd:verifier` | close-out check: frozen tests, suites, traceability, diff review | change id | nothing but its memory | opus / high | — |
 
-All five have the tools `Read, Grep, Glob, Bash, mcp__sdd__sdd`. All but the verifier also have `Write` and `Edit`. All five have `memory: project`.
+All five have the tools `Read, Grep, Glob, Bash, mcp__sdd__sdd`. All but the verifier also have `Write` and `Edit`. The spec-author also has `mcp__sdd__bundle`, to check and repair its change's bundle (`fix` is allowed on a change, not on `specs`; see [roles](sdd-tool-roles.md#the-bundle-tool)). All five have `memory: project`.
 
 ## Return contracts
 
 | Agent | Returns |
 |---|---|
-| spec-author | ≤ ~15 lines: REQ ids + titles by ADDED/MODIFIED/REMOVED, ADR ids + one-line decisions, blocking open questions with options (or "none"), what was left out and why. Never the spec text. |
+| spec-author | ≤ ~15 lines: REQ and INV ids + titles by ADDED/MODIFIED/REMOVED (and moved concepts), ADR ids + one-line decisions, blocking open questions with options (or "none"), what was left out and why. Never the spec text. |
 | planner | ≤ ~10 lines: tasks as `Tn kind REQs files`, one line per contract, any decision or spec problem found. |
 | acceptance-tester | ≤ ~8 lines: test files, scenario → test count, failure reason per group, scenarios that could not be tested as written. |
 | implementer | ≤ ~8 lines: `DONE` or `BLOCKED: <REQ-id> <reason>`, files changed, unit tests added, acceptance result, out-of-scope notes. |
@@ -40,7 +40,7 @@ All five have the tools `Read, Grep, Glob, Bash, mcp__sdd__sdd`. All but the ver
 
 ## Hard rules per agent
 
-- **spec-author**: never paste spec text back. Never type a base hash: re-run `delta-stub` after a CONFLICT. If a MODIFIED/REMOVED REQ lives in a required change that is not merged yet, report it as an open question, never re-ADD it.
+- **spec-author**: never paste spec text back. Keep concepts short (max 5 blocks per file), give every INV a `#### Check:`, run `bundle` with `fix: true` on the change before handing back. Never type a base hash: re-run `delta-stub` after a CONFLICT. If a MODIFIED/REMOVED REQ lives in a required change that is not merged yet, report it as an open question, never re-ADD it.
 - **planner**: never change the spec. If a decision meets the ADR bar and has none, stop and report. For a `size: fix`, add lines to `tasks.md` with Edit; never rewrite it or touch T1's line.
 - **acceptance-tester**: test only through the public surface in Contracts (or the existing surface, for a fix). Tests must fail for the right reason. An untestable or ambiguous scenario is a spec bug: report it.
 - **implementer**: never edit, skip, xfail or weaken an acceptance test, never change spec, plan or ADRs. Stay inside the task's `files:` or name the extra files. No behavior no REQ asks for.

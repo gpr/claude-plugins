@@ -20,13 +20,15 @@ Created by `sdd init` with every key below except `req_id_pattern`. Keys you omi
 
 | Key | Default | Used for |
 |---|---|---|
-| `specs_dir` | `specs` | living specs |
+| `specs_dir` | `specs` | the living specs OKF bundle ([layout](bundles.md)) |
 | `changes_dir` | `changes` | open and archived changes |
 | `adr_dir` | `adr` | ADRs |
 | `acceptance_dir` | `tests/acceptance` | acceptance tests: coverage, freeze, guard |
 | `acceptance_cmd` | `pytest -q {files}` | how agents run acceptance tests; `{files}` is the file list |
 | `unit_cmd` | `pytest -q tests/unit` | how agents run the unit suite |
 | `req_id_pattern` | `REQ-[A-Z0-9]+-[0-9]{3}` | regex for REQ ids |
+| `inv_id_pattern` | `INV-[A-Z0-9]+-[0-9]{3}` | regex for invariant ids |
+| `concept_max_blocks` | `5` | REQ/INV blocks per concept file before `bundle` warns |
 | `base_branch` | `""` | base for new changes; empty means the remote's default branch (`origin/HEAD`), else `main` |
 | `branch_prefix` | `sdd/` | change branch name prefix |
 | `worktree_dir` | `.claude/worktrees` | where change worktrees go |

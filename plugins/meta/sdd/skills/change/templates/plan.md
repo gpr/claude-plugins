@@ -1,4 +1,5 @@
 ---
+type: plan
 change: {{id}}
 ---
 

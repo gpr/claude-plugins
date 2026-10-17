@@ -52,6 +52,11 @@ The API MUST reject an expired token with 401.
 """
 
 
+def put(path: Path, text: str):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text)
+
+
 def dedent(s: str) -> str:
     return textwrap.dedent(s).lstrip("\n")
 
@@ -83,7 +88,8 @@ class SddCase(unittest.TestCase):
         self.write(f"changes/{change}/tasks.md", "# Tasks\n\n" + "\n".join(lines) + "\n")
 
     def living(self):
-        self.write("specs/auth/spec.md", LIVING_AUTH)
+        self.write("specs/auth/auth.md", LIVING_AUTH)
+        self.assert_ok(self.sdd("bundle", "specs", "--fix"))
 
     def new_change(self, name: str = "c1") -> str:
         code, out = self.sdd("new", name)
@@ -93,7 +99,7 @@ class SddCase(unittest.TestCase):
     def added_change(self, name: str = "c1") -> str:
         """A clean change adding REQ-AUTH-003 with a test and an impl task."""
         self.new_change(name)
-        self.write(f"changes/{name}/specs/auth.md", "# Delta: auth\n\n## ADDED\n\n" + ADDED_003)
+        self.write(f"changes/{name}/specs/auth/auth.md", "# Delta: auth\n\n## ADDED\n\n" + ADDED_003)
         self.set_tasks(name,
                        "- [ ] T1 (test) Expired token — REQ-AUTH-003",
                        "- [ ] T2 (impl) Reject expired — REQ-AUTH-003 | blocked-by: T1")
@@ -199,9 +205,10 @@ class TestDeltaNew(SddCase):
         self.new_change()
         code, out = self.sdd("delta-new", "c1", "auth")
         self.assertEqual(code, 0, out)
-        self.assertIn("created changes/c1/specs/auth.md", out)
-        delta = self.read("changes/c1/specs/auth.md")
-        self.assertTrue(delta.startswith("# Delta: auth\n"))
+        self.assertIn("created changes/c1/specs/auth/auth.md", out)
+        delta = self.read("changes/c1/specs/auth/auth.md")
+        self.assertIn("type: spec-delta\ntarget: specs/auth/auth.md\n", delta)
+        self.assertIn("\n# Delta: auth\n", delta)
         for section in ("## ADDED", "## MODIFIED", "## REMOVED"):
             self.assertEqual(delta.count(f"\n{section}\n"), 1, section)
         self.assertIn("- GIVEN", delta)
@@ -228,7 +235,7 @@ class TestDeltaNew(SddCase):
         self.new_change()
         self.assert_ok(self.sdd("delta-new", "c1", "auth"))
         self.assert_ok(self.sdd("delta-stub", "c1", "REQ-AUTH-001"))
-        delta = self.read("changes/c1/specs/auth.md")
+        delta = self.read("changes/c1/specs/auth/auth.md")
         self.assertEqual(delta.count("## MODIFIED"), 1)
         self.assertLess(delta.index("## MODIFIED"), delta.index("### REQ-AUTH-001"))
         self.assertLess(delta.index("### REQ-AUTH-001"), delta.index("## REMOVED"))
@@ -242,8 +249,9 @@ class TestDeltaStub(SddCase):
 
     def test_missing_delta_starts_from_template(self):
         self.assert_ok(self.sdd("delta-stub", "c1", "REQ-AUTH-001"))
-        delta = self.read("changes/c1/specs/auth.md")
-        self.assertTrue(delta.startswith("# Delta: auth\n"))
+        delta = self.read("changes/c1/specs/auth/auth.md")
+        self.assertIn("type: spec-delta\ntarget: specs/auth/auth.md\n", delta)
+        self.assertIn("\n# Delta: auth\n", delta)
         self.assertIn("## ADDED", delta)
         self.assertEqual(delta.count("## MODIFIED"), 1)
 
@@ -251,7 +259,7 @@ class TestDeltaStub(SddCase):
         code, out = self.sdd("delta-stub", "c1", "REQ-AUTH-001")
         self.assertEqual(code, 0, out)
         base = re.search(r"base=([0-9a-f]{8})", out).group(1)
-        delta = self.read("changes/c1/specs/auth.md")
+        delta = self.read("changes/c1/specs/auth/auth.md")
         self.assertIn("## MODIFIED", delta)
         self.assertIn(f"<!-- base: {base} -->", delta)
         self.assertIn("The API MUST accept a valid password.", delta)
@@ -259,7 +267,7 @@ class TestDeltaStub(SddCase):
 
     def test_remove_writes_reason_placeholder(self):
         self.assert_ok(self.sdd("delta-stub", "c1", "REQ-AUTH-002", "--remove"))
-        delta = self.read("changes/c1/specs/auth.md")
+        delta = self.read("changes/c1/specs/auth/auth.md")
         self.assertIn("## REMOVED", delta)
         self.assertIn("Reason:", delta)
         self.assertNotIn("lock the account", delta)
@@ -267,7 +275,7 @@ class TestDeltaStub(SddCase):
     def test_two_stubs_share_one_section(self):
         self.assert_ok(self.sdd("delta-stub", "c1", "REQ-AUTH-001"))
         self.assert_ok(self.sdd("delta-stub", "c1", "REQ-AUTH-002"))
-        delta = self.read("changes/c1/specs/auth.md")
+        delta = self.read("changes/c1/specs/auth/auth.md")
         self.assertEqual(delta.count("## MODIFIED"), 1)
         self.assertIn("REQ-AUTH-001", delta)
         self.assertIn("REQ-AUTH-002", delta)
@@ -292,7 +300,7 @@ class TestCheck(SddCase):
 
     def test_requirement_without_scenario(self):
         self.new_change()
-        self.write("changes/c1/specs/auth.md",
+        self.write("changes/c1/specs/auth/auth.md",
                    "## ADDED\n\n### REQ-AUTH-003: No scenario\nThe API MUST do X.\n")
         self.set_tasks("c1", "- [ ] T1 (test) x — REQ-AUTH-003",
                        "- [ ] T2 (impl) y — REQ-AUTH-003 | blocked-by: T1")
@@ -322,13 +330,13 @@ class TestCheck(SddCase):
 
     def test_added_but_already_living(self):
         self.new_change()
-        self.write("changes/c1/specs/auth.md", "## ADDED\n\n" + LIVING_AUTH.split("\n\n", 1)[1])
+        self.write("changes/c1/specs/auth/auth.md", "## ADDED\n\n" + LIVING_AUTH.split("\n\n", 1)[1])
         self.assert_fails(self.sdd("check", "c1"), "ADDED but already exists")
 
     def test_modified_without_base(self):
         self.new_change()
         block = LIVING_AUTH.split("### REQ-AUTH-002")[0].split("\n", 2)[2]
-        self.write("changes/c1/specs/auth.md", "## MODIFIED\n\n" + block)
+        self.write("changes/c1/specs/auth/auth.md", "## MODIFIED\n\n" + block)
         self.assert_fails(self.sdd("check", "c1"), "missing <!-- base: -->")
 
     def test_conflict_when_living_spec_changed_after_stub(self):
@@ -338,7 +346,7 @@ class TestCheck(SddCase):
                        "- [ ] T2 (impl) y — REQ-AUTH-001 | blocked-by: T1")
         self.assert_ok(self.sdd("check", "c1"))
         # another change lands first and edits REQ-AUTH-001
-        self.write("specs/auth/spec.md", LIVING_AUTH.replace("a valid password", "a valid passphrase"))
+        self.write("specs/auth/auth.md", LIVING_AUTH.replace("a valid password", "a valid passphrase"))
         self.assert_fails(self.sdd("check", "c1"), "CONFLICT")
 
     def test_whitespace_only_edit_is_not_a_conflict(self):
@@ -346,7 +354,7 @@ class TestCheck(SddCase):
         self.assert_ok(self.sdd("delta-stub", "c1", "REQ-AUTH-001"))
         self.set_tasks("c1", "- [ ] T1 (test) x — REQ-AUTH-001",
                        "- [ ] T2 (impl) y — REQ-AUTH-001 | blocked-by: T1")
-        self.write("specs/auth/spec.md", LIVING_AUTH.replace("password.\n", "password.   \n", 1))
+        self.write("specs/auth/auth.md", LIVING_AUTH.replace("password.\n", "password.   \n", 1))
         self.assert_ok(self.sdd("check", "c1"))
 
     def test_test_task_on_removed_req(self):
@@ -375,7 +383,7 @@ class TestCheck(SddCase):
 
     def test_non_draft_without_tasks(self):
         self.new_change()
-        self.write("changes/c1/specs/auth.md", "## ADDED\n\n" + ADDED_003)
+        self.write("changes/c1/specs/auth/auth.md", "## ADDED\n\n" + ADDED_003)
         self.assert_ok(self.sdd("set-status", "c1", "approved"))
         self.assert_fails(self.sdd("check", "c1"), "tasks.md has no tasks")
 
@@ -542,7 +550,7 @@ class TestSync(SddCase):
         self.new_change()
         self.assert_ok(self.sdd("delta-stub", "c1", "REQ-AUTH-001"))
         self.assert_ok(self.sdd("delta-stub", "c1", "REQ-AUTH-002", "--remove"))
-        f = self.root / "changes/c1/specs/auth.md"
+        f = self.root / "changes/c1/specs/auth/auth.md"
         text = f.read_text().replace("a valid password", "a valid passphrase")
         f.write_text(text.replace("## ADDED\n", "## ADDED\n\n" + ADDED_003, 1))
         self.set_tasks("c1",
@@ -555,13 +563,13 @@ class TestSync(SddCase):
 
     def test_dry_run_writes_nothing(self):
         self.sdd("set-status", "c1", "verified")
-        before = self.read("specs/auth/spec.md")
+        before = self.read("specs/auth/auth.md")
         code, out = self.sdd("sync", "c1", "--dry-run")
         self.assertEqual(code, 0, out)
         for line in ("MODIFIED REQ-AUTH-001", "REMOVED  REQ-AUTH-002", "ADDED    REQ-AUTH-003",
                      "DRY-RUN ok, 3 change(s)"):
             self.assertIn(line, out)
-        self.assertEqual(self.read("specs/auth/spec.md"), before)
+        self.assertEqual(self.read("specs/auth/auth.md"), before)
         self.assertTrue((self.root / "changes/c1").exists())
 
     def test_sync_merges_accepts_adrs_and_archives(self):
@@ -572,13 +580,14 @@ class TestSync(SddCase):
         code, out = self.sdd("sync", "c1")
         self.assertEqual(code, 0, out)
 
-        spec = self.read("specs/auth/spec.md")
+        spec = self.read("specs/auth/auth.md")
         self.assertIn("a valid passphrase", spec)
         self.assertNotIn("a valid password", spec)
         self.assertNotIn("REQ-AUTH-002", spec)
         self.assertNotIn("<!-- base:", spec)
         self.assertLess(spec.index("REQ-AUTH-001"), spec.index("REQ-AUTH-003"))
-        self.assertTrue(spec.startswith("# auth\n"))
+        self.assertIn("type: spec\ntitle: auth\ncapability: auth\n", spec)
+        self.assertIn("\n# auth\n", spec)
         self.assertNotIn("GIVEN <", spec)  # delta template guidance stays out
 
         self.assertIn("status: accepted", self.read("adr/ADR-0001-token-format.md"))
@@ -594,45 +603,46 @@ class TestSync(SddCase):
     def test_conflict_blocks_sync_and_writes_nothing(self):
         self.sdd("set-status", "c1", "verified")
         changed = LIVING_AUTH.replace("after 5 failures", "after 3 failures")
-        self.write("specs/auth/spec.md", changed)
+        self.write("specs/auth/auth.md", changed)
         self.assert_fails(self.sdd("sync", "c1"), "CONFLICT", "fix errors before sync")
-        self.assertEqual(self.read("specs/auth/spec.md"), changed)
+        self.assertEqual(self.read("specs/auth/auth.md"), changed)
         self.assertTrue((self.root / "changes/c1/intent.md").exists())
 
     def test_force_skips_status_but_not_errors(self):
-        self.write("specs/auth/spec.md", LIVING_AUTH.replace("after 5", "after 3"))
+        self.write("specs/auth/auth.md", LIVING_AUTH.replace("after 5", "after 3"))
         self.assert_fails(self.sdd("sync", "c1", "--force"), "CONFLICT")
 
     def test_bad_adr_blocks_sync_before_writing(self):
         intent = self.read("changes/c1/intent.md").replace("adrs: []", "adrs: [ADR-0007]")
         self.write("changes/c1/intent.md", intent)
         self.sdd("set-status", "c1", "verified")
-        before = self.read("specs/auth/spec.md")
+        before = self.read("specs/auth/auth.md")
         self.assert_fails(self.sdd("sync", "c1"), "ADR-0007")
-        self.assertEqual(self.read("specs/auth/spec.md"), before)
+        self.assertEqual(self.read("specs/auth/auth.md"), before)
 
     def test_living_spec_is_ordered_by_req_id(self):
         self.new_change("c2")
-        self.write("changes/c2/specs/auth.md", "## ADDED\n\n"
+        self.write("changes/c2/specs/auth/auth.md", "## ADDED\n\n"
                    + ADDED_003.replace("REQ-AUTH-003", "REQ-AUTH-009") + "\n" + ADDED_003)
         self.set_tasks("c2", "- [x] T1 (test) x — REQ-AUTH-003 REQ-AUTH-009",
                        "- [x] T2 (impl) y — REQ-AUTH-003 REQ-AUTH-009 | blocked-by: T1")
         self.sdd("set-status", "c2", "verified")
         self.assert_ok(self.sdd("sync", "c2"))
-        ids = re.findall(r"^### (REQ-AUTH-\d+)", self.read("specs/auth/spec.md"), re.M)
+        ids = re.findall(r"^### (REQ-AUTH-\d+)", self.read("specs/auth/auth.md"), re.M)
         self.assertEqual(ids, ["REQ-AUTH-001", "REQ-AUTH-002", "REQ-AUTH-003", "REQ-AUTH-009"])
 
     def test_new_capability_creates_spec(self):
         self.new_change("c2")
-        self.write("changes/c2/specs/billing.md",
+        self.write("changes/c2/specs/billing/billing.md",
                    "## ADDED\n\n### REQ-BILL-001: Invoice\nThe API MUST invoice.\n\n"
                    "#### Scenario: monthly\n- GIVEN a plan\n- WHEN month ends\n- THEN an invoice exists\n")
         self.set_tasks("c2", "- [x] T1 (test) x — REQ-BILL-001",
                        "- [x] T2 (impl) y — REQ-BILL-001 | blocked-by: T1")
         self.sdd("set-status", "c2", "verified")
         self.assert_ok(self.sdd("sync", "c2"))
-        spec = self.read("specs/billing/spec.md")
-        self.assertTrue(spec.startswith("# billing\n"))
+        spec = self.read("specs/billing/billing.md")
+        self.assertIn("type: spec\ntitle: Billing\ncapability: billing\n", spec)
+        self.assertIn("\n# Billing\n", spec)
         self.assertIn("### REQ-BILL-001: Invoice", spec)
 
 
@@ -750,7 +760,7 @@ class TestCheckpoint(GitCase):
     def test_checkpoint_sets_phase_commits_and_pushes(self):
         wt = self.start()
         (wt / "changes/c1/specs").mkdir(exist_ok=True)
-        (wt / "changes/c1/specs/auth.md").write_text("# Delta: auth\n")
+        put(wt / "changes/c1/specs/auth/auth.md", "# Delta: auth\n")
         code, out = self.sdd("checkpoint", "c1", "--phase", "gate1", "-m", "docs(sdd): c1 spec", cwd=wt)
         self.assertEqual(code, 0, out)
         self.assertEqual(self.state(wt)["phase"], "gate1")
@@ -818,7 +828,7 @@ class TestDeps(GitCase):
         """Take a change through sync + finish on its branch (not merged into main yet)."""
         wt = self.start(name)
         self.assertEqual(self.sdd("set-status", name, "verified", cwd=wt)[0], 0)
-        (wt / f"changes/{name}/specs/auth.md").write_text("# Delta: auth\n\n## ADDED\n\n" + ADDED_003)
+        put(wt / f"changes/{name}/specs/auth/auth.md", "# Delta: auth\n\n## ADDED\n\n" + ADDED_003)
         (wt / f"changes/{name}/tasks.md").write_text(
             "- [x] T1 (test) t — REQ-AUTH-003\n- [x] T2 (impl) i — REQ-AUTH-003 | blocked-by: T1\n")
         self.assertEqual(self.sdd("sync", name, "--force", cwd=wt)[0], 0)
@@ -952,7 +962,7 @@ class TestDeps(GitCase):
         wt = self.started_with()
         d = self.start("dep")
         self.assertEqual(self.sdd("set-status", "dep", "verified", cwd=d)[0], 0)
-        (d / "changes/dep/specs/auth.md").write_text("# Delta: auth\n\n## ADDED\n\n" + ADDED_003)
+        put(d / "changes/dep/specs/auth/auth.md", "# Delta: auth\n\n## ADDED\n\n" + ADDED_003)
         (d / "changes/dep/tasks.md").write_text(
             "- [x] T1 (test) t — REQ-AUTH-003\n- [x] T2 (impl) i — REQ-AUTH-003 | blocked-by: T1\n")
         self.assertEqual(self.sdd("sync", "dep", "--force", cwd=d)[0], 0)
@@ -1028,7 +1038,7 @@ class TestFinishAndStatus(GitCase):
     def test_finish_marks_done_pushes_and_readies_pr(self):
         wt = self.start()
         self.assertEqual(self.sdd("set-status", "c1", "verified", cwd=wt)[0], 0)
-        (wt / "changes/c1/specs/auth.md").write_text("# Delta: auth\n\n## ADDED\n\n" + ADDED_003)
+        put(wt / "changes/c1/specs/auth/auth.md", "# Delta: auth\n\n## ADDED\n\n" + ADDED_003)
         (wt / "changes/c1/tasks.md").write_text(
             "- [x] T1 (test) t — REQ-AUTH-003\n- [x] T2 (impl) i — REQ-AUTH-003 | blocked-by: T1\n")
         code, out = self.sdd("sync", "c1", "--force", cwd=wt)
@@ -1041,6 +1051,230 @@ class TestFinishAndStatus(GitCase):
         self.assertEqual(json.loads((arch / "state.json").read_text())["phase"], "done")
         self.git("fetch", "-q", "origin", "sdd/c1")
         self.assertEqual(self.remote_subjects("sdd/c1")[0], "chore(sdd): sync c1")
+
+
+INV_LOG = """\
+### INV-SEC-001: Secrets are never logged
+The system MUST NOT write a password or token to any log.
+
+#### Check: test_no_secret_in_logs greps the captured log of the login flow
+"""
+
+
+class TestBundle(SddCase):
+    def test_fresh_init_is_a_valid_bundle(self):
+        self.assert_ok(self.sdd("bundle", "specs"))
+        self.assertIn('okf_version: "0.2"', self.read("specs/index.md"))
+        self.assertIn("type: log", self.read("specs/log.md"))
+
+    def test_legacy_spec_md_is_migrated_and_second_run_is_clean(self):
+        self.write("specs/auth/spec.md", LIVING_AUTH)
+        self.assert_fails(self.sdd("bundle", "specs"), "legacy layout", "[fixable]")
+        code, out = self.sdd("bundle", "specs", "--fix")
+        self.assertEqual(code, 0, out)
+        self.assertIn("FIXED", out)
+        self.assertFalse((self.root / "specs/auth/spec.md").exists())
+        concept = self.read("specs/auth/auth.md")
+        self.assertIn("type: spec\ntitle: auth\ncapability: auth\nsources: []", concept)
+        self.assertIn("REQ-AUTH-001, REQ-AUTH-002", self.read("specs/auth/index.md"))
+        self.assertIn("[auth/](auth/index.md)", self.read("specs/index.md"))
+        code, out = self.sdd("bundle", "specs", "--fix")
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("FIXED", out)
+
+    def test_stale_index_and_unsorted_blocks_are_fixed(self):
+        self.living()
+        a, b = LIVING_AUTH.split("\n\n### ")[1:]
+        self.write("specs/auth/auth.md", self.read("specs/auth/auth.md").split("### ")[0]
+                   + "### " + b + "\n### " + a)
+        self.write("specs/auth/index.md", "stale\n")
+        self.assert_fails(self.sdd("bundle", "specs"), "blocks not sorted", "index.md: stale")
+        self.assert_ok(self.sdd("bundle", "specs", "--fix"))
+        ids = re.findall(r"^### (REQ-AUTH-\d+)", self.read("specs/auth/auth.md"), re.M)
+        self.assertEqual(ids, ["REQ-AUTH-001", "REQ-AUTH-002"])
+        self.assert_ok(self.sdd("bundle", "specs"))
+
+    def test_missing_source_is_a_warning_fix_drops_it(self):
+        self.living()
+        self.write("src/a.py", "x = 1\n")
+        f = self.root / "specs/auth/auth.md"
+        f.write_text(f.read_text().replace("sources: []", "sources: [src/a.py, src/gone.py]"))
+        self.assert_ok(self.sdd("bundle", "specs"))
+        code, out = self.sdd("bundle", "specs")
+        self.assertIn("source 'src/gone.py' not found", out)
+        self.assert_ok(self.sdd("bundle", "specs", "--fix"))
+        self.assertIn("sources: [src/a.py]", f.read_text())
+
+    def test_too_many_blocks_warns_and_is_not_fixed(self):
+        self.living()
+        self.write(".claude/sdd.json", json.dumps({"concept_max_blocks": 1}))
+        code, out = self.sdd("bundle", "specs", "--fix")
+        self.assertEqual(code, 0, out)
+        self.assertIn("2 blocks > 1", out)
+
+    def test_empty_concept_is_deleted(self):
+        self.living()
+        self.write("specs/auth/old.md", "# old\n")
+        self.assert_fails(self.sdd("bundle", "specs"), "no requirement blocks")
+        self.assert_ok(self.sdd("bundle", "specs", "--fix"))
+        self.assertFalse((self.root / "specs/auth/old.md").exists())
+
+    def test_concept_with_prose_but_no_blocks_is_not_deleted(self):
+        self.living()
+        self.write("specs/auth/notes.md", "# notes\n\nSome hand-written prose.\n")
+        self.assert_fails(self.sdd("bundle", "specs", "--fix"), "holds prose")
+        self.assertTrue((self.root / "specs/auth/notes.md").exists())
+
+    def test_unfixable_problems_stay_errors(self):
+        self.living()
+        self.write("specs/auth/dup.md", "### REQ-AUTH-001: Again\nx\n")
+        self.write("specs/auth/inv.md", INV_LOG)
+        self.write("specs/loose/deep/x.md", LIVING_AUTH.replace("AUTH", "LOOSE"))
+        code, out = self.sdd("bundle", "specs", "--fix")
+        self.assertEqual(code, 1, out)
+        self.assertIn("defined in both", out)
+        self.assertIn("INV in the spec tree", out)
+        self.assertIn("concepts live in specs/<capability>/", out)
+
+    def test_change_bundle_legacy_delta_front_matter_and_index(self):
+        self.living()
+        self.new_change()
+        self.write("changes/c1/specs/auth.md", "# Delta: auth\n\n## ADDED\n\n" + ADDED_003)
+        code, out = self.sdd("bundle", "c1")
+        self.assertEqual(code, 0, out)
+        self.assertIn("legacy layout", out)
+        self.assert_ok(self.sdd("bundle", "c1", "--fix"))
+        delta = self.read("changes/c1/specs/auth/auth.md")
+        self.assertIn("type: spec-delta\ntarget: specs/auth/auth.md", delta)
+        self.assertFalse((self.root / "changes/c1/specs/auth.md").exists())
+        index = self.read("changes/c1/index.md")
+        self.assertIn('okf_version: "0.2"', index)
+        self.assertIn("## Spec delta", index)
+        self.assertIn("ADDED REQ-AUTH-003", index)
+        code, out = self.sdd("bundle", "c1", "--fix")
+        self.assertNotIn("FIXED", out)
+        self.assertNotIn("WARN", out)
+
+    def test_change_bundle_rejects_misplaced_delta(self):
+        self.new_change()
+        self.write("changes/c1/specs/invariants/x.md", "## ADDED\n")
+        self.assert_fails(self.sdd("bundle", "c1"), "deltas live in specs/<capability>/")
+
+    def test_unknown_change(self):
+        self.assert_fails(self.sdd("bundle", "nope"), "no change 'nope'", code=2)
+
+
+class TestInvariants(SddCase):
+    def inv_change(self, check: bool = True) -> str:
+        self.new_change()
+        self.assert_ok(self.sdd("delta-new", "c1", "invariants/security/logging"))
+        f = self.root / "changes/c1/specs/invariants/security/logging.md"
+        block = INV_LOG if check else INV_LOG.split("#### Check")[0]
+        f.write_text(f.read_text().replace("## ADDED\n", "## ADDED\n\n" + block, 1))
+        self.set_tasks("c1", "- [ ] T1 (test) No secret in logs — INV-SEC-001")
+        return "c1"
+
+    def test_delta_new_places_invariant_deltas_in_category_dirs(self):
+        self.new_change()
+        code, out = self.sdd("delta-new", "c1", "invariants/security")
+        self.assertIn("created changes/c1/specs/invariants/security/security.md", out)
+        self.assertIn("type: invariant-delta\ntarget: specs/invariants/security/security.md",
+                      self.read("changes/c1/specs/invariants/security/security.md"))
+        self.assert_ok(self.sdd("delta-new", "c1", "auth/tokens"))
+        self.assertTrue((self.root / "changes/c1/specs/auth/tokens.md").exists())
+        self.assert_fails(self.sdd("delta-new", "c1", "invariants"), "target must be", code=2)
+        self.assert_fails(self.sdd("delta-new", "c1", "Bad Name"), "target must be", code=2)
+
+    def test_invariant_needs_check_and_test_task_but_no_impl_task(self):
+        self.inv_change()
+        self.assert_ok(self.sdd("check", "c1"))
+        self.set_tasks("c1", "- [ ] T1 (chore) nothing")
+        self.assert_fails(self.sdd("check", "c1"), "INV-SEC-001: no (test) task")
+
+    def test_invariant_without_check_fails(self):
+        self.inv_change(check=False)
+        self.assert_fails(self.sdd("check", "c1"), "no '#### Check:'")
+
+    def test_inv_in_spec_tree_and_req_in_invariant_tree_fail(self):
+        self.new_change()
+        self.write("changes/c1/specs/auth/auth.md", "## ADDED\n\n" + INV_LOG)
+        self.write("changes/c1/specs/invariants/security/s.md", "## ADDED\n\n" + ADDED_003)
+        self.set_tasks("c1", "- [ ] T1 (test) t — INV-SEC-001 REQ-AUTH-003")
+        self.assert_fails(self.sdd("check", "c1"), "INV in the wrong tree", "REQ in the wrong tree")
+
+    def test_sync_writes_invariant_concept_indexes_and_log(self):
+        self.inv_change()
+        self.set_tasks("c1", "- [x] T1 (test) No secret in logs — INV-SEC-001")
+        self.sdd("set-status", "c1", "verified")
+        self.assert_ok(self.sdd("sync", "c1"))
+        concept = self.read("specs/invariants/security/logging.md")
+        self.assertIn("type: invariant\ntitle: Logging\ncategory: security", concept)
+        self.assertIn("INV-SEC-001", self.read("specs/invariants/security/index.md"))
+        self.assertIn("[security/](security/index.md)", self.read("specs/invariants/index.md"))
+        self.assertIn("[invariants/](invariants/index.md)", self.read("specs/index.md"))
+        self.assertRegex(self.read("specs/log.md"), r"- \d{4}-\d{2}-\d{2} c1: ADDED INV-SEC-001")
+        self.assert_ok(self.sdd("bundle", "specs"))
+
+    def test_impl_context_lists_invariants_in_force(self):
+        self.write("specs/invariants/security/logging.md", INV_LOG)
+        self.assert_ok(self.sdd("bundle", "specs", "--fix"))
+        self.added_change()
+        code, out = self.sdd("context", "c1", "T2")
+        self.assertIn("## Invariants in force", out)
+        self.assertIn("- INV-SEC-001: Secrets are never logged", out)
+        code, out = self.sdd("context", "c1", "T1")
+        self.assertNotIn("Invariants in force", out)
+
+
+class TestConceptSync(SddCase):
+    def test_modified_req_in_another_concept_is_moved(self):
+        self.living()
+        self.new_change()
+        self.assert_ok(self.sdd("delta-new", "c1", "auth/lockout"))
+        self.assert_ok(self.sdd("delta-stub", "c1", "REQ-AUTH-002"))
+        self.assertTrue((self.root / "changes/c1/specs/auth/auth.md").exists())
+        (self.root / "changes/c1/specs/auth/auth.md").rename(self.root / "changes/c1/specs/auth/lockout.md")
+        self.set_tasks("c1", "- [x] T1 (test) x — REQ-AUTH-002", "- [x] T2 (impl) y — REQ-AUTH-002 | blocked-by: T1")
+        self.sdd("set-status", "c1", "verified")
+        code, out = self.sdd("sync", "c1")
+        self.assertEqual(code, 0, out)
+        self.assertIn("MOVED", out)
+        self.assertNotIn("REQ-AUTH-002", self.read("specs/auth/auth.md"))
+        self.assertIn("REQ-AUTH-002", self.read("specs/auth/lockout.md"))
+        self.assertIn("REQ-AUTH-002", self.read("specs/auth/index.md"))
+        self.assert_ok(self.sdd("bundle", "specs"))
+
+    def test_removing_the_last_req_deletes_the_concept(self):
+        self.write("specs/auth/auth.md", LIVING_AUTH.split("### REQ-AUTH-002")[0])
+        self.assert_ok(self.sdd("bundle", "specs", "--fix"))
+        self.new_change()
+        self.assert_ok(self.sdd("delta-stub", "c1", "REQ-AUTH-001", "--remove"))
+        self.set_tasks("c1", "- [x] T1 (chore) drop the endpoint")
+        self.sdd("set-status", "c1", "verified")
+        self.assert_ok(self.sdd("sync", "c1"))
+        self.assertFalse((self.root / "specs/auth").exists())
+        self.assertNotIn("auth", self.read("specs/index.md").split("# Specs")[1])
+        self.assert_ok(self.sdd("bundle", "specs"))
+
+    def test_sync_refuses_while_specs_bundle_is_invalid(self):
+        self.added_change()
+        self.write("specs/auth/spec.md", LIVING_AUTH)
+        self.sdd("set-status", "c1", "verified")
+        self.assert_fails(self.sdd("sync", "c1"), "specs bundle:", "bundle specs --fix")
+
+    def test_delta_sources_are_merged_into_the_concept(self):
+        self.write("src/a.py", "x\n")
+        self.write("src/b.py", "x\n")
+        self.living()
+        f = self.root / "specs/auth/auth.md"
+        f.write_text(f.read_text().replace("sources: []", "sources: [src/a.py]"))
+        self.added_change()
+        self.assert_ok(self.sdd("bundle", "c1", "--fix"))
+        d = self.root / "changes/c1/specs/auth/auth.md"
+        d.write_text(d.read_text().replace("sources: []", "sources: [src/b.py]"))
+        self.sdd("set-status", "c1", "verified")
+        self.assert_ok(self.sdd("sync", "c1"))
+        self.assertIn("sources: [src/a.py, src/b.py]", f.read_text())
 
 
 if __name__ == "__main__":

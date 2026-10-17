@@ -13,7 +13,7 @@ generated:
 
 # Your first fix
 
-This tutorial continues from [Your first spec-driven change](first-change.md). You have `specs/greet/spec.md` with `REQ-GREET-001` (`--name Ada` prints `Hello, Ada!`) merged on `main`.
+This tutorial continues from [Your first spec-driven change](first-change.md). You have `specs/greet/greeting.md` with `REQ-GREET-001` (`--name Ada` prints `Hello, Ada!`) merged on `main`.
 
 We'll introduce a bug, report it, and watch the workflow fix it test-first, without writing any new spec.
 

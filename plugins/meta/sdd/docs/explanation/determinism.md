@@ -18,29 +18,29 @@ A language model is good at writing a requirement. It is bad at copying one exac
 
 ## Sync merges by id, never by prose
 
-`sdd sync` takes each delta block and applies it by REQ id. MODIFIED replaces the whole block with the delta's text, REMOVED drops it, ADDED appends it, and then the blocks are sorted by id. Nothing is summarised or rewritten. The text you approved at Gate 1 is the text that lands in `specs/`.
+`sdd sync` takes each delta block and applies it by REQ or INV id to its concept file. MODIFIED replaces the whole block with the delta's text (or moves it to another concept of the same capability), REMOVED drops it, ADDED appends it, and then the blocks are sorted by id; the indexes and `specs/log.md` are regenerated. Nothing is summarised or rewritten. The text you approved at Gate 1 is the text that lands in `specs/`.
 
 ## Base hashes turn races into conflicts
 
 Two open changes may modify the same requirement. When the spec-author runs `delta-stub`, the script copies the living block and records an 8-character hash of it as `<!-- base: ... -->`. If another change syncs first and edits that REQ, the hashes differ, and `sdd check` and `sdd sync` fail with:
 
 ```
-ERROR specs/greeting.md REQ-GREET-001: CONFLICT base f1452e6a != current 52566f36 (living spec changed since this delta was written)
+ERROR changes/polite-greeting/specs/greet/greeting.md REQ-GREET-001: CONFLICT base f1452e6a != current 59e67d47 (living spec changed since this delta was written)
 ```
 
 ```mermaid
 sequenceDiagram
     participant A as change A
-    participant S as specs/greeting/spec.md
+    participant S as specs/greet/greeting.md
     participant B as change B
     A->>S: delta-stub REQ-GREET-001
     S-->>A: copy + base f1452e6a
     B->>S: delta-stub REQ-GREET-001
     S-->>B: copy + base f1452e6a
     A->>S: sync (base matches)
-    Note over S: REQ-GREET-001 now hashes 52566f36
+    Note over S: REQ-GREET-001 now hashes 59e67d47
     B->>S: check / sync
-    S-->>B: CONFLICT base f1452e6a != current 52566f36
+    S-->>B: CONFLICT base f1452e6a != current 59e67d47
     Note over B: re-stub, re-edit, Gate 1 for that REQ
 ```
 

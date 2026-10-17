@@ -55,6 +55,7 @@ number. Direct-path work has no change id and none of this.
    done -> nothing left; a fix starts at plan, its test is written alongside). A stored phase can lag a step that was done but not
    checkpointed: trust the files (`sdd check`, task ticks) over the phase when they disagree.
    Resume a partly written spec or plan with the same agent type and the files as context.
+   Run the `bundle` tool on the change first: a change started on the old layout needs `fix: true`.
 
 ## 1. Triage (you, no agent unless context is missing)
 If you need codebase facts to decide, delegate to `Explore` (quick or medium) with one
@@ -78,15 +79,16 @@ Apply this rule, in order, and state the result in one line:
    prints. Do this before any agent writes an artifact. If it prints `PR missing`, create a
    draft PR for the branch (GitHub tools) and run `sdd set-pr <id> <number>`.
 2. Delegate to `spec-author` with: change id, the user's request verbatim, and the
-   Explore findings (summarized, with file paths). It writes intent.md, the delta and any
-   proposed ADRs, then runs `sdd check <id>`. Then
+   Explore findings (summarized, with file paths). It writes intent.md, the spec delta,
+   the invariant delta and any proposed ADRs, then runs `bundle` and `sdd check <id>`. Then
    `sdd checkpoint <id> --phase gate1 -m "docs(<id>): spec delta"`.
 3. If it returns open questions, ask the user (AskUserQuestion, max 4) and resume the
    same spec-author with the answers (SendMessage), do not start a new one.
 
 ## 3. Gate 1 - user review (deep)
 Show the user, compactly: the intent's Why/Outcome/Non-goals, each REQ id + title +
-scenario names, each ADR title + decision paragraph. Give file paths for the full text.
+scenario names (with the concept file it lands in), each INV id + title + its check,
+each ADR title + decision paragraph. Give file paths for the full text.
 Ask: approve / change something / stop.
 - Change -> resume spec-author with the feedback, then Gate 1 again.
 - Approve -> `sdd set-status <id> approved`, then
@@ -153,8 +155,11 @@ After each implementer returns (and its branch is merged, if isolated):
    findings to the user and let them decide.
 4. Then `sdd set-status <id> verified`, `sdd checkpoint <id> --phase sync -m "chore(<id>): verified"`,
    then `sdd sync <id> --dry-run`, then
-   `sdd sync <id>`. Sync merges the delta into specs/, accepts the ADRs and archives the
-   change. If sync reports CONFLICT, another change modified the same REQ first: resume
+   `sdd sync <id>`. Sync merges the spec and invariant deltas into the specs/ OKF bundle
+   (`specs/<capability>/`, `specs/invariants/<category>/`, regenerated indexes, `log.md`),
+   accepts the ADRs and archives the change. If sync refuses with a `specs bundle:` error
+   (e.g. a project still on the old `spec.md` layout), run the `bundle` tool on `specs` with
+   `fix: true` and commit that first. If sync reports CONFLICT, another change modified the same REQ first: resume
    spec-author to rebase the delta (`delta-stub` again), back to Gate 1 for that REQ only.
 5. `sdd finish <id>`: marks the phase done, commits the synced specs/ADRs/archive, pushes
    and marks the PR ready for review (merging stays with the user). Report to the user in

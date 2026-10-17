@@ -16,15 +16,15 @@ generated:
 **Symptom** (from `sdd check` or `sdd sync`):
 
 ```
-ERROR specs/greeting.md REQ-GREET-001: CONFLICT base f1452e6a != current 52566f36 (living spec changed since this delta was written)
+ERROR changes/polite-greeting/specs/greet/greeting.md REQ-GREET-001: CONFLICT base f1452e6a != current 59e67d47 (living spec changed since this delta was written)
 FAIL polite-greeting: 1 REQ, 0 tasks, 1 errors, 0 warnings
 ```
 
-Another change synced a new version of `REQ-GREET-001` after your delta copied it. Nothing has been written.
+Another change synced a new version of `REQ-GREET-001` after your delta copied it. The same applies to an `INV-` id. Nothing has been written.
 
 1. **Don't edit the base hash.** That would silently overwrite the other change's version.
-2. Read what changed: compare the living block in `specs/greeting/spec.md` with your delta's MODIFIED block.
-3. Re-stub the REQ. `delta-stub` refuses a REQ already in the delta, so delete your block (heading through the end of its scenarios) from `changes/<id>/specs/<capability>.md` first, then:
+2. Read what changed: compare the living block in `specs/greet/greeting.md` with your delta's MODIFIED block.
+3. Re-stub the REQ. `delta-stub` refuses a REQ already in the delta, so delete your block (heading through the end of its scenarios) from `changes/<id>/specs/<capability>/<concept>.md` first, then:
 
    ```
    sdd delta-stub <id> REQ-GREET-001

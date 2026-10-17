@@ -61,7 +61,7 @@ The status-line check only refuses a `status:` value that differs from the curre
 
 | Path | Rule |
 |---|---|
-| `specs/**` | refused: living specs change only through `sdd sync` |
+| `specs/**` | refused: living specs change only through `sdd sync` (and `sdd bundle specs --fix`, run by the lead through the tool) |
 | `changes/archive/**` | refused: archived changes are immutable |
 | `changes/**/frozen.json` | refused: written only by `sdd freeze` |
 | `changes/**/state.json` | refused: written only by `sdd.py` |
@@ -82,7 +82,7 @@ The lead passes every other write.
 
 | Role | May write | While |
 |---|---|---|
-| `spec-author` | `adr/**`; `changes/<c>/intent.md`; `changes/<c>/specs/**` | intent and delta only while the change is `draft` (or has no status yet) |
+| `spec-author` | `adr/**`; `changes/<c>/intent.md`; `changes/<c>/specs/**` (spec and invariant deltas, nested under capability or category) | intent and delta only while the change is `draft` (or has no status yet). The generated `changes/<c>/index.md` is not writable: it comes from `sdd` |
 | `planner` | `changes/<c>/plan.md`, `changes/<c>/tasks.md` | change is `draft` or `approved` |
 | `acceptance-tester` | `tests/acceptance/**`, `changes/<c>/tasks.md` | any status |
 | `implementer` | anything except `tests/acceptance/**`, `adr/**` and `changes/**` (but `changes/<c>/tasks.md` is allowed) | any status |

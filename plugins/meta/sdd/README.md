@@ -43,8 +43,34 @@ Local test: `claude --plugin-dir ./plugins/meta/sdd`
 
 In a repo, just describe the change: the main conversation is the lead and runs the
 workflow (`/sdd:change <what you want>` does the same explicitly). The first run calls `sdd init`, which
-creates `specs/ adr/ changes/ tests/acceptance/` and `.claude/sdd.json`: set
-`acceptance_cmd` and `unit_cmd` there.
+creates `specs/ adr/ changes/ tests/acceptance/` (`specs/` as an OKF bundle with `index.md`
+and `log.md`) and `.claude/sdd.json`: set `acceptance_cmd` and `unit_cmd` there.
+
+## Specs, invariants and OKF bundles
+`specs/` and every `changes/<id>/` are [OKF](https://github.com/gpr/claude-plugins/tree/main/plugins/meta/documentalist-agent)
+bundles (`okf_version: "0.2"` in the root `index.md`, `type`/`sources` front matter on
+every concept). Concept files are short (at most `concept_max_blocks`, default 5, REQ/INV
+blocks) and grouped:
+```
+specs/index.md  specs/log.md
+specs/<capability>/{index.md,<concept>.md}                living requirements (REQ-<CAP>-NNN)
+specs/invariants/<category>/{index.md,<concept>.md}       living invariants (INV-<CAT>-NNN)
+changes/<id>/{index.md,intent.md,plan.md,tasks.md}
+changes/<id>/specs/<capability>/<concept>.md              spec delta, mirrors the living path
+changes/<id>/specs/invariants/<category>/<concept>.md     invariant delta
+```
+An invariant is a system-wide rule with a `#### Check:` instead of a scenario; it needs a
+test task but no impl task. `sdd sync` applies both deltas (ADDED, MODIFIED, REMOVED, and
+MOVED when a MODIFIED block sits in another concept of the same capability), merges the
+delta `sources`, regenerates the indexes and appends to `specs/log.md`.
+
+The `bundle` tool (`mcp__sdd__bundle`, or `sdd bundle <specs|change> [--fix]`) checks both
+kinds of bundle and repairs what it marks `[fixable]` (indexes, front matter, block order,
+missing sources, empty concepts). `--fix` also migrates the old layout: `specs/<cap>/spec.md`
+becomes `specs/<cap>/<cap>.md` and flat `changes/<id>/specs/<cap>.md` deltas move below
+`specs/<cap>/`. It is idempotent. Splitting an over-long concept stays a warning: a
+spec-author decides the topics. After upgrading, run `bundle specs --fix` once (sync refuses
+a specs bundle with errors), then `bundle <id> --fix` for each open change.
 
 ## What is in it
 | Part | Where | What it does |
@@ -52,7 +78,7 @@ creates `specs/ adr/ changes/ tests/acceptance/` and `.claude/sdd.json`: set
 | Lead workflow | `skills/change` (`/sdd:change`) | triage, gates, routing, close-out, reopen path |
 | Format rules | `skills/formats` (`sdd:formats`) | REQ/scenario/delta/ADR/task formats, preloaded into the authoring agents |
 | Agents | `agents/` (`sdd:spec-author`, `sdd:planner`, `sdd:acceptance-tester`, `sdd:implementer`, `sdd:verifier`) | one job each, minimal tools, project memory in `.claude/agent-memory/sdd-<agent>/` |
-| Spec tool | `tools/sdd.py`, exposed as the `mcp__sdd__sdd` tool | check, context bundles, delta-new from the delta template, delta-stub with base hashes, freeze/verify-frozen, deterministic sync, ADR accept/supersede |
+| Spec tool | `tools/sdd.py`, exposed as the `mcp__sdd__sdd` and `mcp__sdd__bundle` tools | check, context bundles, delta-new from the delta templates, delta-stub with base hashes, freeze/verify-frozen, deterministic sync into the specs bundle, ADR accept/supersede, bundle check/fix |
 | Mod | `hooks/register.tsx`, `hooks/guard.ts`, `hooks/phase.ts` | lead role for the main conversation, write guard per agent, the `sdd` tool, status band, `/sdd` and `/sdd phase` panes |
 
 ## Branches, PRs and resume
@@ -113,6 +139,9 @@ remote's default branch), `branch_prefix` (`sdd/`), `worktree_dir` (`.claude/wor
   - read-only, any role: `deps`
   - lead and acceptance-tester: `freeze`
   - lead and spec-author: `delta-new`, `delta-stub`, `adr-new`
+- **`bundle` tool.** `mcp__sdd__bundle` takes `target` (`specs` or a change id) and `fix`.
+  Checking is open to every role; `fix` on `specs` is lead-only, `fix` on a change is
+  lead or spec-author.
 - **Band above the prompt.** Shows the most active open change, its phase, its status, task
   progress, the last check result, which workflow agents are running, and how many other
   changes are open. It hides itself when nothing is open.

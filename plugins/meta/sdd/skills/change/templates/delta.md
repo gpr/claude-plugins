@@ -1,6 +1,14 @@
+---
+type: spec-delta
+target: {{target}}
+sources: []
+---
+
 # Delta: {{capability}}
 
-<!-- One file per capability. Delete sections you leave empty.
+<!-- One short file per topic of the capability (see `sources:` = code paths the concept covers).
+Keep at most 5 requirements per concept; open another concept file rather than growing one.
+Delete sections you leave empty.
 ADDED: write each new requirement in full, in this shape:
 
   ### REQ-<CAP>-NNN: <one behavior, as a title>

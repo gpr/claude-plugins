@@ -1,12 +1,13 @@
 ---
 type: Reference
 title: File formats
-description: Exact syntax sdd.py parses - REQ blocks, scenarios, delta sections and base markers, intent and ADR front matter, task lines and acceptance test tagging.
-tags: [sdd, reference, formats, spec, adr, tasks]
+description: Exact syntax sdd.py parses - REQ and INV blocks, scenarios and checks, concept files, delta sections and base markers, intent and ADR front matter, task lines and acceptance test tagging.
+tags: [sdd, reference, formats, spec, invariant, adr, tasks]
 sources:
   - resource: ../../skills/formats/SKILL.md
   - resource: ../../skills/change/templates/intent.md
   - resource: ../../skills/change/templates/delta.md
+  - resource: ../../skills/change/templates/invariant-delta.md
   - resource: ../../skills/change/templates/adr.md
   - resource: ../../skills/change/templates/plan.md
   - resource: ../../skills/change/templates/tasks.md
@@ -33,20 +34,39 @@ and error code `token_expired`. It MUST NOT refresh the token implicitly.
 - THEN the response is 401 with `{"error": "token_expired"}`
 ```
 
-- A block starts at a line `### <REQ id>: <title>` and runs to the next such line. Text before the first block is kept as the spec's preamble.
+- A block starts at a line `### <REQ or INV id>: <title>` and runs to the next such line. Text before the first block is kept as the concept's preamble.
 - REQ ids match `req_id_pattern` (default `REQ-[A-Z0-9]+-[0-9]{3}`). An id is unique forever; never reuse a removed one.
-- A block has a scenario when one of its lines starts with `#### Scenario:`. ADDED and MODIFIED blocks need one.
+- A block has a scenario when one of its lines starts with `#### Scenario:`. ADDED and MODIFIED REQ blocks need one.
 - **Block hash**: the first 8 hex chars of sha256 over the block's lines, trailing spaces stripped, leading and trailing blank lines dropped, base marker excluded. Whitespace at line ends does not change it.
 
-## Living spec
+## Invariant block
 
-`specs/<capability>/spec.md`: a preamble (`# <capability>`) and REQ blocks. `sync` rewrites it with blocks sorted by REQ id. Never edited by hand.
+```markdown
+### INV-SEC-001: Secrets are never logged
+The system MUST NOT write a password or token to any log.
+
+#### Check: test_no_secret_in_logs greps the captured log of the login flow
+```
+
+- INV ids match `inv_id_pattern` (default `INV-[A-Z0-9]+-[0-9]{3}`). Same block hash, base marker and uniqueness rules as a REQ.
+- A block has a check when one of its lines starts with `#### Check:`. ADDED and MODIFIED INV blocks need one instead of a scenario.
+- INV blocks live only under `specs/invariants/<category>/`, REQ blocks only under `specs/<capability>/`; `check` errors on a block in the wrong tree.
+
+## Living spec (concept file)
+
+`specs/<capability>/<concept>.md` for REQs, `specs/invariants/<category>/<concept>.md` for INVs: front matter (`type: spec|invariant`, `title`, `capability` or `category`, `sources`), a preamble (`# <title>`) and up to `concept_max_blocks` blocks. `sync` rewrites it with blocks sorted by id and merges the delta's `sources`. Never edited by hand. The generated `index.md` and `log.md` files, the front matter per type and the checks are in [OKF bundles](bundles.md).
 
 ## Delta
 
-`changes/<change>/specs/<capability>.md`, one per capability:
+`changes/<change>/specs/<capability>/<concept>.md`, or `changes/<change>/specs/invariants/<category>/<concept>.md` for invariants. The path mirrors the living concept it targets; one file per concept touched:
 
 ```markdown
+---
+type: spec-delta
+target: specs/auth/tokens.md
+sources: []
+---
+
 # Delta: auth
 
 ## ADDED
@@ -68,13 +88,15 @@ Reason: ...
 
 - Sections are lines exactly `## ADDED`, `## MODIFIED`, `## REMOVED`. Blocks outside a section are ignored.
 - `<!-- base: <8 hex> -->` on its own line inside a block records the hash of the living REQ the entry was based on. `delta-stub` writes it; never type it.
-- MODIFIED holds the complete new block: sync replaces the whole block.
+- MODIFIED holds the complete new block: sync replaces the whole block. If the entry sits in a different concept file of the same capability (or category) than the living block, sync moves it there.
+- Front matter: `type: spec-delta` (`invariant-delta` for INV), `target` (the living concept path), `sources` (code paths, merged into the concept at sync). `sdd delta-new` writes it.
 - Other HTML comments (template guidance) are ignored.
 
 ## intent.md
 
 ```yaml
 ---
+type: intent
 id: add-login
 title: Add login
 status: draft          # draft | approved | implementing | verified | archived
@@ -113,7 +135,7 @@ The ADR number is the first 8 characters of the file name. `## Decision` must be
 
 ## plan.md
 
-Front matter `change: <id>`; sections Approach, Contracts, Components, Risks. `sdd context` sends test tasks only `## Contracts`, and sends the whole plan only with `--plan`. `check` validates REQ and ADR ids mentioned outside comments.
+Front matter `type: plan`, `change: <id>`; sections Approach, Contracts, Components, Risks. `sdd context` sends test tasks only `## Contracts`, and sends the whole plan only with `--plan`. `check` validates REQ and ADR ids mentioned outside comments.
 
 ## Task line
 
@@ -127,18 +149,18 @@ Parsed with `^- \[( |x|X)\] (T\d+) \((test|impl|chore)\) (.*)$`:
 |---|---|
 | `[ ]` / `[x]` | open / done |
 | `T<n>` | task id, unique in the file |
-| `(test)` | acceptance tests, by acceptance-tester; needs ≥ 1 REQ |
-| `(impl)` | code, by an implementer; needs ≥ 1 REQ; should be `blocked-by` its test task |
+| `(test)` | acceptance tests, by acceptance-tester; needs ≥ 1 REQ or INV |
+| `(impl)` | code, by an implementer; needs ≥ 1 REQ or INV; should be `blocked-by` its test task. An INV needs no `(impl)` task |
 | `(chore)` | migrations, config, docs; no REQ needed |
-| REQ / ADR ids | anywhere in the rest of the line |
+| REQ / INV / ADR ids | anywhere in the rest of the line |
 | `blocked-by: T1, T3` | dependencies |
 | `files: a, b` | files the task touches; the lead runs impl tasks in parallel when these sets are disjoint |
 
-Lines inside HTML comments are ignored, so the template's example is never parsed.
+Front matter of `tasks.md` is `type: tasks`, `change: <id>`. Lines inside HTML comments are ignored, so the template's example is never parsed.
 
 ## Acceptance test tagging
 
-A file under `acceptance_dir` covers a REQ when its text contains the exact REQ id. Put it in a docstring or a comment above the test:
+A file under `acceptance_dir` covers a REQ or INV when its text contains the exact id. Put it in a docstring or a comment above the test:
 
 ```python
 # REQ-AUTH-004
@@ -149,4 +171,4 @@ def test_expired_token_rejected(): ...
 
 ## frozen.json
 
-`{"<path relative to root>": "<sha256 hex>", ...}` for every acceptance file that mentions one of the change's test REQs. Written by `freeze`, checked by `verify-frozen`.
+`{"<path relative to root>": "<sha256 hex>", ...}` for every acceptance file that mentions one of the change's test REQs or INVs. Written by `freeze`, checked by `verify-frozen`.

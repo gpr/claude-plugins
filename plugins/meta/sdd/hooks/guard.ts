@@ -249,6 +249,19 @@ export function checkSdd(sub: string | undefined, role: Role): string | undefine
   return `\`sdd ${sub}\` is run by ${allowed.join(' or ')} only, not ${role}.`
 }
 
+/**
+ * Deny reason for the `bundle` tool, or undefined. Checking is open to every role. `--fix` on
+ * the living `specs` bundle is lead-only (only the lead's call may write specs/); on a change it
+ * is open to the lead and the spec-author: it only touches front matter, delta locations and the
+ * generated index, never the text of a requirement.
+ */
+export function checkBundle(target: string | undefined, fix: boolean, role: Role): string | undefined {
+  if (target === undefined || target === '') return 'give the target: "specs" or a change id.'
+  if (!fix) return undefined
+  if (target === 'specs') return role === 'lead' ? undefined : `\`bundle specs --fix\` is run by the lead only, not ${role}.`
+  return role === 'lead' || role === 'spec-author' ? undefined : `\`bundle ${target} --fix\` is run by lead or spec-author only, not ${role}.`
+}
+
 /** `status:` from a markdown file's front matter. */
 export function frontStatus(text: string): string | undefined {
   if (!text.startsWith('---')) return undefined
