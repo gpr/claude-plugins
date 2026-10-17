@@ -2,6 +2,18 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## sdd-0.7.0 - 2026-10-17
+#### Features
+- (**sdd**) OKF bundles for specs and changes, invariants, bundle tool - (e1ee85d) - Claude, *Claude Sonnet 5.5*
+#### Documentation
+- (**sdd**) document the OKF layout, invariants and the bundle tool - (1f54ba7) - Claude, *Claude Sonnet 5.5*
+- (**sdd**) add mermaid diagrams to the documentation bundle - (8ffdf37) - Claude, *Claude Opus 5.5*
+- (**sdd**) add Diátaxis documentation as OKF v0.2 bundle - (3b7f662) - Claude, *Claude Opus 5.5*
+#### Refactoring
+- (**sdd**) close bundle --fix argument-order bypass, keep prose-only concepts - (118daf9) - Claude, *Claude Sonnet 5.5*
+
+- - -
+
 ## sdd-0.6.1 - 2026-10-17
 #### Bug Fixes
 - (**sdd**) clearer /sdd pane, no buttons - (578b6e1) - Claude, *Claude Opus 5.5*
