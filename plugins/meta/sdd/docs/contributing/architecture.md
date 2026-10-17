@@ -39,7 +39,7 @@ plugins/meta/sdd/
 |---|---|---|
 | `tools/sdd.py` | every write to specs, ADR status, `frozen.json`, `state.json` and the archive; all git and `gh` calls; traceability; context bundles | call a model; produce chatty output |
 | `hooks/guard.ts` | who may write what: `roleOf`, `checkPath`, `checkBash`, `checkSdd`, `SDD_RULES`, `memoryDirs` | do I/O (it gets a `Lookup` for statuses) |
-| `hooks/phase.ts` | `PHASES`, `phaseOf`, `phasesOf`, `stepOf`, `byActivity`, `byPhase` | do I/O |
+| `hooks/phase.ts` | `PHASES`, `phaseOf`, `phasesOf`, `stepOf`, `byActivity`, `byStatus`, `activeOf` | do I/O |
 | `hooks/register.tsx` | hooks: `prompt.compose` (lead section), `session.start` (tool + command + timers), `command.run` (`/sdd`), `tool.call` (sdd tool, guard), `agent.spawn`, `turn.complete`, `ui.render` (band, two panes); state atoms | contain rules or phase logic |
 | `skills/change` | the workflow the lead follows, step names, routing | duplicate format rules |
 | `skills/formats` | the formats `sdd.py` parses, as writing rules | drift from `sdd.py` |
