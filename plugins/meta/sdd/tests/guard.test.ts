@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'claude-code/testing'
 
-import { checkBash, checkPath, checkSdd, DEFAULT_CFG, relTo, roleOf } from '../hooks/guard'
+import { checkBash, checkBundle, checkPath, checkSdd, DEFAULT_CFG, relTo, roleOf } from '../hooks/guard'
 import type { Lookup, Role } from '../hooks/guard'
 
 const ROOT = '/repo'
@@ -151,5 +151,44 @@ describe('roles', () => {
     expect(roleOf('Explore')).toBe('other')
     expect(roleOf('implementer')).toBe('other')
     expect(roleOf('sdd:unknown')).toBe('other')
+  })
+})
+
+describe('bundle tool', () => {
+  test('checking is open to every role', () => {
+    for (const role of ['lead', 'spec-author', 'planner', 'implementer', 'verifier'] as const) {
+      expect(checkBundle('specs', false, role)).toBeUndefined()
+      expect(checkBundle('c1', false, role)).toBeUndefined()
+    }
+  })
+  test('fixing the living specs is lead-only', () => {
+    expect(checkBundle('specs', true, 'lead')).toBeUndefined()
+    expect(checkBundle('specs', true, 'spec-author')).toBeDefined()
+    expect(checkBundle('specs', true, 'implementer')).toBeDefined()
+  })
+  test('fixing a change is for the lead and the spec-author', () => {
+    expect(checkBundle('c1', true, 'lead')).toBeUndefined()
+    expect(checkBundle('c1', true, 'spec-author')).toBeUndefined()
+    expect(checkBundle('c1', true, 'planner')).toBeDefined()
+    expect(checkBundle('c1', true, 'verifier')).toBeDefined()
+  })
+  test('a missing target is refused', () => {
+    expect(checkBundle(undefined, false, 'lead')).toBeDefined()
+    expect(checkBundle('', true, 'lead')).toBeDefined()
+  })
+})
+
+describe('bundle files stay generated', () => {
+  const write = (role: Role, rel: string) => checkPath(rel, role, DEFAULT_CFG, look, 'x')
+  test('nobody but sdd writes the specs bundle or a change index', async () => {
+    expect(await write('lead', 'specs/auth/index.md')).toBeDefined()
+    expect(await write('lead', 'specs/invariants/security/logging.md')).toBeDefined()
+    for (const role of ['spec-author', 'planner', 'implementer'] as const) {
+      expect(await write(role, 'changes/c1/index.md')).toBeDefined()
+    }
+  })
+  test('spec-author writes deltas in capability and invariant directories', async () => {
+    expect(await write('spec-author', 'changes/c1/specs/auth/tokens.md')).toBeUndefined()
+    expect(await write('spec-author', 'changes/c1/specs/invariants/security/logging.md')).toBeUndefined()
   })
 })

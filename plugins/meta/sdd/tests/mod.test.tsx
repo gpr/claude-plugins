@@ -175,3 +175,35 @@ test('the main conversation is the lead: its system prompt ends with the lead se
   expect(sections[1].scope).toBe('session')
   expect(sections[1].text).toContain('`sdd:change`')
 })
+
+test('the bundle tool runs `sdd.py bundle` and relays its output', async ($, on) => {
+  on('session.root', () => ({ value: '/repo' }))
+  on('session.cwd', () => ({ value: '/repo' }))
+  on('agent.list', () => ({ value: [] }))
+  const argvs: string[][] = []
+  on('process.run', (_$, e) => {
+    argvs.push(e.argv.slice(-3))
+    return { value: { exitCode: 0, stdout: 'OK specs: 0 errors, 0 warnings\n', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
+  })
+  const ran = await $.tool.call({ tool: 'mcp__sdd__bundle', target: 'specs', fix: true })
+  expect(JSON.stringify(ran)).toContain('OK specs')
+  expect(argvs.some(a => a.join(' ') === 'bundle specs --fix')).toBe(true)
+})
+
+test('`sdd bundle --fix` follows the same role rules as the bundle tool', async ($, on) => {
+  on('session.root', () => ({ value: '/repo' }))
+  on('session.cwd', () => ({ value: '/repo' }))
+  on('agent.list', () => ({ value: [{ id: 'a1', type: 'sdd:planner', description: '', status: 'running' }] }))
+  on('process.run', () => ({ value: { exitCode: 0, stdout: '', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }))
+  const ran = await $.tool.call({ tool: 'mcp__sdd__sdd', args: ['bundle', 'c1', '--fix'], agentId: 'a1' })
+  expect(JSON.stringify(ran)).toContain('lead or spec-author only')
+})
+
+test('the bundle tool refuses a fix on specs from a subagent', async ($, on) => {
+  on('session.root', () => ({ value: '/repo' }))
+  on('session.cwd', () => ({ value: '/repo' }))
+  on('agent.list', () => ({ value: [{ id: 'a1', type: 'sdd:spec-author', description: '', status: 'running' }] }))
+  on('process.run', () => ({ value: { exitCode: 0, stdout: '', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }))
+  const ran = await $.tool.call({ tool: 'mcp__sdd__bundle', target: 'specs', fix: true, agentId: 'a1' })
+  expect(JSON.stringify(ran)).toContain('lead only')
+})

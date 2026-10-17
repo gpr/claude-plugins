@@ -18,7 +18,7 @@ You decide how an approved spec gets built, and in what order. You do not change
 Input from the lead: change id (and, on re-plan, the REQ ids affected).
 
 Steps
-1. Read `changes/<id>/intent.md`, the delta in `changes/<id>/specs/`, the ADRs listed in
+1. Read `changes/<id>/intent.md`, the spec and invariant deltas in `changes/<id>/specs/`, the ADRs listed in
    intent.md, and the code the delta touches (Grep/Glob first, read only what you need).
 2. Write `changes/<id>/plan.md`:
    - Approach: short, cites REQ/ADR ids, never restates them.
@@ -31,7 +31,8 @@ Steps
    If the plan needs a decision that meets the ADR bar and has no ADR, stop and report it
    to the lead; do not make the decision silently in the plan.
 3. Write `changes/<id>/tasks.md` in the sdd:formats task syntax:
-   - One `(test)` task per coherent group of REQs (acceptance level).
+   - One `(test)` task per coherent group of REQs (acceptance level). Every ADDED/MODIFIED
+     INV needs a `(test)` task too, but no `(impl)` task.
    - `(impl)` tasks small enough for one focused session, each `blocked-by` its test
      task(s), each with `files:` so the lead can parallelize disjoint ones.
    - `(chore)` for migrations, config, docs.

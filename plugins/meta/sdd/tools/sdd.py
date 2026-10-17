@@ -13,7 +13,8 @@ Commands
   new <change> [--title T]           scaffold changes/<change>/
   status [<change>] [--json]         list changes / show one
   set-status <change> <status>       draft|approved|implementing|verified|archived
-  delta-new <change> <capability>    scaffold changes/<change>/specs/<capability>.md
+  delta-new <change> <capability>[/<concept>] | invariants/<category>[/<concept>]
+                                     scaffold changes/<change>/specs/<group>/<concept>.md
   delta-stub <change> <REQ> [--remove]
                                      copy the living REQ into the delta with its base hash
   adr-new <title> [--supersedes ADR-NNNN]
@@ -24,6 +25,7 @@ Commands
   verify-frozen <change>             fail if frozen acceptance tests were modified
   sync <change> [--dry-run] [--force]
                                      merge delta into living specs, accept ADRs, archive
+  bundle <specs|change> [--fix]      validate (and repair) an OKF bundle: specs/ or changes/<change>/
 Branch / PR / resume (git + gh; the lead runs them)
   start <change> --title T [--pr-title P] [--base B] [--requires a,b]
                                      branch sdd/<change>, worktree, scaffold, push, draft PR
@@ -105,6 +107,8 @@ CFG = {
     "acceptance_cmd": "pytest -q {files}",
     "unit_cmd": "pytest -q tests/unit",
     "req_id_pattern": "REQ-[A-Z0-9]+-[0-9]{3}",
+    "inv_id_pattern": "INV-[A-Z0-9]+-[0-9]{3}",
+    "concept_max_blocks": 5,         # REQ/INV blocks per concept file before `bundle` warns
     "base_branch": "",               # empty: the remote's default branch, else main
     "branch_prefix": "sdd/",
     "worktree_dir": ".claude/worktrees",
@@ -118,8 +122,13 @@ SPECS = ROOT / CFG["specs_dir"]
 CHANGES = ROOT / CFG["changes_dir"]
 ADRS = ROOT / CFG["adr_dir"]
 ACCEPT = ROOT / CFG["acceptance_dir"]
-REQ_RE = re.compile(CFG["req_id_pattern"])
-HEAD_RE = re.compile(r"^### (" + CFG["req_id_pattern"] + r"):\s*(.*)$")
+INV_RE = re.compile(CFG["inv_id_pattern"])
+ID_RE = re.compile(f"(?:{CFG['req_id_pattern']})|(?:{CFG['inv_id_pattern']})")
+HEAD_RE = re.compile(r"^### (" + ID_RE.pattern + r"):\s*(.*)$")
+INV_GROUP = "invariants"             # specs/invariants/<category>/<concept>.md holds INV blocks
+RESERVED = {"index.md", "log.md"}    # generated OKF files, never concepts
+OKF_VERSION = '"0.2"'
+KEBAB_RE = re.compile(r"[a-z0-9][a-z0-9-]*")
 TEMPLATES = Path(__file__).resolve().parent.parent / "skills" / "change" / "templates"
 
 
@@ -166,12 +175,16 @@ def read_fm(path: Path) -> tuple[dict, str]:
     return fm, text[end + 4:].lstrip("\n")
 
 
-def write_fm(path: Path, fm: dict, body: str):
+def fm_text(fm: dict, body: str) -> str:
     lines = ["---"]
     for k, v in fm.items():
         lines.append(f"{k}: [{', '.join(v)}]" if isinstance(v, list) else f"{k}: {v}")
     lines.append("---")
-    atomic_write(path, "\n".join(lines) + "\n\n" + body)
+    return "\n".join(lines) + "\n\n" + body
+
+
+def write_fm(path: Path, fm: dict, body: str):
+    atomic_write(path, fm_text(fm, body))
 
 
 def atomic_write(path: Path, content: str):
@@ -202,6 +215,10 @@ class Block:
     def has_scenario(self) -> bool:
         return any(l.startswith("#### Scenario:") for l in self.lines)
 
+    @property
+    def has_check(self) -> bool:
+        return any(l.startswith("#### Check:") for l in self.lines)
+
 
 def split_blocks(lines: list[str]) -> tuple[list[str], list[Block]]:
     pre, blocks, cur = [], [], None
@@ -222,58 +239,125 @@ def split_blocks(lines: list[str]) -> tuple[list[str], list[Block]]:
     return pre, blocks
 
 
+def is_inv(ident: str) -> bool:
+    return INV_RE.fullmatch(ident) is not None
+
+
+def is_inv_group(group: str) -> bool:
+    return group == INV_GROUP or group.startswith(INV_GROUP + "/")
+
+
+def title_of_stem(stem: str) -> str:
+    return stem.replace("-", " ").capitalize()
+
+
+def first_heading(lines: list[str]) -> str:
+    return next((l[2:].strip() for l in lines if l.startswith("# ")), "")
+
+
+def want_fm(group: str, stem: str, fm: dict, pre: list[str]) -> dict:
+    """The front matter a living concept must carry; other keys are kept."""
+    inv = is_inv_group(group)
+    out = {"type": "invariant" if inv else "spec",
+           "title": fm.get("title") or first_heading(pre) or title_of_stem(stem),
+           ("category" if inv else "capability"): group.split("/")[-1] if inv else group,
+           "sources": fm["sources"] if isinstance(fm.get("sources"), list) else []}
+    for k, v in fm.items():
+        out.setdefault(k, v)
+    return out
+
+
+def concept_name(path: Path, group: str) -> str:
+    """File stem of a concept; a legacy `spec.md` is named after its group."""
+    return group.split("/")[-1] if path.stem == "spec" else path.stem
+
+
 @dataclass
-class LivingSpec:
+class Concept:
+    """One short living-spec file: front matter plus up to concept_max_blocks REQ/INV blocks."""
     path: Path
+    fm: dict
     pre: list[str]
     blocks: list[Block]
 
     @classmethod
-    def load(cls, capability: str) -> "LivingSpec":
-        path = SPECS / capability / "spec.md"
+    def load(cls, path: Path, group: str) -> "Concept":
+        fm, pre, blocks = {}, [], []
         if path.exists():
-            pre, blocks = split_blocks(path.read_text().splitlines())
-        else:
-            pre, blocks = [f"# {capability}", ""], []
-        return cls(path, pre, blocks)
+            fm, body = read_fm(path)
+            pre, blocks = split_blocks(body.splitlines())
+        fm = want_fm(group, path.stem, fm, pre)
+        if not any(l.strip() for l in pre):
+            pre = [f"# {fm['title']}", ""]
+        return cls(path, fm, pre, blocks)
 
     def get(self, req: str) -> Block | None:
         return next((b for b in self.blocks if b.req == req), None)
 
     def render(self) -> str:
-        out = "\n".join(self.pre).rstrip("\n") + "\n"
+        body = "\n".join(self.pre).rstrip("\n") + "\n"
         for b in self.blocks:
-            out += "\n" + b.text + "\n"
-        return out
+            body += "\n" + b.text + "\n"
+        return fm_text(self.fm, body)
 
 
-def all_living() -> dict[str, tuple[str, Block]]:
-    """REQ id -> (capability, block) across every living spec."""
-    out: dict[str, tuple[str, Block]] = {}
+def living_files() -> list[tuple[str, Path]]:
+    """(group, file) of every concept under specs/: group is `<capability>` or `invariants/<category>`."""
+    out = []
     if SPECS.exists():
-        for f in sorted(SPECS.glob("*/spec.md")):
-            _, blocks = split_blocks(f.read_text().splitlines())
-            for b in blocks:
-                out[b.req] = (f.parent.name, b)
+        for f in sorted(SPECS.rglob("*.md")):
+            rel = f.relative_to(SPECS).parent.as_posix()
+            if f.name not in RESERVED and rel != ".":
+                out.append((rel, f))
+    return out
+
+
+def all_living() -> dict[str, tuple[str, Block, Path]]:
+    """REQ/INV id -> (group, block, concept file) across every living concept."""
+    out: dict[str, tuple[str, Block, Path]] = {}
+    for group, f in living_files():
+        _, blocks = split_blocks(read_fm(f)[1].splitlines())
+        for b in blocks:
+            out[b.req] = (group, b, f)
     return out
 
 
 @dataclass
 class Delta:
-    capability: str
+    group: str                 # `<capability>` or `invariants/<category>`
+    concept: str               # file stem of the target concept
+    path: Path
+    sources: list[str] = field(default_factory=list)
     added: list[Block] = field(default_factory=list)
     modified: list[Block] = field(default_factory=list)
     removed: list[Block] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
 
+    @property
+    def target(self) -> Path:
+        return SPECS / self.group / f"{self.concept}.md"
+
+
+def delta_files(change: Path) -> list[tuple[str, str, Path]]:
+    """(group, concept, file) of each delta under changes/<c>/specs/. A flat `<cap>.md` is the
+    legacy layout and maps to <cap>/<cap>."""
+    out = []
+    ddir = change / "specs"
+    if ddir.exists():
+        for f in sorted(ddir.rglob("*.md")):
+            rel = f.relative_to(ddir)
+            if f.name in RESERVED:
+                continue
+            group = f.stem if len(rel.parts) == 1 else rel.parent.as_posix()
+            out.append((group, f.stem, f))
+    return out
+
 
 def load_deltas(change: Path) -> list[Delta]:
     out = []
-    ddir = change / "specs"
-    if not ddir.exists():
-        return out
-    for f in sorted(ddir.glob("*.md")):
-        d = Delta(f.stem)
+    for group, concept, f in delta_files(change):
+        fm, _ = read_fm(f)
+        d = Delta(group, concept, f, fm["sources"] if isinstance(fm.get("sources"), list) else [])
         section, buf = None, []
 
         def flush():
@@ -336,7 +420,7 @@ def parse_tasks(change: Path) -> list[dict]:
         tasks.append({
             "id": m.group(2), "kind": m.group(3), "done": m.group(1) != " ",
             "text": rest, "line": n, "raw": line.strip(),
-            "reqs": sorted(set(REQ_RE.findall(rest))),
+            "reqs": sorted(set(ID_RE.findall(rest))),
             "adrs": sorted(set(ADR_RE.findall(rest))),
             "blocked_by": blocked,
         })
@@ -359,7 +443,7 @@ def acceptance_hits(reqs: set[str]) -> dict[str, list[Path]]:
         if not f.is_file():
             continue
         try:
-            found = set(REQ_RE.findall(f.read_text(errors="ignore")))
+            found = set(ID_RE.findall(f.read_text(errors="ignore")))
         except OSError:
             continue
         for r in found & reqs:
@@ -382,7 +466,8 @@ def cmd_new(args):
     today = _dt.date.today().isoformat()
     for t in ["intent.md", "plan.md", "tasks.md"]:
         (d / t).write_text(render_template(t, "", id=name, title=title, date=today))
-    print(f"created {d.relative_to(ROOT)}/ (intent.md plan.md tasks.md specs/)")
+    write_change_index(d)
+    print(f"created {d.relative_to(ROOT)}/ (index.md intent.md plan.md tasks.md specs/)")
 
 
 def cmd_init(args):
@@ -395,6 +480,13 @@ def cmd_init(args):
         cfg = {k: v for k, v in DEFAULT_CFG.items() if k != "req_id_pattern"}
         atomic_write(_cfg_file, json.dumps(cfg, indent=2) + "\n")
         made.append(str(_cfg_file.relative_to(ROOT)) + " (edit acceptance_cmd / unit_cmd)")
+    for p, text in (build_spec_indexes() or {SPECS / "index.md": ""}).items():
+        if p == SPECS / "index.md" and not p.exists():
+            atomic_write(p, text or render_dir_index(SPECS, "", [], []))
+            made.append(str(p.relative_to(ROOT)))
+    if not (SPECS / "log.md").exists():
+        atomic_write(SPECS / "log.md", SPEC_LOG_HEAD)
+        made.append(str((SPECS / "log.md").relative_to(ROOT)))
     ignore = ROOT / ".gitignore"
     line = f"/{CFG['worktree_dir'].strip('/')}/"
     old = ignore.read_text() if ignore.exists() else ""
@@ -458,34 +550,42 @@ def cmd_set_status(args):
     print(f"{d.name}: {old} -> {args[1]}")
 
 
-def delta_template(cap: str) -> str:
-    return render_template("delta.md", "# Delta: {{capability}}\n", capability=cap)
+def delta_template(group: str, concept: str) -> str:
+    name = "invariant-delta.md" if is_inv_group(group) else "delta.md"
+    return render_template(name, "# Delta: {{concept}}\n\n## ADDED\n\n## MODIFIED\n\n## REMOVED\n",
+                           group=group, concept=concept, capability=group.split("/")[-1],
+                           target=f"{CFG['specs_dir']}/{group}/{concept}.md")
 
 
 def cmd_delta_new(args):
     if len(args) != 2:
-        die("usage: delta-new <change> <capability>")
-    d, cap = change_dir(args[0]), args[1]
-    if not re.fullmatch(r"[a-z0-9][a-z0-9-]{0,60}", cap):
-        die("capability must be kebab-case")
-    f = d / "specs" / f"{cap}.md"
+        die("usage: delta-new <change> <capability>[/<concept>] | invariants/<category>[/<concept>]")
+    d, parts = change_dir(args[0]), args[1].split("/")
+    inv = parts[0] == INV_GROUP
+    if len(parts) not in ((2, 3) if inv else (1, 2)) or not all(KEBAB_RE.fullmatch(x) for x in parts):
+        die("target must be <capability>[/<concept>] or invariants/<category>[/<concept>], kebab-case")
+    group = "/".join(parts[:2] if inv else parts[:1])
+    concept = parts[-1]
+    f = d / "specs" / group / f"{concept}.md"
     if f.exists():
         die(f"{f.relative_to(ROOT)} already exists")
-    atomic_write(f, delta_template(cap))
+    atomic_write(f, delta_template(group, concept))
+    write_change_index(d)
     print(f"created {f.relative_to(ROOT)}")
 
 
 def cmd_delta_stub(args):
     if len(args) < 2:
-        die("usage: delta-stub <change> <REQ> [--remove]")
+        die("usage: delta-stub <change> <REQ|INV> [--remove]")
     d, req = change_dir(args[0]), args[1]
     living = all_living()
     if req not in living:
         die(f"{req} not in living specs (use ## ADDED for new requirements)")
-    cap, blk = living[req]
+    group, blk, src = living[req]
+    concept = concept_name(src, group)
     section = "REMOVED" if "--remove" in args else "MODIFIED"
-    f = d / "specs" / f"{cap}.md"
-    text = f.read_text() if f.exists() else delta_template(cap)
+    f = d / "specs" / group / f"{concept}.md"
+    text = f.read_text() if f.exists() else delta_template(group, concept)
     if f"### {req}:" in text:
         die(f"{req} already present in {f.relative_to(ROOT)}")
     lines = blk.lines[:1] + [f"<!-- base: {blk.digest} -->"]
@@ -496,6 +596,7 @@ def cmd_delta_stub(args):
     else:
         text = text.rstrip("\n") + f"\n\n## {section}\n\n{entry}\n"
     atomic_write(f, text)
+    write_change_index(d)
     print(f"{section} {req} base={blk.digest} -> {f.relative_to(ROOT)}")
 
 
@@ -555,6 +656,239 @@ def cmd_adr_accept(args):
     sys.exit(1 if errs else 0)
 
 
+# ------------------------------------------------------------- OKF bundles --
+def concept_ids(path: Path) -> list[str]:
+    return [b.req for b in split_blocks(read_fm(path)[1].splitlines())[1]]
+
+
+def render_dir_index(d: Path, rel: str, concepts: list[Path], subs: list[Path]) -> str:
+    fm = {"okf_version": OKF_VERSION} if not rel else {}
+    fm.update({"type": "index", "title": rel or "Specs"})
+    lines = [f"# {rel or 'Specs'}", ""]
+    for s in subs:
+        lines.append(f"- [{s.name}/]({s.name}/index.md)")
+    for c in concepts:
+        cfm, body = read_fm(c)
+        title = cfm.get("title") or first_heading(body.splitlines()) or title_of_stem(c.stem)
+        ids = ", ".join(concept_ids(c))
+        lines.append(f"- [{title}]({c.name})" + (f" — {ids}" if ids else ""))
+    return fm_text(fm, "\n".join(lines) + "\n")
+
+
+def build_spec_indexes() -> dict[Path, str]:
+    """Expected index.md of specs/ and of every directory below it that holds concepts."""
+    out: dict[Path, str] = {}
+
+    def walk(d: Path, rel: str) -> bool:
+        concepts = sorted(f for f in d.glob("*.md") if f.name not in RESERVED)
+        subs = [s for s in sorted(p for p in d.iterdir() if p.is_dir())
+                if walk(s, f"{rel}/{s.name}" if rel else s.name)]
+        if rel and not concepts and not subs:
+            return False
+        out[d / "index.md"] = render_dir_index(d, rel, concepts, subs)
+        return True
+
+    if SPECS.exists():
+        walk(SPECS, "")
+    return out
+
+
+def build_change_index(change: Path) -> str:
+    fm, _ = read_fm(change / "intent.md")
+    title = fm.get("title") or change.name
+    head = {"okf_version": OKF_VERSION, "type": "change", "title": title}
+    lines = [f"# {title}", "", "- [Intent](intent.md)", "- [Plan](plan.md)", "- [Tasks](tasks.md)"]
+    deltas = load_deltas(change)
+    for heading, inv in (("Spec delta", False), ("Invariant delta", True)):
+        rows = []
+        for d in deltas:
+            if is_inv_group(d.group) != inv:
+                continue
+            ops = "; ".join(f"{k.upper()} {', '.join(b.req for b in getattr(d, k))}"
+                            for k in ("added", "modified", "removed") if getattr(d, k))
+            rel = d.path.relative_to(change).as_posix()
+            rows.append(f"- [{rel}]({rel})" + (f" — {ops}" if ops else ""))
+        if rows:
+            lines += ["", f"## {heading}", ""] + rows
+    return fm_text(head, "\n".join(lines) + "\n")
+
+
+def write_change_index(change: Path):
+    atomic_write(change / "index.md", build_change_index(change))
+
+
+class Report:
+    """Findings of a bundle check. With fix=True a fixable finding is repaired and listed as fixed."""
+    def __init__(self, fix: bool):
+        self.fix, self.errs, self.warns, self.fixed = fix, [], [], []
+
+    def issue(self, level: str, msg: str, fixer=None):
+        if fixer is not None and self.fix:
+            fixer()
+            self.fixed.append(msg)
+        else:
+            (self.errs if level == "ERROR" else self.warns).append(msg + (" [fixable]" if fixer else ""))
+
+
+def _drop_missing_sources(sources: list[str]) -> list[str]:
+    return [s for s in sources if (ROOT / re.sub(r":\d+(-\d+)?$", "", s)).exists()]
+
+
+def check_specs(rep: Report):
+    rel = lambda p: p.relative_to(ROOT).as_posix()
+    if not SPECS.exists():
+        rep.issue("ERROR", f"{rel(SPECS)}/ missing", lambda: SPECS.mkdir(parents=True))
+        if not SPECS.exists():
+            return
+    for f in sorted(SPECS.glob("*/spec.md")):          # legacy: one long spec.md per capability
+        cap = f.parent.name
+        dest = f.with_name(f"{cap}.md")
+        if dest.exists():
+            rep.issue("ERROR", f"{rel(f)}: legacy file, {rel(dest)} already exists")
+        else:
+            rep.issue("ERROR", f"{rel(f)}: legacy layout, expected {rel(dest)}", lambda f=f, dest=dest: f.rename(dest))
+    seen: dict[str, Path] = {}
+    for group, f in living_files():
+        parts = f.relative_to(SPECS).parts
+        want_depth = 3 if group.startswith(INV_GROUP + "/") else 2
+        if len(parts) != want_depth or group == INV_GROUP:
+            rep.issue("ERROR", f"{rel(f)}: concepts live in specs/<capability>/ or specs/{INV_GROUP}/<category>/")
+            continue
+        if not all(KEBAB_RE.fullmatch(x) for x in (*group.split("/"), f.stem)):
+            rep.issue("ERROR", f"{rel(f)}: names must be kebab-case")
+        concept = Concept.load(f, group)
+        raw_fm, body = read_fm(f)
+        fixes = []
+        if concept.fm != raw_fm:
+            fixes.append("front matter")
+            rep.issue("ERROR", f"{rel(f)}: front matter incomplete (type, title, "
+                      f"{'category' if is_inv_group(group) else 'capability'}, sources)", lambda: None)
+        kept = _drop_missing_sources(concept.fm["sources"])
+        for s in concept.fm["sources"]:
+            if s not in kept:
+                fixes.append("sources")
+                rep.issue("WARN", f"{rel(f)}: source '{s}' not found", lambda: None)
+        concept.fm["sources"] = kept
+        ids = [b.req for b in concept.blocks]
+        for b in concept.blocks:
+            if is_inv(b.req) != is_inv_group(group):
+                rep.issue("ERROR", f"{rel(f)}: {b.req} does not belong under specs/{group}/ "
+                          f"({'INV in the spec tree' if is_inv(b.req) else 'REQ in the invariant tree'})")
+            if b.req in seen:
+                rep.issue("ERROR", f"{b.req}: defined in both {rel(seen[b.req])} and {rel(f)}")
+            seen[b.req] = f
+            if is_inv(b.req) and not b.has_check:
+                rep.issue("WARN", f"{rel(f)} {b.req}: no '#### Check:'")
+            if not is_inv(b.req) and not b.has_scenario:
+                rep.issue("WARN", f"{rel(f)} {b.req}: no '#### Scenario:'")
+        if not concept.blocks:
+            rep.issue("ERROR", f"{rel(f)}: concept has no requirement blocks", lambda f=f: f.unlink())
+            continue
+        if ids != sorted(ids):
+            fixes.append("order")
+            rep.issue("ERROR", f"{rel(f)}: blocks not sorted by id", lambda: None)
+        if len(ids) > CFG["concept_max_blocks"]:
+            rep.issue("WARN", f"{rel(f)}: {len(ids)} blocks > {CFG['concept_max_blocks']}, split it by topic")
+        if rep.fix and fixes:
+            concept.blocks.sort(key=lambda b: b.req)
+            atomic_write(f, concept.render())
+    expected = build_spec_indexes()
+    for p, text in sorted(expected.items()):
+        cur = p.read_text() if p.exists() else None
+        if cur is None or (p == SPECS / "index.md" and "okf_version" not in cur):
+            rep.issue("ERROR", f"{rel(p)}: missing" if cur is None else f"{rel(p)}: no okf_version",
+                      lambda p=p, text=text: atomic_write(p, text))
+        elif cur != text:
+            rep.issue("ERROR", f"{rel(p)}: stale (lists other concepts than the directory holds)",
+                      lambda p=p, text=text: atomic_write(p, text))
+    for p in sorted(SPECS.rglob("index.md")):
+        if p not in expected:
+            rep.issue("WARN", f"{rel(p)}: index of a directory without concepts", lambda p=p: p.unlink())
+    log = SPECS / "log.md"
+    if not log.exists():
+        rep.issue("ERROR", f"{rel(log)}: missing", lambda: atomic_write(log, SPEC_LOG_HEAD))
+    for d in sorted((p for p in SPECS.rglob("*") if p.is_dir()), reverse=True):
+        if not any(d.iterdir()):
+            rep.issue("WARN", f"{rel(d)}/: empty directory", lambda d=d: d.rmdir())
+    for f in sorted(SPECS.rglob("*")):
+        if f.is_file() and f.suffix != ".md":
+            rep.issue("WARN", f"{rel(f)}: not a concept (only .md files belong in specs/)")
+
+
+SPEC_LOG_HEAD = fm_text({"type": "log", "title": "Specs log"}, "# Log\n\n")
+
+
+def check_change(rep: Report, change: Path):
+    rel = lambda p: p.relative_to(ROOT).as_posix()
+    for name, kind in (("intent.md", "intent"), ("plan.md", "plan"), ("tasks.md", "tasks")):
+        f = change / name
+        if not f.exists():
+            continue
+        fm, body = read_fm(f)
+        if fm.get("type") != kind:
+            rep.issue("WARN", f"{rel(f)}: front matter lacks 'type: {kind}'",
+                      lambda f=f, fm=fm, body=body, kind=kind: write_fm(f, {"type": kind, **{k: v for k, v in fm.items() if k != "type"}}, body))
+    ddir = change / "specs"
+    for group, concept, f in delta_files(change):
+        if len(f.relative_to(ddir).parts) == 1:          # legacy flat layout
+            dest = ddir / f.stem / f.name
+            if dest.exists():
+                rep.issue("WARN", f"{rel(f)}: legacy flat delta, {rel(dest)} already exists")
+            else:
+                rep.issue("WARN", f"{rel(f)}: legacy layout, expected {rel(dest)}",
+                          lambda f=f, dest=dest: (dest.parent.mkdir(parents=True, exist_ok=True), f.rename(dest)))
+    for group, concept, f in delta_files(change):
+        parts = f.relative_to(ddir).parts
+        if len(parts) == 1:
+            continue
+        want_depth = 3 if group.startswith(INV_GROUP + "/") else 2
+        if len(parts) != want_depth or group == INV_GROUP:
+            rep.issue("ERROR", f"{rel(f)}: deltas live in specs/<capability>/ or specs/{INV_GROUP}/<category>/")
+            continue
+        if not all(KEBAB_RE.fullmatch(x) for x in (*group.split("/"), concept)):
+            rep.issue("ERROR", f"{rel(f)}: names must be kebab-case")
+        fm, body = read_fm(f)
+        want = {"type": "invariant-delta" if is_inv_group(group) else "spec-delta",
+                "target": f"{CFG['specs_dir']}/{group}/{concept}.md",
+                "sources": fm["sources"] if isinstance(fm.get("sources"), list) else []}
+        want.update({k: v for k, v in fm.items() if k not in want})
+        if any(fm.get(k) != want[k] for k in ("type", "target")) or "sources" not in fm:
+            rep.issue("WARN", f"{rel(f)}: front matter incomplete (type, target, sources)",
+                      lambda f=f, want=want, body=body: write_fm(f, want, body))
+    idx = change / "index.md"
+    text = build_change_index(change)
+    if not idx.exists():
+        rep.issue("WARN", f"{rel(idx)}: missing", lambda: atomic_write(idx, text))
+    elif idx.read_text() != text:
+        rep.issue("WARN", f"{rel(idx)}: stale", lambda: atomic_write(idx, text))
+
+
+def bundle_check(target: str, fix: bool = False) -> Report:
+    rep = Report(fix)
+    if target == "specs":
+        check_specs(rep)
+    else:
+        check_change(rep, change_dir(target))
+    return rep
+
+
+def cmd_bundle(args):
+    fix = "--fix" in args
+    args = [a for a in args if a != "--fix"]
+    if len(args) != 1:
+        die("usage: bundle <specs|change> [--fix]")
+    rep = bundle_check(args[0], fix)
+    for m in rep.fixed:
+        print(f"FIXED {m}")
+    for w in rep.warns:
+        print(f"WARN  {w}")
+    for e in rep.errs:
+        print(f"ERROR {e}")
+    tail = f", {len(rep.fixed)} fixed" if fix else ""
+    print(f"{'FAIL' if rep.errs else 'OK'} {args[0]}: {len(rep.errs)} errors, {len(rep.warns)} warnings{tail}")
+    sys.exit(1 if rep.errs else 0)
+
+
 def collect(change: Path):
     """Run every structural check. Returns (errors, warnings, info)."""
     errs, warns = [], []
@@ -568,7 +902,10 @@ def collect(change: Path):
     for d in deltas:
         for kind in ("added", "modified", "removed"):
             for b in getattr(d, kind):
-                where = f"specs/{d.capability}.md {b.req}"
+                where = f"{d.path.relative_to(ROOT).as_posix()} {b.req}"
+                if is_inv(b.req) != is_inv_group(d.group):
+                    errs.append(f"{where}: {'INV' if is_inv(b.req) else 'REQ'} in the wrong tree "
+                                f"(INV go under specs/{INV_GROUP}/<category>/, REQ under specs/<capability>/)")
                 if b.req in touched:
                     errs.append(f"{where}: appears twice in this change")
                 touched[b.req] = kind.upper()
@@ -582,17 +919,22 @@ def collect(change: Path):
                 else:
                     if not cur:
                         errs.append(f"{where}: {kind.upper()} but not in living specs")
-                    elif cur[0] != d.capability:
-                        errs.append(f"{where}: lives in specs/{cur[0]}, not {d.capability}")
+                    elif cur[0] != d.group:
+                        errs.append(f"{where}: lives in specs/{cur[0]}, not {d.group}")
                     elif not b.base:
                         errs.append(f"{where}: missing <!-- base: --> (use delta-stub)")
                     elif b.base != cur[1].digest:
                         errs.append(f"{where}: CONFLICT base {b.base} != current {cur[1].digest} "
                                     f"(living spec changed since this delta was written)")
-                if kind != "removed" and not b.has_scenario:
+                if kind != "removed" and is_inv(b.req) and not b.has_check:
+                    errs.append(f"{where}: no '#### Check:' (how the invariant is verified)")
+                elif kind != "removed" and not is_inv(b.req) and not b.has_scenario:
                     errs.append(f"{where}: no '#### Scenario:' (acceptance criteria required)")
     if not touched and fm.get("size") != "fix":
         warns.append("no spec delta in this change")
+    rep = bundle_check(change.name)
+    errs += [f"bundle: {e}" for e in rep.errs]
+    warns += [f"bundle: {w}" for w in rep.warns]
     phase = load_state(change).get("phase")
     if phase and (phase not in PHASES or fm.get("status") not in PHASE_STATUSES[phase]):
         warns.append(f"state.json phase '{phase}' does not fit status '{fm.get('status')}'")
@@ -626,7 +968,7 @@ def collect(change: Path):
     plan = change / "plan.md"
     if plan.exists():
         ptxt = strip_comments(plan.read_text())
-        for r in sorted(set(REQ_RE.findall(ptxt))):
+        for r in sorted(set(ID_RE.findall(ptxt))):
             if r not in touched and r not in living:
                 errs.append(f"plan.md references unknown {r}")
         for a in sorted(set(ADR_RE.findall(ptxt))):
@@ -639,7 +981,7 @@ def collect(change: Path):
         kinds = {t["kind"] for t in tasks if r in t["reqs"]}
         if tasks and "test" not in kinds:
             errs.append(f"{r}: no (test) task")
-        if tasks and "impl" not in kinds:
+        if tasks and "impl" not in kinds and not is_inv(r):
             errs.append(f"{r}: no (impl) task")
     if not tasks and fm.get("status") not in ("draft",):
         errs.append("tasks.md has no tasks")
@@ -705,6 +1047,18 @@ def cmd_context(args):
         elif r in living:
             print(f"<!-- unchanged, specs/{living[r][0]} -->")
             print(living[r][1].text + "\n")
+    if t["kind"] == "impl":
+        held = {i: b for i, (_, b, _) in living.items() if is_inv(i)}
+        for i, b in info["blocks"].items():
+            if is_inv(i):
+                held[i] = b
+        for i, k in info["touched"].items():
+            if k == "REMOVED":
+                held.pop(i, None)
+        rest = [i for i in sorted(held) if i not in t["reqs"]]
+        if rest:
+            print("## Invariants in force (do not break; `sdd context` of a task naming one prints it in full)\n")
+            print("\n".join(f"- {i}: {held[i].title}" for i in rest) + "\n")
     adrs = adr_files()
     if t["adrs"]:
         print("## Decisions\n")
@@ -780,23 +1134,33 @@ def cmd_sync(args):
     if fm.get("status") != "verified" and not force:
         die(f"status is {fm.get('status')}; sync requires verified (or --force)", 1)
     errs, _, info = collect(d)
+    errs += [f"specs bundle: {e}" for e in bundle_check("specs").errs]
     if errs:
         for e in errs:
             print(f"ERROR {e}")
-        die("fix errors before sync", 1)
-    specs: dict[str, LivingSpec] = {}
+        die("fix errors before sync (a specs bundle error: `bundle specs --fix`)", 1)
+    living = info["living"]
+    concepts: dict[Path, Concept] = {}
+
+    def concept(path: Path, group: str) -> Concept:
+        return concepts.setdefault(path, Concept.load(path, group))
+
     log = []
     for delta in info["deltas"]:
-        ls = specs.setdefault(delta.capability, LivingSpec.load(delta.capability))
+        tgt = concept(delta.target, delta.group)
+        tgt.fm["sources"] = sorted(set(tgt.fm["sources"]) | set(delta.sources))
         for b in delta.modified:
-            i = ls.blocks.index(ls.get(b.req))
-            ls.blocks[i] = Block(b.req, b.title, b.lines)
-            log.append(f"MODIFIED {b.req}")
+            _, _, src_path = living[b.req]
+            src = concept(src_path, delta.group)
+            src.blocks.remove(src.get(b.req))
+            tgt.blocks.append(Block(b.req, b.title, b.lines))
+            log.append(f"{'MODIFIED' if src is tgt else 'MOVED   '} {b.req}")
         for b in delta.removed:
-            ls.blocks.remove(ls.get(b.req))
+            src = concept(living[b.req][2], delta.group)
+            src.blocks.remove(src.get(b.req))
             log.append(f"REMOVED  {b.req}")
         for b in delta.added:
-            ls.blocks.append(Block(b.req, b.title, b.lines))
+            tgt.blocks.append(Block(b.req, b.title, b.lines))
             log.append(f"ADDED    {b.req}")
     adr_list = fm.get("adrs", []) if isinstance(fm.get("adrs"), list) else []
     adr_errs = [e for a in adr_list for e in accept_adr(a, dry=True)]
@@ -806,18 +1170,29 @@ def cmd_sync(args):
         die("ADR problems", 1)
     for line in log:
         print(line)
+    emptied = sorted(c.path for c in concepts.values() if not c.blocks)
     if dry:
-        print(f"DRY-RUN ok, {len(log)} change(s), ADRs to accept: {','.join(adr_list) or '-'}")
+        print(f"DRY-RUN ok, {len(log)} change(s), concepts emptied: {len(emptied)}, "
+              f"ADRs to accept: {','.join(adr_list) or '-'}")
         return
-    for ls in specs.values():
-        ls.blocks.sort(key=lambda b: b.req)
-        atomic_write(ls.path, ls.render())
+    for c in concepts.values():
+        if c.blocks:
+            c.blocks.sort(key=lambda b: b.req)
+            atomic_write(c.path, c.render())
+        elif c.path.exists():
+            c.path.unlink()
+    rep = Report(True)
+    check_specs(rep)                      # regenerates the indexes, drops emptied directories
+    today = _dt.date.today().isoformat()
+    summary = "; ".join(" ".join(l.split()) for l in log) or "no spec change"
+    logf = SPECS / "log.md"
+    atomic_write(logf, logf.read_text().rstrip("\n") + f"\n- {today} {d.name}: {summary}\n")
     for a in adr_list:
         accept_adr(a)
     fm["status"] = "archived"
-    fm["archived"] = _dt.date.today().isoformat()
+    fm["archived"] = today
     write_fm(d / "intent.md", fm, body)
-    dest = CHANGES / "archive" / f"{_dt.date.today().isoformat()}-{d.name}"
+    dest = CHANGES / "archive" / f"{today}-{d.name}"
     dest.parent.mkdir(parents=True, exist_ok=True)
     shutil.move(str(d), dest)
     print(f"synced {len(log)} change(s); ADRs accepted: {','.join(adr_list) or '-'}; "
@@ -875,13 +1250,13 @@ def opt(args: list[str], flag: str) -> str | None:
     return args[args.index(flag) + 1] if flag in args and args.index(flag) + 1 < len(args) else None
 
 
-ID_RE = re.compile(r"[a-z0-9][a-z0-9-]{1,60}")
+CHANGE_ID_RE = re.compile(r"[a-z0-9][a-z0-9-]{1,60}")
 
 
 def parse_requires(raw: list[str], name: str) -> list[str]:
     out: list[str] = []
     for dep in (x for r in raw for x in r.split(",") if x):
-        if not ID_RE.fullmatch(dep):
+        if not CHANGE_ID_RE.fullmatch(dep):
             die(f"required change '{dep}' is not a kebab-case id")
         if dep == name:
             die(f"{name} cannot require itself")
@@ -1003,7 +1378,7 @@ def cmd_start(args):
     if not args or args[0].startswith("-"):
         die("usage: start <change> --title T [--pr-title P] [--base B] [--requires a,b]")
     name = args[0]
-    if not ID_RE.fullmatch(name):
+    if not CHANGE_ID_RE.fullmatch(name):
         die("change id must be kebab-case")
     requires = parse_requires([opt(args, "--requires") or ""], name)
     title = opt(args, "--title") or name
@@ -1234,7 +1609,7 @@ COMMANDS = {
     "init": cmd_init, "config": cmd_config, "new": cmd_new, "status": cmd_status, "set-status": cmd_set_status,
     "delta-new": cmd_delta_new, "delta-stub": cmd_delta_stub, "adr-new": cmd_adr_new, "adr-accept": cmd_adr_accept,
     "check": cmd_check, "context": cmd_context, "freeze": cmd_freeze,
-    "verify-frozen": cmd_verify_frozen, "sync": cmd_sync,
+    "verify-frozen": cmd_verify_frozen, "sync": cmd_sync, "bundle": cmd_bundle,
     "start": cmd_start, "requires": cmd_requires, "deps": cmd_deps, "checkpoint": cmd_checkpoint, "set-pr": cmd_set_pr, "resume": cmd_resume,
     "finish": cmd_finish,
 }

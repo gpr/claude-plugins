@@ -1,4 +1,5 @@
 ---
+type: intent
 id: {{id}}
 title: {{title}}
 status: draft
