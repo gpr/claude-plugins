@@ -28,8 +28,13 @@ number. Direct-path work has no change id and none of this.
 - **Checkpoint**: each time an agent (or you) finishes an artifact, run
   `sdd checkpoint <id> [--phase <next>] -m "<conventional message>"`. It stores the phase,
   commits everything and pushes. Phase ids: `spec gate1 plan gate2 acceptance implement
-  verify sync done`. Pass `--phase` when the step you just finished moves the change to
+  verify sync done`. If it refuses because a required change is not merged, handle it as in Resume. Pass `--phase` when the step you just finished moves the change to
   the next phase; omit it for further commits within a phase.
+- **Requires**: a change may depend on others (`requires` in `state.json`, set with
+  `sdd start --requires a,b` or `sdd requires <id> a b`). A dependency counts as done only
+  when its PR is merged into the base. `sdd checkpoint --phase plan` (or later) and
+  `sdd resume` refuse until then; `sdd deps <id>` shows where each one stands. Spec work
+  (steps 2-3) may go ahead meanwhile.
 - Never `git commit` or `git push` yourself for a change (merging isolated implementer
   branches is the one exception); never write `state.json`.
 
@@ -38,6 +43,12 @@ number. Direct-path work has no change id and none of this.
 1. `sdd resume <id>` (add `--pr <n>` if you only have the PR number). It fetches the PR
    branch, creates or reuses the worktree, fast-forwards it, and prints the stored phase
    and the step to continue at.
+   If it ends with `blocked` / `next: ...`, a required change is not merged yet: do not
+   enter the worktree or continue this change. Follow `next:`. For `resume <dep>`, run this
+   whole Resume procedure for the dep (its own worktree, its own `requires` first), carry it
+   through to `sdd finish`, then come back. For `merge the PR of <dep>`, tell the user which
+   PR to merge and stop; once they say it is merged, `sdd resume <id>` again (it merges the
+   base into the branch, so the dependency's specs and code arrive).
 2. `EnterWorktree` with `path` = the printed worktree. From here every `sdd` call acts on it.
 3. `sdd status <id>`, then continue at the step the phase names (spec -> 2, gate1 -> 3,
    plan -> 4, gate2 -> 5, acceptance -> 6, implement -> 7, verify -> 8, sync -> 8.4,
@@ -61,7 +72,8 @@ Apply this rule, in order, and state the result in one line:
   to `general-purpose` (or do it yourself if trivial), run the unit tests, done.
 
 ## 2. Capture intent and spec delta
-1. Pick a kebab-case id. `sdd start <id> --title "<title>" --pr-title "<feat|fix>: <title>"`
+1. Pick a kebab-case id. If the request builds on an open change (its PR not merged yet),
+   add `--requires <id>[,<id>]`. `sdd start <id> --title "<title>" --pr-title "<feat|fix>: <title>"`
    (conventional type from triage). Then `EnterWorktree` with `path` = the worktree it
    prints. Do this before any agent writes an artifact. If it prints `PR missing`, create a
    draft PR for the branch (GitHub tools) and run `sdd set-pr <id> <number>`.

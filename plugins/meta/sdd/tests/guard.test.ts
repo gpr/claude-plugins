@@ -135,11 +135,12 @@ describe('sdd subcommands', () => {
     expect(checkSdd('context', 'implementer')).toBeUndefined()
   })
   test('branch, PR and resume subcommands are lead-only', () => {
-    for (const sub of ['start', 'checkpoint', 'set-pr', 'resume', 'finish']) {
+    for (const sub of ['start', 'checkpoint', 'set-pr', 'requires', 'resume', 'finish']) {
       expect(checkSdd(sub, 'lead')).toBeUndefined()
       expect(checkSdd(sub, 'implementer')).toBeDefined()
     }
   })
+  test('deps is read-only for every role', () => expect(checkSdd('deps', 'implementer')).toBeUndefined())
   test('missing subcommand is refused', () => expect(checkSdd(undefined, 'lead')).toBeDefined())
 })
 

@@ -813,6 +813,199 @@ class TestResume(GitCase):
         self.assertEqual(code, 1, out)
 
 
+class TestDeps(GitCase):
+    def finish_change(self, name: str) -> Path:
+        """Take a change through sync + finish on its branch (not merged into main yet)."""
+        wt = self.start(name)
+        self.assertEqual(self.sdd("set-status", name, "verified", cwd=wt)[0], 0)
+        (wt / f"changes/{name}/specs/auth.md").write_text("# Delta: auth\n\n## ADDED\n\n" + ADDED_003)
+        (wt / f"changes/{name}/tasks.md").write_text(
+            "- [x] T1 (test) t — REQ-AUTH-003\n- [x] T2 (impl) i — REQ-AUTH-003 | blocked-by: T1\n")
+        self.assertEqual(self.sdd("sync", name, "--force", cwd=wt)[0], 0)
+        self.assertEqual(self.sdd("finish", name, cwd=wt)[0], 0)
+        return wt
+
+    def merge_into_main(self, name: str):
+        self.git("fetch", "-q", "origin", f"sdd/{name}")
+        self.git("merge", "-q", "--no-ff", "-m", f"merge {name}", f"origin/sdd/{name}", cwd=self.root)
+        self.git("push", "-q", "origin", "main", cwd=self.root)
+
+    def started_with(self, dep: str = "dep", name: str = "c1") -> Path:
+        code, out = self.sdd("start", name, "--title", "C", "--requires", dep)
+        self.assertEqual(code, 0, out)
+        return self.root / ".claude/worktrees" / f"sdd-{name}"
+
+    def test_start_stores_requires_and_warns(self):
+        self.start("dep")
+        code, out = self.sdd("start", "c1", "--title", "C", "--requires", "dep,dep")
+        self.assertEqual(code, 0, out)
+        self.assertIn("WARN requires open dep phase spec pr #7", out)
+        wt = self.root / ".claude/worktrees/sdd-c1"
+        self.assertEqual(self.state(wt)["requires"], ["dep"])
+        code, out = self.sdd("status", "--json", cwd=wt)
+        self.assertEqual(json.loads(out)["changes"][0]["requires"], ["dep"])
+
+    def test_start_rejects_bad_or_self_requires(self):
+        self.assertEqual(self.sdd("start", "c1", "--title", "C", "--requires", "c1")[0], 2)
+        self.assertEqual(self.sdd("start", "c2", "--title", "C", "--requires", "Bad_Id")[0], 2)
+
+    def test_deps_open_ready_unknown_then_merged(self):
+        wt = self.started_with()
+        code, out = self.sdd("deps", "c1", cwd=wt)
+        self.assertEqual(code, 1, out)
+        self.assertIn("unknown dep no branch sdd/dep", out)
+        self.start("dep")
+        code, out = self.sdd("deps", "c1", cwd=wt)
+        self.assertEqual(code, 1, out)
+        self.assertIn("open dep phase spec pr #7", out)
+        self.assertIn("next: resume dep", out)
+        self.sdd("checkpoint", "dep", "--phase", "plan", cwd=self.root / ".claude/worktrees/sdd-dep")
+        self.assertIn("phase plan", self.sdd("deps", "c1", cwd=wt)[1])
+
+    def test_deps_ready_then_missing_until_base_is_merged_in(self):
+        wt = self.started_with()
+        self.finish_change("dep")
+        code, out = self.sdd("deps", "c1", cwd=wt)
+        self.assertEqual(code, 1, out)
+        self.assertIn("ready dep finished pr #7, awaits merge into main", out)
+        self.assertIn("next: merge the PR of dep (#7)", out)
+        self.merge_into_main("dep")
+        code, out = self.sdd("deps", "c1", cwd=wt)
+        self.assertEqual(code, 1, out)
+        self.assertIn("missing dep merged into main, not in this branch", out)
+
+    def test_transitive_deps_list_deepest_first(self):
+        self.start("aa")
+        self.started_with("aa", "bb")
+        wt_c = self.started_with("bb", "cc")
+        code, out = self.sdd("deps", "cc", cwd=wt_c)
+        self.assertEqual(code, 1, out)
+        lines = [l for l in out.splitlines() if l.startswith(("open", "unknown", "ready"))]
+        self.assertEqual([l.split()[1] for l in lines], ["aa", "bb"])
+        self.assertIn("next: resume aa", out)
+
+    def test_cycle_is_an_error(self):
+        wt_a = self.start("aa")
+        self.started_with("aa", "bb")
+        code, out = self.sdd("requires", "aa", "bb", cwd=wt_a)
+        self.assertEqual(code, 1, out)
+        self.assertIn("cycle aa -> bb -> aa", out)
+        self.assertEqual(self.state(wt_a, "aa").get("requires"), [])
+        self.assertEqual(self.sdd("start", "cc", "--title", "C", "--requires", "cc")[0], 2)
+
+    def test_requires_command_sets_shows_and_clears(self):
+        wt = self.start()
+        self.assertEqual(self.sdd("requires", "c1", cwd=wt)[1].strip(), "-")
+        code, out = self.sdd("requires", "c1", "xx,yy", "zz", cwd=wt)
+        self.assertEqual(code, 0, out)
+        self.assertEqual(self.state(wt)["requires"], ["xx", "yy", "zz"])
+        self.git("fetch", "-q", "origin", "sdd/c1")
+        self.assertEqual(self.remote_subjects("sdd/c1")[0], "chore(sdd): c1 requires xx,yy,zz")
+        self.assertEqual(self.sdd("requires", "c1", cwd=wt)[1].strip(), "xx,yy,zz")
+        self.sdd("requires", "c1", "--clear", cwd=wt)
+        self.assertEqual(self.state(wt)["requires"], [])
+
+    def test_checkpoint_gates_plan_and_later_but_not_earlier_phases(self):
+        wt = self.started_with()
+        self.start("dep")
+        self.assertEqual(self.sdd("checkpoint", "c1", "--phase", "gate1", cwd=wt)[0], 0)
+        code, out = self.sdd("checkpoint", "c1", "--phase", "plan", cwd=wt)
+        self.assertEqual(code, 1, out)
+        self.assertIn("required changes are not merged", out)
+        self.assertIn("Next: resume dep", out)
+        self.assertEqual(self.state(wt)["phase"], "gate1")
+
+    def test_resume_refuses_while_dep_is_open_and_names_next_step(self):
+        wt = self.started_with()
+        self.start("dep")
+        other = self.tmp / "other"
+        self.git("clone", "-q", str(self.origin), str(other), cwd=self.tmp)
+        code, out = self.sdd("resume", "c1", cwd=other)
+        self.assertEqual(code, 1, out)
+        self.assertIn("blocked: required changes are not merged into main", out)
+        self.assertIn("next: resume dep, then `resume c1` again", out)
+        self.assertNotIn("EnterWorktree", out)
+
+    def test_resume_says_to_merge_a_finished_dep(self):
+        self.started_with()
+        self.finish_change("dep")
+        code, out = self.sdd("resume", "c1")
+        self.assertEqual(code, 1, out)
+        self.assertIn("next: merge the PR of dep (#7), then `resume c1` again", out)
+
+    def test_resume_and_checkpoint_merge_base_once_dep_is_merged(self):
+        wt = self.started_with()
+        self.finish_change("dep")
+        self.merge_into_main("dep")
+        code, out = self.sdd("resume", "c1")
+        self.assertEqual(code, 0, out)
+        self.assertIn("merged origin/main into the branch", out)
+        self.assertTrue(list((wt / "changes/archive").glob("*-dep")))
+        self.assertEqual(self.sdd("deps", "c1", cwd=wt)[0], 0)
+        # a second change: the checkpoint itself brings the base in
+        wt2 = self.started_with("dep", "c2")
+        code, out = self.sdd("checkpoint", "c2", "--phase", "plan", cwd=wt2)
+        self.assertEqual(code, 0, out)
+        self.assertEqual(self.state(wt2, "c2")["phase"], "plan")
+
+    def test_synced_but_not_finished_dep_is_still_open(self):
+        wt = self.started_with()
+        d = self.start("dep")
+        self.assertEqual(self.sdd("set-status", "dep", "verified", cwd=d)[0], 0)
+        (d / "changes/dep/specs/auth.md").write_text("# Delta: auth\n\n## ADDED\n\n" + ADDED_003)
+        (d / "changes/dep/tasks.md").write_text(
+            "- [x] T1 (test) t — REQ-AUTH-003\n- [x] T2 (impl) i — REQ-AUTH-003 | blocked-by: T1\n")
+        self.assertEqual(self.sdd("sync", "dep", "--force", cwd=d)[0], 0)
+        self.git("add", "-A", cwd=d)
+        self.git("commit", "-qm", "sync", cwd=d)
+        self.git("push", "-q", cwd=d)
+        code, out = self.sdd("deps", "c1", cwd=wt)
+        self.assertEqual(code, 1, out)
+        self.assertIn("open dep phase spec pr #7 (synced, `finish` not run)", out)
+        self.assertIn("next: resume dep", out)
+
+    def test_start_does_not_warn_about_a_dep_merged_while_main_checkout_is_stale(self):
+        self.finish_change("dep")
+        self.merge_into_main("dep")
+        self.git("reset", "-q", "--hard", "HEAD~1", cwd=self.root)  # local main behind origin
+        code, out = self.sdd("start", "c1", "--title", "C", "--requires", "dep")
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("WARN", out)
+
+    def test_requires_command_warns_about_unmerged_and_unknown(self):
+        wt = self.start()
+        self.start("dep")
+        code, out = self.sdd("requires", "c1", "dep", "lgoin", cwd=wt)
+        self.assertEqual(code, 0, out)
+        self.assertIn("WARN requires open dep phase spec", out)
+        self.assertIn("WARN requires unknown lgoin no branch sdd/lgoin", out)
+
+    def test_resume_refuses_to_merge_base_over_uncommitted_changes(self):
+        wt = self.started_with()
+        self.finish_change("dep")
+        self.merge_into_main("dep")
+        (wt / "scratch.txt").write_text("wip\n")
+        code, out = self.sdd("resume", "c1")
+        self.assertEqual(code, 1, out)
+        self.assertIn("uncommitted changes", out)
+        self.assertEqual((wt / "scratch.txt").read_text(), "wip\n")
+        self.assertFalse(list((wt / "changes/archive").glob("*-dep")))
+
+    def test_base_merge_conflict_is_aborted_cleanly(self):
+        wt = self.started_with()
+        (wt / "clash.txt").write_text("branch\n")
+        self.sdd("checkpoint", "c1", cwd=wt)
+        self.finish_change("dep")
+        (self.root / "clash.txt").write_text("main\n")
+        self.git("add", "-A", cwd=self.root)
+        self.git("commit", "-qm", "clash", cwd=self.root)
+        self.merge_into_main("dep")
+        code, out = self.sdd("resume", "c1")
+        self.assertEqual(code, 1, out)
+        self.assertIn("clash.txt", out)
+        self.assertEqual(self.git("status", "--porcelain", cwd=wt), "")
+
+
 class TestFinishAndStatus(GitCase):
     def test_status_json_and_check_warn_expose_state(self):
         wt = self.start()

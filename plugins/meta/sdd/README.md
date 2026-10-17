@@ -59,7 +59,7 @@ For a full change or a fix the lead runs `sdd start <id>` before any artifact ex
   lead moves into it with `EnterWorktree`), the scaffolded change pushed, and a **draft PR**
   opened with `gh`. If `gh` is missing or fails, the lead opens the PR and records it with
   `sdd set-pr <id> <number>`.
-- `changes/<id>/state.json` stores `phase`, `branch`, `base`, `pr`, `pr_url`. Only `sdd.py`
+- `changes/<id>/state.json` stores `phase`, `branch`, `base`, `pr`, `pr_url`, `requires`. Only `sdd.py`
   writes it; the guard refuses every other write. Phases: `spec gate1 plan gate2 acceptance
   implement verify sync done`. The band and `/sdd phase` show the stored phase (older
   changes without it keep the derived one) and `sdd check` warns when phase and status
@@ -67,6 +67,15 @@ For a full change or a fix the lead runs `sdd start <id>` before any artifact ex
 - After every artifact outcome (spec, plan, each test task, each impl task, each fix) the
   lead runs `sdd checkpoint <id> [--phase P] -m "<message>"`: store the phase, commit all,
   push. It refuses to run off the change's branch.
+- **Dependencies**: `sdd start <id> --requires a,b` (or `sdd requires <id> a b`, `--clear`)
+  stores the changes this one needs in `state.json`. A required change is done when its
+  archive is on `origin/<base>`, i.e. its PR is **merged**. `sdd deps <id>` lists each one
+  (`ok`, `missing` = merged but not in this branch yet, `ready` = finished, PR unmerged,
+  `open`, `unknown`), transitively; cycles are refused. Spec work can start anyway, but
+  `checkpoint --phase plan` (or later) and `resume` refuse until all are merged. Once they
+  are, `resume` / `checkpoint` merge `origin/<base>` into the branch, so the dependency's
+  specs and code are there. The lead handles a blocked resume by resuming the unfinished
+  required change first (depth-first) and finishing it, then asking you to merge its PR.
 - **Continue a change**: `/sdd:change resume <id>` runs `sdd resume <id>` (or `--pr <n>`):
   `git fetch` the PR branch, create or reuse the worktree, fast-forward it, print the stored
   phase and the step to continue at. The lead enters the worktree and carries on.
@@ -98,7 +107,8 @@ remote's default branch), `branch_prefix` (`sdd/`), `worktree_dir` (`.claude/wor
   If the guard itself fails, it refuses subagents' calls and lets the lead's through.
 - **`sdd` tool.** Agents call `mcp__sdd__sdd` with `args` instead of a script path, and
   the tool applies role rules per subcommand:
-  - lead only: `sync`, `set-status`, `new`, `init`, `adr-accept`, `start`, `checkpoint`, `set-pr`, `resume`, `finish`
+  - lead only: `sync`, `set-status`, `new`, `init`, `adr-accept`, `start`, `checkpoint`, `set-pr`, `requires`, `resume`, `finish`
+  - read-only, any role: `deps`
   - lead and acceptance-tester: `freeze`
   - lead and spec-author: `delta-new`, `delta-stub`, `adr-new`
 - **Band above the prompt.** Shows the most active open change, its phase, its status, task
@@ -147,6 +157,10 @@ python3 -m unittest discover -s plugins/meta/sdd/tests -p 'test_*.py'   # sdd.py
 
 ## Known limits
 - `resume` fast-forwards only: a diverged local branch needs a manual fix.
+- Bringing the base into a change's branch can conflict; sdd aborts the merge and names
+  the files, you resolve it by hand and checkpoint.
+- "Merged" means the dependency's archive directory is on `origin/<base>`: squash merges
+  are fine, a dependency that is closed without merging stays blocked until `requires --clear`.
 - Parallel implementer worktrees (`isolation: "worktree"`) started from inside the change's
   worktree are untested with nested worktrees; run implementers sequentially if it fails.
 - The Bash check is heuristic. `verify-frozen`, run by the verifier and ideally in CI,

@@ -21,6 +21,7 @@ Steps
 1. Read `changes/<id>/intent.md` and only the living specs (`specs/<capability>/spec.md`)
    and ADRs (`adr/`) relevant to the request. Do not read source code beyond what the
    lead's findings point to; ask the lead if a fact is missing.
+   If a MODIFIED/REMOVED REQ lives in a change this one requires (not merged yet), `delta-stub` will fail: report it as an open question, never re-ADD the REQ.
 2. Fill intent.md: Why, Outcome, Scope, Non-goals, Success criteria. Keep it under a page.
    Non-goals are mandatory: name the adjacent things a reasonable engineer might also do.
 3. Write the delta in `changes/<id>/specs/<capability>.md` following sdd:formats.
