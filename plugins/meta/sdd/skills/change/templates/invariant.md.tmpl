@@ -1,0 +1,61 @@
+---
+type: Invariant
+title: <Invariant name>
+description: "<The statement, in one sentence.>"
+status: draft
+tags: []
+generated:
+  by: human:<id>
+  at: "<YYYY-MM-DDTHH:MM:SSZ>"
+sources: []
+---
+
+# <Invariant name>
+
+<!--
+Acceptance TDD lifecycle:
+1. draft: write the statement and both examples first; the check is written and fails on the violation.
+2. stable: only when the check is in place and runs where stated under Enforcement.
+3. deprecated: the rule no longer holds; record why in an ADR.
+-->
+
+## Statement
+
+<Subject> must always / must never <condition>.
+
+## Scope
+
+<What the invariant applies to: components, paths, data, runtime.>
+
+## Rationale
+
+<Why the rule exists, in a few lines.>
+
+- Decided in: [<ADR title>](<relative path to adr>.md)
+
+## Enforcement
+
+- Check: `<test, lint rule or gate that verifies it>` at `<path>`, or `manual` with the reason it cannot be automated yet
+- Runs: <CI | pre-commit | runtime | review>
+
+## Examples
+
+<!--
+Both examples are test cases for the check:
+the check must pass on Holds and fail on Violation.
+The Violation case proves the check actually detects a breach.
+-->
+
+### Holds
+
+- **Given** <state that respects the invariant>
+- **Then** the check passes
+
+### Violation
+
+- **Given** <state that breaks the invariant>
+- **Then** the check fails with <expected message>
+
+## Exceptions
+
+None. <!-- An exception requires an ADR; link it here. -->

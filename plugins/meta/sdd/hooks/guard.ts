@@ -12,7 +12,7 @@ export type Cfg = {
 export const DEFAULT_CFG: Cfg = {
   specs_dir: 'specs',
   changes_dir: 'changes',
-  adr_dir: 'adr',
+  adr_dir: 'adrs',
   acceptance_dir: 'tests/acceptance',
 }
 
@@ -30,6 +30,10 @@ export type Lookup = {
   changeStatus: (change: string) => Promise<string | undefined>
   adrStatus: (relPath: string) => Promise<string | undefined>
 }
+
+/** ADR statuses that lock the file: OKF's stable/deprecated, and accepted/superseded of the
+ * ADRs written before the OKF templates (a repo that has not migrated them yet). */
+const DECIDED = new Set(['stable', 'deprecated', 'accepted', 'superseded'])
 
 export const WRITE_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit'])
 
@@ -101,7 +105,12 @@ function changeOf(rel: string, cfg: Cfg): string | undefined {
 
 /** `status:` values a write would put at the start of a line (front matter). */
 export function statusesIn(text: string): string[] {
-  return [...text.matchAll(/^status:[ \t]*(\S*)/gm)].map(m => m[1] ?? '')
+  return [...text.matchAll(/^status:[ \t]*(\S*)/gm)].map(m => unquote(m[1] ?? ''))
+}
+
+/** A YAML scalar without its quotes: `"stable"` and `'stable'` read as `stable`, as sdd.py reads them. */
+export function unquote(v: string): string {
+  return v.length >= 2 && (v[0] === '"' || v[0] === "'") && v[v.length - 1] === v[0] ? v.slice(1, -1) : v
 }
 
 /**
@@ -116,15 +125,18 @@ export async function checkPath(
   written?: string,
 ): Promise<string | undefined> {
   const { specs_dir: S, changes_dir: C, adr_dir: A, acceptance_dir: T } = cfg
-  // everyone
+  // everyone (the repo's concept templates aside: the lead may adapt them)
+  if (under(rel, `${S}/.templates`)) {
+    return role === 'lead' ? undefined : `${rel}: concept templates are changed by the lead only.`
+  }
   if (under(rel, S)) return `${rel}: living specs change only through \`sdd sync <change>\`.`
   if (under(rel, `${C}/archive`)) return `${rel}: archived changes are immutable.`
   if (under(rel, C) && rel.endsWith('/frozen.json')) return `${rel}: written only by \`sdd freeze\`.`
   if (under(rel, C) && rel.endsWith('/state.json')) return `${rel}: written only by \`sdd start\`, \`checkpoint\`, \`set-pr\` and \`finish\`.`
   const isAdr = under(rel, A) && rel !== A
   const adrSt = isAdr ? await look.adrStatus(rel) : undefined
-  if (adrSt === 'accepted' || adrSt === 'superseded' || adrSt === 'deprecated') {
-    return `${rel}: this ADR is ${adrSt}. Write a new one with \`sdd adr-new <title> --supersedes ADR-NNNN\`.`
+  if (adrSt !== undefined && DECIDED.has(adrSt)) {
+    return `${rel}: this ADR is ${adrSt} (decided). Write a new one with \`sdd adr-new <title> --supersedes ADR-NNNN\`.`
   }
   if (role === 'lead') return undefined
   // every subagent
@@ -135,7 +147,7 @@ export async function checkPath(
   const isTopLevelOfChange = ch !== undefined && rel === `${C}/${ch}/${name}`
   const chStatus = async () => (ch ? await look.changeStatus(ch) : undefined)
   if (written !== undefined) {
-    if (isAdr && statusesIn(written).some(s => s !== (adrSt ?? 'proposed'))) {
+    if (isAdr && statusesIn(written).some(s => s !== (adrSt ?? 'draft'))) {
       return `${rel}: ADR status changes only through \`sdd adr-accept\` (lead).`
     }
     if (isTopLevelOfChange && name === 'intent.md') {
@@ -155,7 +167,7 @@ export async function checkPath(
           ? undefined
           : `change ${ch} is ${st}: its spec is frozen. Ask the lead to reopen it.`
       }
-      return `${rel}: spec-author writes only intent.md, the spec delta and proposed ADRs.`
+      return `${rel}: spec-author writes only intent.md, the spec delta and draft ADRs.`
     }
     case 'planner': {
       if (isTopLevelOfChange && (name === 'plan.md' || name === 'tasks.md')) {
@@ -169,11 +181,11 @@ export async function checkPath(
       return `${rel}: acceptance-tester writes only under ${T}/ and tasks.md.`
     case 'implementer':
       if (under(rel, T)) {
-        return `${rel}: acceptance tests are frozen. If one is wrong, stop and report BLOCKED with the REQ id.`
+        return `${rel}: acceptance tests are frozen. If one is wrong, stop and report BLOCKED with its id (capabilities/<id>#AC-NN or invariants/<id>).`
       }
       if (under(rel, A)) return `${rel}: decisions are not changed during implementation. Report BLOCKED.`
       if (under(rel, C) && !(isTopLevelOfChange && name === 'tasks.md')) {
-        return `${rel}: the spec is frozen. Report BLOCKED with the REQ id instead.`
+        return `${rel}: the spec is frozen. Report BLOCKED with the criterion or invariant id instead.`
       }
       return undefined
     case 'verifier':
@@ -251,14 +263,16 @@ export function checkSdd(sub: string | undefined, role: Role): string | undefine
 
 /**
  * Deny reason for the `bundle` tool, or undefined. Checking is open to every role. `--fix` on
- * the living `specs` bundle is lead-only (only the lead's call may write specs/); on a change it
- * is open to the lead and the spec-author: it only touches front matter, delta locations and the
- * generated index, never the text of a requirement.
+ * the living `specs` and `adrs` bundles is lead-only (only the lead's call may write them); on a
+ * change it is open to the lead and the spec-author: it only touches front matter and the
+ * generated indexes, never the text of a criterion or an invariant.
  */
 export function checkBundle(target: string | undefined, fix: boolean, role: Role): string | undefined {
-  if (target === undefined || target === '') return 'give the target: "specs" or a change id.'
+  if (target === undefined || target === '') return 'give the target: "specs", "adrs" or a change id.'
   if (!fix) return undefined
-  if (target === 'specs') return role === 'lead' ? undefined : `\`bundle specs --fix\` is run by the lead only, not ${role}.`
+  if (target === 'specs' || target === 'adrs') {
+    return role === 'lead' ? undefined : `\`bundle ${target} --fix\` is run by the lead only, not ${role}.`
+  }
   return role === 'lead' || role === 'spec-author' ? undefined : `\`bundle ${target} --fix\` is run by lead or spec-author only, not ${role}.`
 }
 
@@ -267,5 +281,6 @@ export function frontStatus(text: string): string | undefined {
   if (!text.startsWith('---')) return undefined
   const end = text.indexOf('\n---', 3)
   const head = end < 0 ? text : text.slice(0, end)
-  return /^status:\s*(\S+)/m.exec(head)?.[1]
+  const v = /^status:[ \t]*(\S+)/m.exec(head)?.[1]
+  return v === undefined ? undefined : unquote(v)
 }

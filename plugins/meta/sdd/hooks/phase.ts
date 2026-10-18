@@ -3,7 +3,7 @@ import type { SddChange } from '../types'
 // The workflow phases of skills/change, in order. Triage happens before a change exists.
 export const PHASES = [
   { id: 'spec', label: 'Spec', hint: 'spec-author writes intent, delta and ADRs' },
-  { id: 'gate1', label: 'Gate 1', hint: 'your review: intent, REQs and ADRs' },
+  { id: 'gate1', label: 'Gate 1', hint: 'your review: intent, capabilities, invariants and ADRs' },
   { id: 'plan', label: 'Plan', hint: 'planner writes plan.md and tasks.md' },
   { id: 'gate2', label: 'Gate 2', hint: 'sdd check, then set implementing' },
   { id: 'acceptance', label: 'Acceptance tests', hint: 'acceptance-tester writes failing tests, then freeze' },

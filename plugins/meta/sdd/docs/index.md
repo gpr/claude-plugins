@@ -9,17 +9,17 @@ Documentation for the `sdd` Claude Code plugin, a spec-driven multi-agent workfl
 ## Tutorials
 
 * [Your first spec-driven change](tutorials/first-change.md) - add an option to a tiny CLI, from request to merged spec, in a local sandbox.
-* [Your first fix](tutorials/first-fix.md) - repair a broken requirement test-first, without a new spec.
+* [Your first fix](tutorials/first-fix.md) - repair a broken acceptance criterion test-first, without a new spec.
 
 ## How-to guides
 
 * [Install and configure sdd](how-to/install-and-configure.md) - project-scope install, `sdd init`, test commands, publish the config.
-* [Write a spec delta and an ADR](how-to/write-a-delta-and-adr.md) - add, modify, remove and regroup REQs and invariants; record or supersede a decision.
-* [Migrate to the OKF layout](how-to/migrate-to-okf-layout.md) - move `spec.md` files and flat deltas to concepts with `bundle --fix`.
+* [Write a spec delta and an ADR](how-to/write-a-delta-and-adr.md) - add a capability or invariant; add, modify or retire criteria; record or supersede a decision.
+* [Migrate to Capability and Invariant concepts](how-to/migrate-to-okf-layout.md) - rewrite REQ/INV specs and ADR-NNNN files as concepts, by hand, once.
 * [Resume a change](how-to/resume-a-change.md) - continue by id or PR number; blocked, diverged and conflicting resumes.
 * [Make a change depend on another](how-to/manage-dependencies.md) - `--requires`, `deps`, unblocking, clearing.
-* [Reopen a spec](how-to/reopen-a-spec.md) - when an agent reports BLOCKED or a scenario is untestable.
-* [Resolve a REQ conflict](how-to/resolve-sync-conflict.md) - a CONFLICT from `check` or `sync`.
+* [Reopen a spec](how-to/reopen-a-spec.md) - when an agent reports BLOCKED or a criterion is untestable.
+* [Resolve a spec conflict](how-to/resolve-sync-conflict.md) - a CONFLICT from `check` or `sync`.
 * [Run verify-frozen and check in CI](how-to/run-verify-frozen-in-ci.md) - fail PRs that tamper with frozen tests.
 * [Follow a change from the band and panes](how-to/use-the-band-and-panes.md) - status, checks without the model, guard refusals.
 * [Share or isolate agent memory](how-to/share-agent-memory.md) - commit, ignore or turn off.
@@ -31,7 +31,7 @@ Documentation for the `sdd` Claude Code plugin, a spec-driven multi-agent workfl
 * [Guard rules](reference/guard-rules.md) - who may write what, Bash heuristics, failure policy.
 * [Workflow agents](reference/agents.md) - the five agents: job, input, output, tools, model, memory.
 * [Phases, statuses and state.json](reference/phases-and-states.md) - phase ids, statuses, fix order, derived phase, dependency states.
-* [File formats](reference/file-formats.md) - REQ and INV blocks, concepts, deltas, base markers, intent, ADR, plan, task lines, test tagging.
+* [File formats](reference/file-formats.md) - Capability and Invariant concepts, citations, CapabilityDelta, base markers, intent, ADR, plan, task lines, test citations.
 * [OKF bundles](reference/bundles.md) - the layout of `specs/` and of a change, front matter per type, bundle checks and fixes, migration.
 * [Repository layout](reference/repo-layout.md) - the files sdd creates and who writes each.
 * [Configuration](reference/configuration.md) - `.claude/sdd.json` keys, project root, requirements.

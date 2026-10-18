@@ -11,7 +11,7 @@ sources:
   - resource: ../../tools/sdd.py
 generated:
   by: claude-code
-  at: 2026-10-17T00:00:00Z
+  at: 2026-10-18T00:00:00Z
 ---
 
 # Things that must change together
@@ -25,10 +25,10 @@ generated:
 | A guard rule | `hooks/guard.ts`, a case in `tests/guard.test.ts`, the README's guard list, [Guard rules](../reference/guard-rules.md) |
 | An agent file name | its role in `ROLES` (`guard.ts`), the agent tables in the README and `skills/change`, its memory dir name, [Workflow agents](../reference/agents.md) |
 | An agent's tools, model or job | the agent file, [Workflow agents](../reference/agents.md) |
-| A file format (REQ or INV block, delta section, base marker, task line) | the parser in `sdd.py`, `skills/formats/SKILL.md`, the templates, `tests/test_sdd.py`, [File formats](../reference/file-formats.md) |
-| The OKF layout or a bundle check (concept paths, front matter, indexes, `log.md`, the `bundle` fixers, the `bundle` tool roles) | `check_specs` / `check_change` / `build_spec_indexes` / `build_change_index` in `sdd.py`, `checkBundle` in `guard.ts`, `BUNDLE_DESCRIPTION` in `register.tsx`, `skills/formats/SKILL.md`, the templates, `agents/spec-author.md`, the README section "Specs, invariants and OKF bundles", `TestBundle` in `tests/test_sdd.py`, [OKF bundles](../reference/bundles.md), [File formats](../reference/file-formats.md), [Repository layout](../reference/repo-layout.md) |
+| A file format (Capability, Invariant, CapabilityDelta section, base marker, citation, task line, index or log) | the parser in `sdd.py`, `skills/formats/SKILL.md`, the templates, `tests/test_sdd.py`, [File formats](../reference/file-formats.md) |
+| The OKF layout or a bundle check (concept paths, front matter, indexes, `log.md`, the `bundle` fixers, the `bundle` tool roles) | `check_specs` / `check_adrs` / `check_change` / `build_indexes` / `append_log` in `sdd.py`, `checkBundle` in `guard.ts`, `BUNDLE_DESCRIPTION` in `register.tsx`, `skills/formats/SKILL.md`, the templates, `agents/spec-author.md`, the README section "Capabilities, invariants and OKF bundles", `TestBundle` in `tests/test_sdd.py`, [OKF bundles](../reference/bundles.md), [File formats](../reference/file-formats.md), [Repository layout](../reference/repo-layout.md) |
 | `state.json` fields or its writers | `sdd.py`, `types/index.d.ts`, the guard's `state.json` message, [Phases and states](../reference/phases-and-states.md#statejson) |
-| A config key (`inv_id_pattern`, `concept_max_blocks` included) | `CFG` in `sdd.py`, `Cfg`/`DEFAULT_CFG` in `guard.ts` if the guard needs it, [Configuration](../reference/configuration.md) |
+| A config key | `CFG` in `sdd.py`, `Cfg`/`DEFAULT_CFG` in `guard.ts` if the guard needs it, [Configuration](../reference/configuration.md) |
 | Band or pane content | `register.tsx`, `tests/mod.test.tsx`, the README, [Slash commands, band and panes](../reference/slash-commands.md) |
 
 ## Invariants

@@ -3,7 +3,7 @@ import { expect, test } from 'claude-code/testing'
 import { activeOf, byActivity, byStatus, phaseOf, phasesOf, stepOf } from '../hooks/phase'
 import type { SddChange, SddTask } from '../types'
 
-const task = (id: string, kind: SddTask['kind'], done: boolean): SddTask => ({ id, kind, done, reqs: ['REQ-A-001'] })
+const task = (id: string, kind: SddTask['kind'], done: boolean): SddTask => ({ id, kind, done, refs: ['capabilities/a#AC-01'] })
 const change = (status: string, tasks: SddTask[] = [], size = 'change'): SddChange => ({
   id: 'c1',
   title: 'c1',

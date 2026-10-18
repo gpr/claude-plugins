@@ -56,8 +56,8 @@ test('the band shows the most active change and its progress', async ($, on) => 
         pr: 42,
         adrs: ['ADR-0002'],
         tasks: [
-          { id: 'T1', kind: 'test', done: true, reqs: ['REQ-AUTH-001'] },
-          { id: 'T2', kind: 'impl', done: false, reqs: ['REQ-AUTH-001'] },
+          { id: 'T1', kind: 'test', done: true, refs: ['capabilities/auth#AC-01'] },
+          { id: 'T2', kind: 'impl', done: false, refs: ['capabilities/auth#AC-01'] },
         ],
       },
     ],
@@ -99,8 +99,8 @@ test('the phase pane marks the current phase of the most active change', async (
         size: 'change',
         adrs: [],
         tasks: [
-          { id: 'T1', kind: 'test', done: true, reqs: ['REQ-AUTH-001'] },
-          { id: 'T2', kind: 'impl', done: false, reqs: ['REQ-AUTH-001'] },
+          { id: 'T1', kind: 'test', done: true, refs: ['capabilities/auth#AC-01'] },
+          { id: 'T2', kind: 'impl', done: false, refs: ['capabilities/auth#AC-01'] },
         ],
       },
     ],
@@ -219,7 +219,7 @@ test('the bundle tool refuses a fix on specs from a subagent', async ($, on) => 
 })
 
 test('the pane shows the active change in full and the others in folded status groups', async ($, on) => {
-  const task = (n: number, done: boolean) => ({ id: `T${n}`, kind: 'test', done, reqs: ['REQ-P-001', 'REQ-P-002'] })
+  const task = (n: number, done: boolean) => ({ id: `T${n}`, kind: 'test', done, refs: ['capabilities/p#AC-01', 'capabilities/p#AC-02'] })
   const status = {
     root: '/repo',
     archived: 1,
@@ -237,7 +237,7 @@ test('the pane shows the active change in full and the others in folded status g
       },
     ],
   }
-  const failed = 'ERROR intent.md: REQ-L-001 has no scenario\nFAIL leader-agent: 1 error\n'
+  const failed = 'ERROR changes/leader-agent/specs/capabilities/l.md: AC-01 has no **Then** line\nFAIL leader-agent: 1 error\n'
   on('session.root', () => ({ value: '/repo' }))
   on('session.cwd', () => ({ value: '/repo' }))
   const out = (stdout: string, exitCode = 0) => ({
@@ -261,12 +261,12 @@ test('the pane shows the active change in full and the others in folded status g
       requestId: 'sdd',
       props: { title: 'Spec-driven workflow', isFocused: false, bodyColumns: 80, placement: 'dock', ...SITE },
     })
-    // the active change in full: every task with every REQ
+    // the active change in full: every task with every reference
     expect(await ui.find({ type: 'Text', text: /▶ platform-foundation/ })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: /Platform foundation/ })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: /1\/8 tasks/ })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: /\[x\] T1 test/ })).toBeDefined()
-    expect(await ui.find({ type: 'Text', text: /\[ \] T8 test REQ-P-001 REQ-P-002/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /\[ \] T8 test capabilities\/p#AC-01 capabilities\/p#AC-02/ })).toBeDefined()
     // the others folded, by status, the failed check counted on its header
     expect(await ui.find({ key: 'fold-approved', text: /▸ approved \(2\) agent-runtime, leader-agent.*1 check failed/ })).toBeDefined()
     expect(await ui.find({ key: 'fold-draft', text: /▸ draft \(1\) old-idea/ })).toBeDefined()
@@ -276,7 +276,7 @@ test('the pane shows the active change in full and the others in folded status g
     expect(await ui.find({ key: 'fold-approved', text: /▾ approved \(2\)/ })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: /agent-runtime Plan · no tasks yet/ })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: /requires agent-runtime/ })).toBeDefined()
-    expect(await ui.find({ type: 'Text', text: /REQ-L-001 has no scenario/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /AC-01 has no \*\*Then\*\* line/ })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: /old-idea Gate 1/ })).toBeUndefined()
     await ui.press({ key: 'fold-approved' })
     expect(await ui.find({ type: 'Text', text: /requires agent-runtime/ })).toBeUndefined()

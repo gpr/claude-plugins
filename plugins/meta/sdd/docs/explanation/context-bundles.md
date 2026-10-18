@@ -8,7 +8,7 @@ sources:
   - resource: ../../skills/change/SKILL.md
 generated:
   by: claude-code
-  at: 2026-10-17T00:00:00Z
+  at: 2026-10-18T00:00:00Z
 ---
 
 # Context bundles
@@ -21,7 +21,7 @@ generated:
 flowchart LR
     subgraph files ["change files"]
         T[tasks.md]
-        D["delta / living spec<br/>REQ blocks"]
+        D["delta / living spec<br/>criteria, invariants"]
         AD["ADRs<br/>Decision only"]
         PC["plan.md<br/>Contracts"]
         PF["plan.md<br/>whole"]
@@ -38,20 +38,20 @@ flowchart LR
 | Part | test task | impl task | impl task with `--plan` |
 |---|---|---|---|
 | the task line and the lines of tasks it is blocked by | ✓ | ✓ | ✓ |
-| the REQ blocks it cites: the delta's version if the change touches it, else the living one | ✓ | ✓ | ✓ |
+| the criteria (with their capability's Intent) and invariants it cites: the change's version if it touches them, else the living one | ✓ | ✓ | ✓ |
 | the `## Decision` paragraph of each ADR it cites, with its status | ✓ | ✓ | ✓ |
 | the id and title of every invariant in force that the task does not cite (`## Invariants in force`) | | ✓ | ✓ |
 | the plan's `## Contracts` section | ✓ | | (in the full plan) |
-| the paths of the frozen acceptance tests for its REQs | | ✓ | ✓ |
+| the paths of the frozen acceptance tests for its criteria | | ✓ | ✓ |
 | the whole plan | | | ✓ |
 
 The workflow uses `context <id> <Tn>` for test tasks and `context <id> <Tn> --plan` for impl tasks.
 
 ## Why minimal
 
-**Independence.** The acceptance-tester sees the scenario and the public contract, never the planned internals, so its tests check behavior and not implementation. The implementer gets the tests as read-only file paths: it must satisfy them, not redesign them.
+**Independence.** The acceptance-tester sees the criterion and the public contract, never the planned internals, so its tests check behavior and not implementation. The implementer gets the tests as read-only file paths: it must satisfy them, not redesign them.
 
-**Accuracy.** The REQ text in the bundle is copied by the script from the files, so it is the current text, not the lead's paraphrase of it. For a REQ the change modifies, it is the new version.
+**Accuracy.** The criterion text in the bundle is copied by the script from the files, so it is the current text, not the lead's paraphrase of it. For a criterion the change modifies, it is the new version.
 
 **Cost.** An agent that reads the whole spec, every ADR and the lead's conversation spends most of its context on things that don't bear on its task. A bundle is usually a screen or two. The same reasoning drives the other token rules in the workflow: agents are resumed with `SendMessage` instead of re-spawned, and the lead gives you ids and paths, not file contents.
 

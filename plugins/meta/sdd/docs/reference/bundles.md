@@ -1,127 +1,113 @@
 ---
 type: Reference
 title: OKF bundles
-description: The OKF v0.2 layout of specs/ and of each change, the front matter of every concept type, the checks of sdd bundle and which ones --fix repairs, and how to migrate the legacy layout.
-tags: [sdd, reference, okf, bundle, specs, invariants]
+description: The OKF v0.2 layout of specs/, adrs/ and each change, the index and log formats, the checks of sdd bundle and which ones --fix repairs, and what happens to the old REQ/INV format.
+tags: [sdd, reference, okf, bundle, specs, capabilities, invariants, adrs]
 sources:
   - resource: ../../tools/sdd.py
   - resource: ../../hooks/guard.ts
   - resource: ../../hooks/register.tsx
   - resource: ../../skills/formats/SKILL.md
-  - resource: ../../skills/change/templates/delta.md
-  - resource: ../../skills/change/templates/invariant-delta.md
   - resource: ../../README.md
 generated:
   by: claude-code
-  at: 2026-10-17T00:00:00Z
+  at: 2026-10-18T00:00:00Z
 ---
 
 # OKF bundles
 
-`specs/` and each open change `changes/<id>/` are [OKF v0.2](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md) bundles: a root `index.md`, one short Markdown file per concept, YAML front matter with a `type`. `sdd.py` writes the indexes and the log; nobody edits them. The `bundle` subcommand ([sdd subcommands](cli.md#checks-and-context)) and the `mcp__sdd__bundle` tool ([roles](sdd-tool-roles.md#the-bundle-tool)) validate and repair them.
+`specs/`, `adrs/` and each open change `changes/<id>/` are [OKF v0.2](https://docs.rs/okf) bundles: a root `index.md` declaring `okf_version: "0.2"`, a `log.md`, one Markdown file per concept with a `type` in its front matter. `sdd.py` writes the indexes and the logs; nobody edits them. The `bundle` subcommand ([sdd subcommands](cli.md#checks-and-context)) and the `mcp__sdd__bundle` tool ([roles](sdd-tool-roles.md#the-bundle-tool)) validate and repair them. Synced bundles pass `okf validate`.
 
 ## Layout
 
 ```
-specs/index.md                                   okf_version "0.2"; lists the capabilities and invariants/
-specs/log.md                                     one line per sync
-specs/<capability>/index.md                      concepts of the capability, with their REQ ids
-specs/<capability>/<concept>.md                  type: spec, a few REQ blocks
-specs/invariants/<category>/index.md             concepts of the category, with their INV ids
-specs/invariants/<category>/<concept>.md         type: invariant, a few INV blocks
+specs/index.md                              okf_version "0.2", then the okf index of the directory
+specs/log.md                                one `* **Update**:` line per sync, under `## YYYY-MM-DD`
+specs/capabilities/<id>.md                  type: Capability
+specs/invariants/<id>.md                    type: Invariant
+specs/.templates/*.md.tmpl                  concept templates; dot-directories are not part of the bundle
+adrs/index.md, adrs/log.md                  log: one line per accepted ADR
+adrs/NNNN_<slug>.md                         type: ADR
+adrs/.templates/adr.md.tmpl
 
-changes/<id>/index.md                            type: change, generated: files and delta ids
-changes/<id>/intent.md                           type: intent
-changes/<id>/plan.md                             type: plan
-changes/<id>/tasks.md                            type: tasks
-changes/<id>/specs/<capability>/<concept>.md     type: spec-delta, mirrors the living path
-changes/<id>/specs/invariants/<category>/<concept>.md   type: invariant-delta
+changes/<id>/index.md                       okf_version "0.2", then the okf index
+changes/<id>/intent.md, plan.md, tasks.md   type: intent / plan / tasks
+changes/<id>/specs/capabilities/<id>.md     type: Capability (new) or CapabilityDelta
+changes/<id>/specs/invariants/<id>.md       type: Invariant (new or replacement)
 ```
 
-- `index.md` and `log.md` are reserved names, never concepts. Every other `.md` under `specs/` is a concept; names are kebab-case.
-- REQ blocks live only under `specs/<capability>/`, INV blocks only under `specs/invariants/<category>/`. `invariants` is therefore not a usable capability name.
-- A concept is short: at most `concept_max_blocks` blocks (default 5, see [Configuration](configuration.md)). Over the limit is a warning: split the topic into another concept file. A concept's file name is free; the REQ/INV id decides what a block is, the path only groups it.
-- A delta's path mirrors the concept it targets. A MODIFIED block placed in a different concept of the same capability or category **moves** the requirement at sync (the log line says `MOVED`). It cannot move to another capability or category.
+- `index.md` and `log.md` are reserved names, never concepts. Every other `.md` file outside a dot-directory is a concept.
+- Concept ids are lowercase snake_case path segments, any depth below `capabilities/` or `invariants/` (`capabilities/reports/export_report`). The tree must match the type.
 - Archived changes keep their files as they were; they are not checked.
 
-## Front matter per type
+## Index and log format
 
-Front matter is parsed line by line as `key: value`; `[a, b]` is a list (nested YAML is not supported, see [File formats](file-formats.md#intentmd)). Keys not listed are kept.
+Every directory holding a concept at any depth gets an `index.md`, written the way `okf index` writes it: entries grouped under a `# <type>` heading (types sorted, subdirectories under `# Subdirectories`), sorted by title, each `* [<title>](<link>) - <description>`. A subdirectory's description is its single entry's description, else `Contains N entries: <titles>.`. Only the root index has front matter, and only `okf_version`. Unlike `okf index`, dot-directories such as `.templates/` are left out (lintel's `okf-index.sh` strips them the same way).
 
-| File | Keys |
-|---|---|
-| `specs/index.md` | `okf_version: "0.2"`, `type: index`, `title: Specs` |
-| `specs/<dir>/index.md` | `type: index`, `title: <dir path under specs/>` |
-| `specs/log.md` | `type: log`, `title: Specs log` |
-| spec concept | `type: spec`, `title`, `capability`, `sources: [code paths]` |
-| invariant concept | `type: invariant`, `title`, `category`, `sources: [code paths]` |
-| `changes/<id>/index.md` | `okf_version: "0.2"`, `type: change`, `title` |
-| `intent.md` | `type: intent`, then `id`, `title`, `status`, `size`, `adrs`, `created` |
-| `plan.md`, `tasks.md` | `type: plan` / `type: tasks`, `change: <id>` |
-| spec delta | `type: spec-delta`, `target: specs/<capability>/<concept>.md`, `sources` |
-| invariant delta | `type: invariant-delta`, `target: specs/invariants/<category>/<concept>.md`, `sources` |
-
-- `title` of a concept defaults to its first `# ` heading, else the file name with dashes as spaces.
-- `sources` lists repository paths the concept covers; an entry may end in `:12` or `:12-30`. A path that does not exist is reported and dropped by `--fix`.
-- At sync, the delta's `sources` are merged (union, sorted) into the target concept's.
-
-## Invariant block
-
-```markdown
-### INV-SEC-001: Secrets are never logged
-The system MUST NOT write a password or token to any log.
-
-#### Check: test_no_secret_in_logs greps the captured log of the login flow
-```
-
-An INV id matches `inv_id_pattern` (default `INV-[A-Z0-9]+-[0-9]{3}`). It has a `#### Check:` line instead of a `#### Scenario:`. In a change, an ADDED or MODIFIED INV needs a `(test)` task and no `(impl)` task. `sdd context` for an `(impl)` task lists the id and title of every invariant in force that the task does not name. Everything else (base hash, MODIFIED/REMOVED, `delta-stub`) works as for a REQ.
+A log is `# Update Log`, then `## YYYY-MM-DD` groups, newest first, of `* **<Kind>**: <text>` lines. `init` opens it with a `**Creation**` entry: okf rejects a log without a date group.
 
 ## Bundle checks
 
-`bundle specs` checks the living specs; `bundle <id>` checks the change. With `--fix`, a finding marked `[fixable]` is repaired and printed as `FIXED <message>` instead.
+`bundle specs`, `bundle adrs` and `bundle <id>`. With `--fix`, a finding marked `[fixable]` is repaired and printed as `FIXED <message>` instead.
 
 ### specs
 
 | Finding | Level | Fixable |
 |---|---|---|
 | `specs/` missing | ERROR | yes, creates it |
-| `<cap>/spec.md` legacy layout | ERROR | yes, renames to `<cap>/<cap>.md` (not if that file exists) |
-| concept at the wrong depth (not `specs/<cap>/x.md` or `specs/invariants/<cat>/x.md`) | ERROR | no |
-| name not kebab-case | ERROR | no |
-| front matter incomplete (`type`, `title`, `capability`/`category`, `sources`) | ERROR | yes |
-| `sources` entry not found | WARN | yes, drops it |
-| INV in the spec tree, or REQ in the invariant tree | ERROR | no |
-| an id defined in two files | ERROR | no |
-| REQ without `#### Scenario:`, INV without `#### Check:` | WARN | no |
-| concept without blocks | ERROR | yes, deletes the file, unless it holds prose |
-| blocks not sorted by id | ERROR | yes |
-| more than `concept_max_blocks` blocks | WARN | no, split by hand |
-| an `index.md` missing, stale, or the root without `okf_version` | ERROR | yes, regenerates it |
+| a concept in the old REQ/INV format | ERROR | no: rewrite it as a Capability or Invariant |
+| a concept outside `capabilities/` or `invariants/`, or not snake_case | ERROR | no |
+| type does not match the tree | ERROR | no |
+| no `title` | ERROR | yes, from the `#` heading |
+| no `description` | WARN | no |
+| `status` not draft/stable/deprecated | ERROR | no |
+| a missing required section, an empty Intent or Scope | ERROR | no |
+| no live criterion (capability not deprecated) | ERROR | no |
+| a criterion twice, or without Given/When/Then | ERROR | no |
+| a `###` heading under Acceptance criteria that is not a criterion | ERROR | no |
+| criteria not sorted by number | ERROR | yes |
+| invariant without Statement, `- Check:`, Holds or Violation | ERROR | no |
+| no Rationale or Exceptions | WARN | no |
+| a link that resolves to nothing or to a deprecated concept | WARN | no |
+| a template placeholder left | WARN | no |
+| `sources` as plain strings | WARN | yes, as `- resource:` entries |
+| a `sources` entry not found | WARN | yes, drops it |
+| an `index.md` missing or stale | ERROR | yes, regenerates it |
 | an `index.md` of a directory without concepts | WARN | yes, deletes it |
-| `log.md` missing | ERROR | yes |
+| `log.md` missing, or without a date group | ERROR | yes |
+| `log.md` with old sdd lines (`- <date> ...`) | WARN | no |
 | empty directory | WARN | yes, removes it |
-| a non-`.md` file under `specs/` | WARN | no |
+| a non-`.md` file | WARN | no |
+
+### adrs
+
+| Finding | Level | Fixable |
+|---|---|---|
+| `adrs/` missing | ERROR | yes |
+| a file not named `NNNN_<slug>.md` (the old `ADR-NNNN-<slug>.md` gets the new name in the message) | ERROR | no |
+| two files with the same number | ERROR | no |
+| type not ADR, status not draft/stable/deprecated, no title | ERROR | no |
+| `supersedes` or `superseded_by` naming no ADR | ERROR | no |
+| deprecated without `superseded_by` | WARN | no |
+| no `## Decision` | ERROR | no |
+| no Context or Consequences | WARN | no |
+| index or log as for specs | ERROR | yes |
 
 ### change
 
 | Finding | Level | Fixable |
 |---|---|---|
 | `intent.md`, `plan.md` or `tasks.md` lacks its `type:` | WARN | yes |
-| flat delta `specs/<cap>.md` (legacy) | WARN | yes, moves to `specs/<cap>/<cap>.md` (not if that file exists) |
-| delta at the wrong depth | ERROR | no |
-| delta name not kebab-case | ERROR | no |
-| delta front matter incomplete (`type`, `target`, `sources`) | WARN | yes |
-| `index.md` missing or stale | WARN | yes, regenerates it |
+| a delta in the old format | ERROR | no |
+| a delta outside `specs/capabilities/` or `specs/invariants/`, or not snake_case | ERROR | no |
+| a delta type that does not fit its tree | ERROR | no |
+| CapabilityDelta without the right `target`, or `sources` not as entries | WARN | yes |
+| an `index.md` missing or stale | WARN | yes; `checkpoint` and `sync` regenerate them anyway |
 
-`--fix` never changes the text of a requirement. It is idempotent: a second run prints `0 fixed`. Output ends with `OK|FAIL <target>: <n> errors, <n> warnings`, plus `, <n> fixed` with `--fix`; exit 1 on any ERROR.
+The structure of the delta's concepts and units is checked by `sdd check`, not by `bundle`. `--fix` never changes the text of a criterion, section or invariant. It is idempotent: a second run prints `0 fixed`. Output ends with `OK|FAIL <target>: <n> errors, <n> warnings`, plus `, <n> fixed` with `--fix`; exit 1 on any ERROR.
 
 `sdd check <change>` runs `bundle <change>` and prefixes the findings with `bundle:`. `sdd sync` additionally refuses while `bundle specs` has errors.
 
-## Migrate the legacy layout
+## The old REQ/INV format
 
-The older layout had one long `specs/<capability>/spec.md` and flat deltas `changes/<id>/specs/<capability>.md`. Both are read and repaired by `--fix`:
-
-1. `bundle specs --fix` once, on the base branch (lead).
-2. `bundle <id> --fix` for every open change (lead or spec-author).
-
-A migrated spec keeps all its blocks in a single concept named after the capability. If it has more than `concept_max_blocks` blocks, `bundle specs` warns; regroup it by topic through a change (see [Write a delta](../how-to/write-a-delta-and-adr.md#group-requirements-into-concepts)). Steps and output: [Migrate to the OKF layout](../how-to/migrate-to-okf-layout.md).
+Earlier sdd versions wrote a living spec as a few `### REQ-<CAP>-NNN` blocks per `specs/<capability>/<concept>.md` and invariants were `### INV-<CAT>-NNN` blocks. They are not migrated: one REQ with several scenarios does not map one-to-one onto acceptance criteria, so a conversion would need review anyway. `bundle` reports each such file as an error; [Migrate to Capability and Invariant concepts](../how-to/migrate-to-okf-layout.md) gives the steps.

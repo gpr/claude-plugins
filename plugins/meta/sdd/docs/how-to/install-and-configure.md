@@ -8,7 +8,7 @@ sources:
   - resource: ../../tools/sdd.py
 generated:
   by: claude-code
-  at: 2026-10-17T00:00:00Z
+  at: 2026-10-18T00:00:00Z
 ---
 
 # Install and configure sdd in a repository
@@ -22,7 +22,7 @@ generated:
    /plugin install sdd@gpr-plugins
    ```
 
-   Choose project scope when asked. At user scope the plugin would guard `specs/` and `adr/` and make the main conversation a lead in every repo.
+   Choose project scope when asked. At user scope the plugin would guard `specs/` and `adrs/` and make the main conversation a lead in every repo.
 
 2. Initialise. Ask Claude to change something, or run `/sdd:change` with a request. The lead calls `sdd init` on first use. Or run it yourself:
 
@@ -31,7 +31,7 @@ generated:
    ```
 
    ```
-   created: specs/, adr/, changes/, tests/acceptance/, .claude/sdd.json (edit acceptance_cmd / unit_cmd), specs/index.md, specs/log.md, .gitignore (/.claude/worktrees/)
+   created: specs/, adrs/, changes/, tests/acceptance/, .claude/sdd.json (edit acceptance_cmd / unit_cmd), specs/index.md, specs/log.md, adrs/index.md, adrs/log.md, specs/.templates/capability.md.tmpl, specs/.templates/invariant.md.tmpl, adrs/.templates/adr.md.tmpl, .gitignore (/.claude/worktrees/)
    ```
 
 3. Edit `.claude/sdd.json` for your stack. The two keys you almost always change:

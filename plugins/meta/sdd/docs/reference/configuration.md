@@ -9,7 +9,7 @@ sources:
   - resource: ../../README.md
 generated:
   by: claude-code
-  at: 2026-10-17T00:00:00Z
+  at: 2026-10-18T00:00:00Z
 ---
 
 # Configuration
@@ -22,13 +22,10 @@ Created by `sdd init` with every key below except `req_id_pattern`. Keys you omi
 |---|---|---|
 | `specs_dir` | `specs` | the living specs OKF bundle ([layout](bundles.md)) |
 | `changes_dir` | `changes` | open and archived changes |
-| `adr_dir` | `adr` | ADRs |
+| `adr_dir` | `adrs` | ADRs (an OKF bundle) |
 | `acceptance_dir` | `tests/acceptance` | acceptance tests: coverage, freeze, guard |
 | `acceptance_cmd` | `pytest -q {files}` | how agents run acceptance tests; `{files}` is the file list |
 | `unit_cmd` | `pytest -q tests/unit` | how agents run the unit suite |
-| `req_id_pattern` | `REQ-[A-Z0-9]+-[0-9]{3}` | regex for REQ ids |
-| `inv_id_pattern` | `INV-[A-Z0-9]+-[0-9]{3}` | regex for invariant ids |
-| `concept_max_blocks` | `5` | REQ/INV blocks per concept file before `bundle` warns |
 | `base_branch` | `""` | base for new changes; empty means the remote's default branch (`origin/HEAD`), else `main` |
 | `branch_prefix` | `sdd/` | change branch name prefix |
 | `worktree_dir` | `.claude/worktrees` | where change worktrees go |
@@ -57,4 +54,4 @@ Nothing above the git root counts. Inside a change worktree, the root is the wor
 
 ## Plugin scope
 
-Install the plugin at **project** scope. At user scope the guard would block hand edits to `specs/` and `adr/` in every repo, and every session's main conversation would become the lead.
+Install the plugin at **project** scope. At user scope the guard would block hand edits to `specs/` and `adrs/` in every repo, and every session's main conversation would become the lead.

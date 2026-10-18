@@ -1,96 +1,154 @@
 ---
 type: Reference
 title: File formats
-description: Exact syntax sdd.py parses - REQ and INV blocks, scenarios and checks, concept files, delta sections and base markers, intent and ADR front matter, task lines and acceptance test tagging.
-tags: [sdd, reference, formats, spec, invariant, adr, tasks]
+description: Exact syntax sdd.py parses - Capability and Invariant concepts, acceptance criteria, CapabilityDelta sections and base markers, intent and ADR front matter, task lines and acceptance test citations.
+tags: [sdd, reference, formats, capability, invariant, adr, tasks]
 sources:
   - resource: ../../skills/formats/SKILL.md
   - resource: ../../skills/change/templates/intent.md
-  - resource: ../../skills/change/templates/delta.md
-  - resource: ../../skills/change/templates/invariant-delta.md
-  - resource: ../../skills/change/templates/adr.md
+  - resource: ../../skills/change/templates/capability.md.tmpl
+  - resource: ../../skills/change/templates/invariant.md.tmpl
+  - resource: ../../skills/change/templates/capability-delta.md
+  - resource: ../../skills/change/templates/adr.md.tmpl
   - resource: ../../skills/change/templates/plan.md
   - resource: ../../skills/change/templates/tasks.md
   - resource: ../../tools/sdd.py
 generated:
   by: claude-code
-  at: 2026-10-17T00:00:00Z
+  at: 2026-10-18T00:00:00Z
 ---
 
 # File formats
 
-The `sdd:formats` skill holds the writing rules and is preloaded into spec-author, planner and acceptance-tester. This page states what `sdd.py` actually parses.
+The `sdd:formats` skill holds the writing rules and is preloaded into spec-author, planner and acceptance-tester. This page states what `sdd.py` actually parses. The Capability, Invariant and ADR formats are the concept templates of the lintel repository (`specs/.templates/`, `adrs/.templates/`), shipped in `skills/change/templates/` and copied into a repo by `sdd init`.
 
-## Requirement block
+## Ids and citations
 
-```markdown
-### REQ-AUTH-004: Expired tokens are rejected
-The API MUST reject a request whose access token is expired with HTTP 401
-and error code `token_expired`. It MUST NOT refresh the token implicitly.
+A concept id is the file's path below its bundle without `.md`: lowercase snake_case segments, `capabilities/<...>` or `invariants/<...>` under `specs/`. The traceable units are:
 
-#### Scenario: expired token
-- GIVEN a token that expired 1 second ago
-- WHEN it calls GET /v1/me
-- THEN the response is 401 with `{"error": "token_expired"}`
-```
+| Unit | Citation | Example |
+|---|---|---|
+| acceptance criterion | `<capability id>#AC-NN` | `capabilities/reports/export_report#AC-02` |
+| invariant | `<invariant id>` | `invariants/no_secret_in_logs` |
+| ADR | `ADR-NNNN` | `ADR-0003` → `adrs/0003_use_csv.md` |
 
-- A block starts at a line `### <REQ or INV id>: <title>` and runs to the next such line. Text before the first block is kept as the concept's preamble.
-- REQ ids match `req_id_pattern` (default `REQ-[A-Z0-9]+-[0-9]{3}`). An id is unique forever; never reuse a removed one.
-- A block has a scenario when one of its lines starts with `#### Scenario:`. ADDED and MODIFIED REQ blocks need one.
-- **Block hash**: the first 8 hex chars of sha256 over the block's lines, trailing spaces stripped, leading and trailing blank lines dropped, base marker excluded. Whitespace at line ends does not change it.
+A citation is matched as a whole: `specs/capabilities/x#AC-01` (preceded by `/`) and `capabilities/x#AC-010` do not cite `capabilities/x#AC-01`. A bare `capabilities/<id>` is not a unit; `check` errors when a task names one.
 
-## Invariant block
+## Front matter
 
-```markdown
-### INV-SEC-001: Secrets are never logged
-The system MUST NOT write a password or token to any log.
+Parsed as a small YAML subset: `key: value` scalars (plain, `"double"` or `'single'` quoted, also over several lines, and `|` / `>` block scalars with `-`/`+` chomping), flow lists `[a, b]` and mappings `{k: v}` (nested, `null` kept), and one level of indented block (`generated:` with `by`/`at`, `sources:` as `- resource: <path>` entries). Keys sdd does not manage round-trip unchanged. `sources` given as plain strings are read as their `resource`; `bundle --fix` rewrites them as entries.
 
-#### Check: test_no_secret_in_logs greps the captured log of the login flow
-```
+## Capability
 
-- INV ids match `inv_id_pattern` (default `INV-[A-Z0-9]+-[0-9]{3}`). Same block hash, base marker and uniqueness rules as a REQ.
-- A block has a check when one of its lines starts with `#### Check:`. ADDED and MODIFIED INV blocks need one instead of a scenario.
-- INV blocks live only under `specs/invariants/<category>/`, REQ blocks only under `specs/<capability>/`; `check` errors on a block in the wrong tree.
-
-## Living spec (concept file)
-
-`specs/<capability>/<concept>.md` for REQs, `specs/invariants/<category>/<concept>.md` for INVs: front matter (`type: spec|invariant`, `title`, `capability` or `category`, `sources`), a preamble (`# <title>`) and up to `concept_max_blocks` blocks. `sync` rewrites it with blocks sorted by id and merges the delta's `sources`. Never edited by hand. The generated `index.md` and `log.md` files, the front matter per type and the checks are in [OKF bundles](bundles.md).
-
-## Delta
-
-`changes/<change>/specs/<capability>/<concept>.md`, or `changes/<change>/specs/invariants/<category>/<concept>.md` for invariants. The path mirrors the living concept it targets; one file per concept touched:
+`specs/capabilities/<id>.md`:
 
 ```markdown
 ---
-type: spec-delta
-target: specs/auth/tokens.md
+type: Capability
+title: "Export report"
+description: "A user can download any report as a CSV file."
+status: stable          # draft | stable | deprecated
+tags: []
+generated:
+  by: human:jdoe        # OKF_AUTHOR, else human:<git user.name>, else process:sdd
+  at: "2026-10-18T10:00:00Z"
+sources:
+  - resource: src/reports/export.py
+---
+
+# Export report
+
+## Intent
+## Scope
+## Acceptance criteria
+
+### AC-01: CSV download
+
+- **Given** a report with 2 rows
+- **When** the user clicks Export
+- **Then** a CSV with a header and 2 rows is downloaded
+
+### AC-02: Empty report
+
+- **Retired**: empty reports are no longer exportable
+
+## Invariants
+## Decisions
+## Verification
+```
+
+- Sections are lines `## <name>` outside HTML comments. Intent, Scope and Acceptance criteria are required; Intent and Scope must not be empty.
+- A criterion starts at `### AC-NN: <name>` (two or more digits) and runs to the next `###` or `##` heading. Any other `###` heading under Acceptance criteria is an error: sync would not keep what it holds. A live criterion needs lines starting `- **Given**`, `- **When**` and `- **Then**`. A retired one holds `- **Retired**: <reason>` instead and stays forever, so its id is never reused.
+- Criteria are kept sorted by number; sync and `bundle --fix` reorder them.
+- Links in Invariants, Decisions and (for an invariant) Rationale are resolved relative to the living file; one that resolves to nothing, or to a deprecated concept, is a warning. A link there to `adrs/NNNN_<slug>.md` counts as citing `ADR-NNNN`.
+- A deprecated capability needs no live criterion.
+
+## Invariant
+
+`specs/invariants/<id>.md`, same front matter with `type: Invariant`, then sections Statement, Scope, Rationale, Enforcement, Examples, Exceptions:
+
+- Statement must not be empty; Enforcement needs a line starting `- Check:`.
+- Examples needs `### Holds` and `### Violation`, each with `- **Given**` and `- **Then**` lines. The check must pass on Holds and fail on Violation.
+- A missing Rationale or Exceptions is a warning.
+
+## Placeholders
+
+A line that still holds a template placeholder (`<actor>`, `<initial state>`, a link target `(<relative path>.md)`; code spans and comments ignored) is a warning, at most three per file.
+
+## Deltas
+
+Files under `changes/<change>/specs/`, at the path of the living concept. Three kinds:
+
+| File | When | Sync |
+|---|---|---|
+| `type: Capability` or `Invariant`, no living concept | a new concept | written to `specs/`, status `stable` |
+| `type: Invariant` with `base:` in front matter | replaces a living invariant | whole file replaced; `status: deprecated` deprecates it |
+| `type: CapabilityDelta` | changes a living capability | merged unit by unit |
+
+A full `Capability` over a living one is an error: change it with a CapabilityDelta.
+
+### CapabilityDelta
+
+```markdown
+---
+type: CapabilityDelta
+title: "Delta: Export report"
+target: specs/capabilities/reports/export_report.md
 sources: []
 ---
 
-# Delta: auth
-
 ## ADDED
 
-### REQ-AUTH-004: ...
+### AC-04: ...
 
 ## MODIFIED
 
-### REQ-AUTH-001: ...
+### AC-01: CSV download
 <!-- base: 1a2b3c4d -->
-(full new text of the requirement, not a diff)
+(complete new criterion)
 
-## REMOVED
+## RETIRED
 
-### REQ-AUTH-002: ...
+### AC-03: Filename
 <!-- base: 9f8e7d6c -->
-Reason: ...
+- **Retired**: <reason>
+
+## SECTIONS
+
+### Scope
+<!-- base: 5e6f7a8b -->
+(complete new section)
 ```
 
-- Sections are lines exactly `## ADDED`, `## MODIFIED`, `## REMOVED`. Blocks outside a section are ignored.
-- `<!-- base: <8 hex> -->` on its own line inside a block records the hash of the living REQ the entry was based on. `delta-stub` writes it; never type it.
-- MODIFIED holds the complete new block: sync replaces the whole block. If the entry sits in a different concept file of the same capability (or category) than the living block, sync moves it there.
-- Front matter: `type: spec-delta` (`invariant-delta` for INV), `target` (the living concept path), `sources` (code paths, merged into the concept at sync). `sdd delta-new` writes it.
-- Other HTML comments (template guidance) are ignored.
+- Sections are lines exactly `## ADDED`, `## MODIFIED`, `## RETIRED`, `## SECTIONS` (case included); any other `##` section is an error, and so is a `###` heading under ADDED/MODIFIED/RETIRED that is not a criterion. HTML comments other than base markers are ignored.
+- ADDED ids must not exist in the living capability, retired ones included. MODIFIED and RETIRED ids must exist, be live, and carry the base of the living criterion. RETIRED needs a reason.
+- SECTIONS entries are `### <name>` with one of Title, Description, Intent, Scope, Invariants, Decisions, Verification; any other `###` line inside an entry is part of it, so a section keeps its own sub-headings. Each name at most once; Title and Description replace the front matter value (Title also the `#` heading). An entry needs the base of the current section when the capability has it.
+- Front matter `status: deprecated` plus `base:` (the whole capability's hash) deprecates it; all its live criteria count as retired, and no ADDED or MODIFIED is allowed.
+- `sources` are merged (union, sorted by resource) into the capability at sync.
+
+### Base hash
+
+The first 8 hex chars of sha256 over the unit's text with HTML comments removed, trailing spaces stripped and blank lines at both ends dropped. The unit is a criterion block (heading included), a section's content, or a whole concept: its body plus its front matter, `generated` and `base` aside, so a concurrent change to a title, description, tags or sources conflicts too. `delta-stub` writes `<!-- base: <hash> -->` (or `base:` in front matter); never type it. A different current hash is a CONFLICT.
 
 ## intent.md
 
@@ -101,7 +159,7 @@ id: add-login
 title: Add login
 status: draft          # draft | approved | implementing | verified | archived
 size: change           # change | fix
-adrs: [ADR-0007]       # inline list only
+adrs: [ADR-0007]
 created: 2026-10-17
 archived: 2026-10-20   # added by sync
 ---
@@ -109,38 +167,36 @@ archived: 2026-10-20   # added by sync
 
 Body sections from the template: Why, Outcome, Scope, Non-goals, Success criteria, Open questions. Open questions must be empty before Gate 1 approval.
 
-Front matter is parsed line by line as `key: value`; `[a, b]` is a list. Nested YAML is not supported.
-
 ## ADR
 
-`adr/ADR-NNNN-<slug>.md`:
+`adrs/NNNN_<slug>.md`, `<slug>` the title in snake_case:
 
 ```yaml
 ---
-status: proposed       # proposed | accepted | superseded | deprecated
-date: 2026-10-17
-supersedes: ADR-0003   # or empty
-superseded_by:         # filled by adr-accept of the successor
+type: ADR
+title: "Use CSV for exports"
+description: "<One sentence: what was decided.>"
+status: draft                  # draft (proposed) | stable (accepted) | deprecated (superseded, rejected)
+tags: []
+decided: 2026-10-18            # set again by adr-accept
+deciders: []
+supersedes: [0002_use_xlsx]    # concept ids of the ADRs it replaces
+superseded_by: null            # set by adr-accept of the successor
+generated: {by: ..., at: ...}
+sources: []
 ---
-
-# ADR-0008: <title>
-
-## Context
-## Options
-## Decision
-## Consequences
 ```
 
-The ADR number is the first 8 characters of the file name. `## Decision` must be self-contained: it is the only part `sdd context` gives to implementers. An empty Decision shows as `(Decision section is empty: report this)`.
+Sections: Context, Decision drivers, Options considered, Decision, Consequences, Related. `## Decision` must be self-contained: it is the only part `sdd context` gives to implementers. An empty one shows as `(Decision section is empty: report this)`.
 
 ## plan.md
 
-Front matter `type: plan`, `change: <id>`; sections Approach, Contracts, Components, Risks. `sdd context` sends test tasks only `## Contracts`, and sends the whole plan only with `--plan`. `check` validates REQ and ADR ids mentioned outside comments.
+Front matter `type: plan`, `change: <id>`; sections Approach, Contracts, Components, Risks. `sdd context` sends test tasks only `## Contracts`, and sends the whole plan only with `--plan`. `check` validates criterion, invariant and ADR citations outside comments.
 
 ## Task line
 
 ```
-- [ ] T2 (impl) Reject expired tokens in middleware — REQ-AUTH-004 ADR-0007 | blocked-by: T1 | files: src/auth/mw.py
+- [ ] T2 (impl) Reject expired tokens — capabilities/auth/tokens#AC-04 ADR-0007 | blocked-by: T1 | files: src/auth/mw.py
 ```
 
 Parsed with `^- \[( |x|X)\] (T\d+) \((test|impl|chore)\) (.*)$`:
@@ -149,26 +205,26 @@ Parsed with `^- \[( |x|X)\] (T\d+) \((test|impl|chore)\) (.*)$`:
 |---|---|
 | `[ ]` / `[x]` | open / done |
 | `T<n>` | task id, unique in the file |
-| `(test)` | acceptance tests, by acceptance-tester; needs ≥ 1 REQ or INV |
-| `(impl)` | code, by an implementer; needs ≥ 1 REQ or INV; should be `blocked-by` its test task. An INV needs no `(impl)` task |
-| `(chore)` | migrations, config, docs; no REQ needed |
-| REQ / INV / ADR ids | anywhere in the rest of the line |
+| `(test)` | acceptance tests, by acceptance-tester; cites ≥ 1 criterion or invariant, none retired or deprecated |
+| `(impl)` | code, by an implementer; cites ≥ 1 criterion; should be `blocked-by` its test task. An invariant needs no `(impl)` task |
+| `(chore)` | migrations, config, docs; no citation needed |
+| citations, ADR ids | anywhere in the rest of the line |
 | `blocked-by: T1, T3` | dependencies |
 | `files: a, b` | files the task touches; the lead runs impl tasks in parallel when these sets are disjoint |
 
 Front matter of `tasks.md` is `type: tasks`, `change: <id>`. Lines inside HTML comments are ignored, so the template's example is never parsed.
 
-## Acceptance test tagging
+## Acceptance test citations
 
-A file under `acceptance_dir` covers a REQ or INV when its text contains the exact id. Put it in a docstring or a comment above the test:
+A file under `acceptance_dir` covers a unit when its text contains the exact citation. Put it in a docstring or a comment above the test:
 
 ```python
-# REQ-AUTH-004
+# capabilities/auth/tokens#AC-04
 def test_expired_token_rejected(): ...
 ```
 
-`def test_REQ_AUTH_004_...` does **not** match: underscores are not hyphens.
+A test name cannot hold `/` or `#`, so the name alone never matches.
 
 ## frozen.json
 
-`{"<path relative to root>": "<sha256 hex>", ...}` for every acceptance file that mentions one of the change's test REQs or INVs. Written by `freeze`, checked by `verify-frozen`.
+`{"<path relative to root>": "<sha256 hex>", ...}` for every acceptance file that cites one of the change's test units. Written by `freeze`, checked by `verify-frozen`.

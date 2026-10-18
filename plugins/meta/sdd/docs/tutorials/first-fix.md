@@ -1,19 +1,19 @@
 ---
 type: Tutorial
 title: Your first fix
-description: Break an existing requirement on purpose and repair it through the fix path - a failing acceptance test against the existing REQ, no new spec, no Gate 1.
+description: Break an existing requirement on purpose and repair it through the fix path - a failing acceptance test against the existing criterion, no new spec, no Gate 1.
 tags: [sdd, tutorial, fix]
 sources:
   - resource: ../../skills/change/SKILL.md
   - resource: ../../hooks/phase.ts
 generated:
   by: claude-code
-  at: 2026-10-17T00:00:00Z
+  at: 2026-10-18T00:00:00Z
 ---
 
 # Your first fix
 
-This tutorial continues from [Your first spec-driven change](first-change.md). You have `specs/greet/greeting.md` with `REQ-GREET-001` (`--name Ada` prints `Hello, Ada!`) merged on `main`.
+This tutorial continues from [Your first spec-driven change](first-change.md). You have `specs/capabilities/greeting.md` with `capabilities/greeting#AC-01` (`--name Ada` prints `Hello, Ada!`) merged on `main`.
 
 We'll introduce a bug, report it, and watch the workflow fix it test-first, without writing any new spec.
 
@@ -41,12 +41,12 @@ In Claude Code:
 
 > `greet --name Ada` prints `Hello, Ada` without the `!`.
 
-Notice the triage line: the code diverges from an existing REQ, so it's a **fix**, not a change. No spec delta, no Gate 1.
+Notice the triage line: the code diverges from an existing criterion, so it's a **fix**, not a change. No spec delta, no Gate 1.
 
-The lead starts the change, sets `size: fix` in its `intent.md`, and writes one test task against the existing REQ:
+The lead starts the change, sets `size: fix` in its `intent.md`, and writes one test task against the existing criterion:
 
 ```
-- [ ] T1 (test) Named greeting keeps its exclamation mark — REQ-GREET-001
+- [ ] T1 (test) Named greeting keeps its exclamation mark — capabilities/greeting#AC-01
 ```
 
 ## 3. Test and plan side by side
@@ -62,7 +62,7 @@ Open `/sdd phase`. A fix has its own order, with no Spec and no Gate 1:
 · 6. Sync
 ```
 
-The contract is the existing CLI, so the test doesn't need to wait for a plan. The acceptance-tester and the planner run **at the same time**. The tester writes a test tagged `REQ-GREET-001`, sees it fail on `Hello, Ada`, and freezes it. The planner adds an impl task `blocked-by: T1`.
+The contract is the existing CLI, so the test doesn't need to wait for a plan. The acceptance-tester and the planner run **at the same time**. The tester writes a test citing `capabilities/greeting#AC-01`, sees it fail on `Hello, Ada`, and freezes it. The planner adds an impl task `blocked-by: T1`.
 
 ## 4. Gate 2, implement, verify
 
@@ -70,11 +70,11 @@ Gate 2 waits for both, checks that T1 is ticked and frozen, and moves straight t
 
 ## 5. Sync without a delta
 
-Sync has no requirement to merge, so `specs/` doesn't change. It archives the change, and the new acceptance test stays in `tests/acceptance/` as a regression guard for `REQ-GREET-001`.
+Sync has no criterion to merge, so `specs/` doesn't change. It archives the change, and the new acceptance test stays in `tests/acceptance/` as a regression guard for `capabilities/greeting#AC-01`.
 
 Merge the branch as before, and `python greet.py --name Ada` prints `Hello, Ada!` again.
 
 ## What you've learned
 
-- A fix starts from a REQ that already exists. It costs one failing test, not a spec review.
-- If the test can't be written against an existing REQ (the "fix" needs behavior no REQ describes), the lead re-triages it as a full change. See [Reopen a spec](../how-to/reopen-a-spec.md#fix-size-fix).
+- A fix starts from a criterion that already exists. It costs one failing test, not a spec review.
+- If the test can't be written against an existing criterion (the "fix" needs behavior no criterion describes), the lead re-triages it as a full change. See [Reopen a spec](../how-to/reopen-a-spec.md#fix-size-fix).

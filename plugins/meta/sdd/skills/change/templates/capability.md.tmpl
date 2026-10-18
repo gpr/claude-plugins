@@ -1,0 +1,60 @@
+---
+type: Capability
+title: <Capability name>
+description: "<One sentence: what an actor can do once this capability exists.>"
+status: draft
+tags: []
+generated:
+  by: human:<id>
+  at: "<YYYY-MM-DDTHH:MM:SSZ>"
+sources: []
+---
+
+# <Capability name>
+
+<!--
+Acceptance TDD lifecycle:
+1. draft: write this spec and its acceptance criteria first; their tests are written and fail.
+2. stable: only when every acceptance criterion has a passing acceptance test.
+3. deprecated: the capability was removed; its tests are removed with it.
+-->
+
+## Intent
+
+As a <actor>, I can <action>, so that <outcome>.
+
+## Scope
+
+- In: <what this capability covers>
+- Out: <what it explicitly does not cover>
+
+## Acceptance criteria
+
+<!--
+One criterion = one executable acceptance test.
+- IDs are stable: never renumber or reuse; retire an ID instead.
+- The test cites the criterion as `<concept id>#AC-<nn>` (e.g. `capabilities/export_report#AC-01`)
+  in a comment or docstring: a test name cannot hold `/` or `#`.
+- Observable behaviour only: inputs and outputs at the system boundary, no implementation detail.
+-->
+
+### AC-01: <short name>
+
+- **Given** <initial state>
+- **When** <action by the actor>
+- **Then** <observable outcome>
+
+## Invariants
+
+<!-- Invariants this capability must preserve. -->
+
+- [<Invariant name>](<relative path to invariant>.md)
+
+## Decisions
+
+- [<ADR title>](<relative path to adr>.md)
+
+## Verification
+
+- Tests: `<path to acceptance tests>`
+- Run: `<command>`
