@@ -1,4 +1,4 @@
-export type SddTask = { id: string; kind: 'test' | 'impl' | 'chore'; done: boolean; reqs: string[] }
+export type SddTask = { id: string; kind: 'test' | 'impl' | 'chore'; done: boolean; refs: string[] }
 
 export type SddChange = {
   id: string

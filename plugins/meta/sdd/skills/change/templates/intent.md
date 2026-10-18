@@ -24,7 +24,8 @@ created: {{date}}
 - 
 
 ## Success criteria
-<!-- Measurable. Each one should map to at least one REQ in the delta. -->
+<!-- Measurable. Each one should map to at least one acceptance criterion
+     (capabilities/<id>#AC-NN) or invariant (invariants/<id>) in the delta. -->
 - 
 
 ## Open questions

@@ -1,6 +1,6 @@
 ---
 name: change
-description: Lead workflow for any request to change the codebase - triage, spec delta and ADRs, user gate, plan, test-first implementation, verification, spec sync. Use for every feature, behavior change, or bug fix request, and when the user types /sdd:change.
+description: Lead workflow for any request to change the codebase - triage, capabilities, invariants and ADRs, user gate, plan, test-first implementation, verification, spec sync. Use for every feature, behavior change, or bug fix request, and when the user types /sdd:change.
 argument-hint: <what you want changed> | resume <change-id>
 ---
 
@@ -12,7 +12,7 @@ Keep your own context thin: pass agents IDs and file paths, read tool output, no
 
 `sdd <args>` = the `mcp__sdd__sdd` tool with `args` as a list (`sdd check c1` is
 `{"args": ["check", "c1"]}`). The guard blocks running the script through Bash.
-First use in a repo: `sdd init` (creates the folders and `.claude/sdd.json`; ask the user
+First use in a repo: `sdd init` (creates the folders, the concept templates and `.claude/sdd.json`; ask the user
 to set `acceptance_cmd` and `unit_cmd` there).
 
 The workflow agents are plugin agents: `sdd:spec-author`, `sdd:planner`,
@@ -55,7 +55,8 @@ number. Direct-path work has no change id and none of this.
    done -> nothing left; a fix starts at plan, its test is written alongside). A stored phase can lag a step that was done but not
    checkpointed: trust the files (`sdd check`, task ticks) over the phase when they disagree.
    Resume a partly written spec or plan with the same agent type and the files as context.
-   Run the `bundle` tool on the change first: a change started on the old layout needs `fix: true`.
+   Run the `bundle` tool on the change first. A change written in the old REQ/INV format
+   cannot be fixed by `bundle`: resume spec-author to rewrite its delta as concepts.
 
 ## 1. Triage (you, no agent unless context is missing)
 If you need codebase facts to decide, delegate to `Explore` (quick or medium) with one
@@ -66,9 +67,9 @@ Apply this rule, in order, and state the result in one line:
   -> **full change** (spec delta).
 - Makes a decision with lasting consequences (technology, data model, boundary,
   security posture) -> **full change** with ADR, even if behavior is unchanged.
-- Code diverges from an existing REQ (bug) -> **fix**: no spec delta, but a failing
-  acceptance test first. `sdd start <id> --title ... --pr-title "fix: ..."`, enter the worktree, `sdd checkpoint <id> --phase plan -m "chore(<id>): fix"`, set `size: fix` in intent.md, write one test task
-  referencing the existing REQ, then go to step 4 (it runs step 6 alongside).
+- Code diverges from an existing acceptance criterion or invariant (bug) -> **fix**: no
+  spec delta, but a failing acceptance test first. `sdd start <id> --title ... --pr-title "fix: ..."`, enter the worktree, `sdd checkpoint <id> --phase plan -m "chore(<id>): fix"`, set `size: fix` in intent.md, write one test task
+  citing the existing criterion (`capabilities/<id>#AC-NN`) or invariant, then go to step 4 (it runs step 6 alongside).
 - Anything else (refactor, rename, dependency bump, docs, config) -> **direct**: delegate
   to `general-purpose` (or do it yourself if trivial), run the unit tests, done.
 
@@ -79,16 +80,16 @@ Apply this rule, in order, and state the result in one line:
    prints. Do this before any agent writes an artifact. If it prints `PR missing`, create a
    draft PR for the branch (GitHub tools) and run `sdd set-pr <id> <number>`.
 2. Delegate to `spec-author` with: change id, the user's request verbatim, and the
-   Explore findings (summarized, with file paths). It writes intent.md, the spec delta,
-   the invariant delta and any proposed ADRs, then runs `bundle` and `sdd check <id>`. Then
+   Explore findings (summarized, with file paths). It writes intent.md, the new or changed
+   capabilities and invariants under `changes/<id>/specs/`, and any draft ADRs, then runs `bundle` and `sdd check <id>`. Then
    `sdd checkpoint <id> --phase gate1 -m "docs(<id>): spec delta"`.
 3. If it returns open questions, ask the user (AskUserQuestion, max 4) and resume the
    same spec-author with the answers (SendMessage), do not start a new one.
 
 ## 3. Gate 1 - user review (deep)
-Show the user, compactly: the intent's Why/Outcome/Non-goals, each REQ id + title +
-scenario names (with the concept file it lands in), each INV id + title + its check,
-each ADR title + decision paragraph. Give file paths for the full text.
+Show the user, compactly: the intent's Why/Outcome/Non-goals; per capability its id, title
+and Intent line, then each AC id + name marked added/modified/retired (and any replaced
+section); per invariant its id, Statement and Check; each ADR title + decision paragraph. Give file paths for the full text.
 Ask: approve / change something / stop.
 - Change -> resume spec-author with the feedback, then Gate 1 again.
 - Approve -> `sdd set-status <id> approved`, then
@@ -121,7 +122,7 @@ the `sdd context <id> <Tn>` output pasted in the prompt. It writes the tests, co
 fail for the right reason, ticks its task and runs `sdd freeze <id>`. After each one:
 `sdd checkpoint <id> -m "test(<id>): <Tn> acceptance tests"`; after the last add
 `--phase implement`.
-If it reports that a scenario is untestable or ambiguous -> step 9 (reopen).
+If it reports that a criterion is untestable or ambiguous -> step 9 (reopen).
 
 ## 7. Implementation (inner TDD)
 For each `(impl)` task whose blocked-by tasks are done, delegate to `implementer` with
@@ -130,7 +131,7 @@ Parallelism: run impl tasks concurrently only when their `files:` sets are disjo
 pass `isolation: "worktree"` on each Agent call when you do, and merge the branches
 yourself into `sdd/<id>` after each returns (they never touch the same files by
 construction), then checkpoint.
-If an implementer returns `BLOCKED: REQ-... <reason>` -> step 9. Never relax a test.
+If an implementer returns `BLOCKED: <criterion or invariant id> <reason>` -> step 9. Never relax a test.
 After each implementer returns (and its branch is merged, if isolated):
 `sdd checkpoint <id> -m "feat(<id>): <Tn> <task title>"`; after the last impl task add
 `--phase verify`.
@@ -141,38 +142,39 @@ After each implementer returns (and its branch is merged, if isolated):
 2. On FAIL: route each finding (implementer for code, step 9 for spec problems);
    checkpoint after each fix.
 3. On PASS, review before syncing: the verifier checks conformance to the spec, not bugs
-   outside its scenarios. Delegate to `general-purpose`: run the built-in `code-review`
+   outside its criteria. Delegate to `general-purpose`: run the built-in `code-review`
    skill on the change's diff against the base branch (uncommitted changes included) and
    return only the findings list (skip this step if the skill is not available). Never
    pass `--fix`: the implementer fixes code, test first. Route each finding:
-   - a bug inside the behavior of an existing REQ -> implementer, with the finding and the
+   - a bug inside the behavior of an existing criterion -> implementer, with the finding and the
      `sdd context <id> <Tn> --plan` bundle of the task whose files it touches; it adds a
      failing unit test first;
-   - a defect in a frozen acceptance test, or a fix that needs behavior no REQ describes
-     (validation, a new error path) -> step 9;
+   - a defect in a frozen acceptance test, or a fix that needs behavior
+     (validation, a new error path) that no criterion describes -> step 9;
    - not worth fixing -> tell the user in one line, then go on.
    After any fix, go back to 8.1. Max 2 review rounds: after that, list the remaining
    findings to the user and let them decide.
 4. Then `sdd set-status <id> verified`, `sdd checkpoint <id> --phase sync -m "chore(<id>): verified"`,
    then `sdd sync <id> --dry-run`, then
-   `sdd sync <id>`. Sync merges the spec and invariant deltas into the specs/ OKF bundle
-   (`specs/<capability>/`, `specs/invariants/<category>/`, regenerated indexes, `log.md`),
-   accepts the ADRs and archives the change. If sync refuses with a `specs bundle:` error
-   (e.g. a project still on the old `spec.md` layout), run the `bundle` tool on `specs` with
-   `fix: true` and commit that first. If sync reports CONFLICT, another change modified the same REQ first: resume
-   spec-author to rebase the delta (`delta-stub` again), back to Gate 1 for that REQ only.
+   `sdd sync <id>`. Sync writes the new concepts and merges each CapabilityDelta unit by
+   unit into the specs/ OKF bundle (status `stable`, regenerated indexes, `log.md`), accepts
+   the ADRs (status `stable`) and archives the change. If sync refuses with a `specs bundle:`
+   error, run the `bundle` tool on `specs` (with `fix: true` for what it marks fixable) and
+   commit that first; old REQ/INV concepts must be rewritten by hand. If sync reports
+   CONFLICT, another change modified the same criterion, section or invariant first: resume
+   spec-author to rebase that unit (`delta-stub` again), back to Gate 1 for it only.
 5. `sdd finish <id>`: marks the phase done, commits the synced specs/ADRs/archive, pushes
    and marks the PR ready for review (merging stays with the user). Report to the user in
-   3 lines: what changed, REQ ids, anything deferred, plus the PR link.
+   3 lines: what changed, criterion and invariant ids, anything deferred, plus the PR link.
 
 ## 9. Reopen (failure path)
-A wrong or untestable REQ goes back to the spec, never into the code or the tests.
+A wrong or untestable criterion or invariant goes back to the spec, never into the code or the tests.
 `sdd set-status <id> draft`, `sdd checkpoint <id> --phase spec -m "chore(<id>): reopen spec"`,
 resume spec-author with the BLOCKED report, then Gate 1 for
-the affected REQs only, then re-plan the affected tasks, re-run their test tasks
+the affected units only, then re-plan the affected tasks, re-run their test tasks
 (re-freeze), then implementation.
-A `size: fix` change has no spec-author to resume: when it needs behavior no REQ
-describes, re-triage it as a full change. Set `size: change` in intent.md,
+A `size: fix` change has no spec-author to resume: when it needs behavior no
+criterion describes, re-triage it as a full change. Set `size: change` in intent.md,
 `sdd set-status <id> draft`, `sdd checkpoint <id> --phase spec -m "chore(<id>): re-triage as change"`,
 start spec-author with the finding, then step 3.
 

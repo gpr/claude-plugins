@@ -7,8 +7,9 @@ const ROOT = '/repo'
 const STATUS: Record<string, string> = {
   'changes/c1/intent.md': 'draft',
   'changes/c2/intent.md': 'implementing',
-  'adr/ADR-0001-x.md': 'accepted',
-  'adr/ADR-0002-y.md': 'proposed',
+  'adrs/0001_x.md': 'stable',
+  'adrs/0002_y.md': 'draft',
+  'adrs/0004_w.md': 'deprecated',
 }
 const look: Lookup = {
   changeStatus: async ch => STATUS[`changes/${ch}/intent.md`],
@@ -24,24 +25,25 @@ async function decide(role: Role, path: string) {
 const bash = (role: Role, cmd: string) => (checkBash(cmd, role, DEFAULT_CFG, [ROOT]) === undefined ? 'allow' : 'deny')
 
 const FILE_CASES: [Role, string, 'allow' | 'deny'][] = [
-  ['lead', 'specs/auth/spec.md', 'deny'],
+  ['lead', 'specs/capabilities/auth.md', 'deny'],
   ['lead', 'src/app.py', 'allow'],
-  ['lead', 'adr/ADR-0001-x.md', 'deny'],
-  ['lead', 'adr/ADR-0002-y.md', 'allow'],
+  ['lead', 'adrs/0001_x.md', 'deny'],
+  ['lead', 'adrs/0002_y.md', 'allow'],
+  ['lead', 'adrs/0004_w.md', 'deny'],
   ['lead', 'changes/c1/frozen.json', 'deny'],
   ['lead', 'changes/c1/state.json', 'deny'],
   ['planner', 'changes/c1/state.json', 'deny'],
   ['lead', 'changes/archive/2026-01-01-c0/intent.md', 'deny'],
   ['lead', '.claude/sdd.json', 'allow'],
-  ['spec-author', 'changes/c1/specs/auth.md', 'allow'],
+  ['spec-author', 'changes/c1/specs/capabilities/auth.md', 'allow'],
   ['spec-author', 'changes/c1/intent.md', 'allow'],
-  ['spec-author', 'changes/c2/specs/auth.md', 'deny'],
-  ['spec-author', 'adr/ADR-0003-z.md', 'allow'],
+  ['spec-author', 'changes/c2/specs/capabilities/auth.md', 'deny'],
+  ['spec-author', 'adrs/0003_z.md', 'allow'],
   ['spec-author', 'src/app.py', 'deny'],
   ['spec-author', 'changes/c1/plan.md', 'deny'],
   ['planner', 'changes/c1/plan.md', 'allow'],
   ['planner', 'changes/c2/tasks.md', 'deny'],
-  ['planner', 'changes/c1/specs/auth.md', 'deny'],
+  ['planner', 'changes/c1/specs/capabilities/auth.md', 'deny'],
   ['acceptance-tester', 'tests/acceptance/test_a.py', 'allow'],
   ['acceptance-tester', 'changes/c2/tasks.md', 'allow'],
   ['acceptance-tester', 'src/app.py', 'deny'],
@@ -49,7 +51,7 @@ const FILE_CASES: [Role, string, 'allow' | 'deny'][] = [
   ['implementer', 'tests/acceptance/test_a.py', 'deny'],
   ['implementer', 'tests/acceptance/../acceptance/test_a.py', 'deny'],
   ['implementer', 'changes/c2/tasks.md', 'allow'],
-  ['implementer', 'changes/c2/specs/auth.md', 'deny'],
+  ['implementer', 'changes/c2/specs/capabilities/auth.md', 'deny'],
   ['implementer', '.claude/settings.json', 'deny'],
   ['verifier', 'src/app.py', 'deny'],
   ['verifier', '.claude/agent-memory/sdd-verifier/MEMORY.md', 'allow'],
@@ -110,8 +112,8 @@ describe('status changes stay in sdd', () => {
     expect(await write('spec-author', 'changes/c1/intent.md', '---\nstatus: draft\n---\n# x')).toBeUndefined()
   })
   test('spec-author cannot accept its own ADR', async () => {
-    expect(await write('spec-author', 'adr/ADR-0002-y.md', 'status: accepted')).toBeDefined()
-    expect(await write('spec-author', 'adr/ADR-0003-z.md', '---\nstatus: proposed\n---')).toBeUndefined()
+    expect(await write('spec-author', 'adrs/0002_y.md', 'status: stable')).toBeDefined()
+    expect(await write('spec-author', 'adrs/0003_z.md', '---\nstatus: draft\n---')).toBeUndefined()
   })
   test('the lead may still edit status by hand', async () =>
     expect(await write('lead', 'changes/c1/intent.md', 'status: approved')).toBeUndefined())
@@ -165,6 +167,8 @@ describe('bundle tool', () => {
     expect(checkBundle('specs', true, 'lead')).toBeUndefined()
     expect(checkBundle('specs', true, 'spec-author')).toBeDefined()
     expect(checkBundle('specs', true, 'implementer')).toBeDefined()
+    expect(checkBundle('adrs', true, 'lead')).toBeUndefined()
+    expect(checkBundle('adrs', true, 'spec-author')).toBeDefined()
   })
   test('fixing a change is for the lead and the spec-author', () => {
     expect(checkBundle('c1', true, 'lead')).toBeUndefined()
@@ -181,14 +185,14 @@ describe('bundle tool', () => {
 describe('bundle files stay generated', () => {
   const write = (role: Role, rel: string) => checkPath(rel, role, DEFAULT_CFG, look, 'x')
   test('nobody but sdd writes the specs bundle or a change index', async () => {
-    expect(await write('lead', 'specs/auth/index.md')).toBeDefined()
-    expect(await write('lead', 'specs/invariants/security/logging.md')).toBeDefined()
+    expect(await write('lead', 'specs/capabilities/index.md')).toBeDefined()
+    expect(await write('lead', 'specs/invariants/no_secrets.md')).toBeDefined()
     for (const role of ['spec-author', 'planner', 'implementer'] as const) {
       expect(await write(role, 'changes/c1/index.md')).toBeDefined()
     }
   })
   test('spec-author writes deltas in capability and invariant directories', async () => {
-    expect(await write('spec-author', 'changes/c1/specs/auth/tokens.md')).toBeUndefined()
-    expect(await write('spec-author', 'changes/c1/specs/invariants/security/logging.md')).toBeUndefined()
+    expect(await write('spec-author', 'changes/c1/specs/capabilities/auth/tokens.md')).toBeUndefined()
+    expect(await write('spec-author', 'changes/c1/specs/invariants/no_secrets.md')).toBeUndefined()
   })
 })

@@ -12,7 +12,7 @@ export type Cfg = {
 export const DEFAULT_CFG: Cfg = {
   specs_dir: 'specs',
   changes_dir: 'changes',
-  adr_dir: 'adr',
+  adr_dir: 'adrs',
   acceptance_dir: 'tests/acceptance',
 }
 
@@ -123,8 +123,8 @@ export async function checkPath(
   if (under(rel, C) && rel.endsWith('/state.json')) return `${rel}: written only by \`sdd start\`, \`checkpoint\`, \`set-pr\` and \`finish\`.`
   const isAdr = under(rel, A) && rel !== A
   const adrSt = isAdr ? await look.adrStatus(rel) : undefined
-  if (adrSt === 'accepted' || adrSt === 'superseded' || adrSt === 'deprecated') {
-    return `${rel}: this ADR is ${adrSt}. Write a new one with \`sdd adr-new <title> --supersedes ADR-NNNN\`.`
+  if (adrSt === 'stable' || adrSt === 'deprecated') {
+    return `${rel}: this ADR is ${adrSt === 'stable' ? 'accepted (stable)' : 'deprecated'}. Write a new one with \`sdd adr-new <title> --supersedes ADR-NNNN\`.`
   }
   if (role === 'lead') return undefined
   // every subagent
@@ -135,7 +135,7 @@ export async function checkPath(
   const isTopLevelOfChange = ch !== undefined && rel === `${C}/${ch}/${name}`
   const chStatus = async () => (ch ? await look.changeStatus(ch) : undefined)
   if (written !== undefined) {
-    if (isAdr && statusesIn(written).some(s => s !== (adrSt ?? 'proposed'))) {
+    if (isAdr && statusesIn(written).some(s => s !== (adrSt ?? 'draft'))) {
       return `${rel}: ADR status changes only through \`sdd adr-accept\` (lead).`
     }
     if (isTopLevelOfChange && name === 'intent.md') {
@@ -155,7 +155,7 @@ export async function checkPath(
           ? undefined
           : `change ${ch} is ${st}: its spec is frozen. Ask the lead to reopen it.`
       }
-      return `${rel}: spec-author writes only intent.md, the spec delta and proposed ADRs.`
+      return `${rel}: spec-author writes only intent.md, the spec delta and draft ADRs.`
     }
     case 'planner': {
       if (isTopLevelOfChange && (name === 'plan.md' || name === 'tasks.md')) {
@@ -169,11 +169,11 @@ export async function checkPath(
       return `${rel}: acceptance-tester writes only under ${T}/ and tasks.md.`
     case 'implementer':
       if (under(rel, T)) {
-        return `${rel}: acceptance tests are frozen. If one is wrong, stop and report BLOCKED with the REQ id.`
+        return `${rel}: acceptance tests are frozen. If one is wrong, stop and report BLOCKED with its id (capabilities/<id>#AC-NN or invariants/<id>).`
       }
       if (under(rel, A)) return `${rel}: decisions are not changed during implementation. Report BLOCKED.`
       if (under(rel, C) && !(isTopLevelOfChange && name === 'tasks.md')) {
-        return `${rel}: the spec is frozen. Report BLOCKED with the REQ id instead.`
+        return `${rel}: the spec is frozen. Report BLOCKED with the criterion or invariant id instead.`
       }
       return undefined
     case 'verifier':
@@ -251,14 +251,16 @@ export function checkSdd(sub: string | undefined, role: Role): string | undefine
 
 /**
  * Deny reason for the `bundle` tool, or undefined. Checking is open to every role. `--fix` on
- * the living `specs` bundle is lead-only (only the lead's call may write specs/); on a change it
- * is open to the lead and the spec-author: it only touches front matter, delta locations and the
- * generated index, never the text of a requirement.
+ * the living `specs` and `adrs` bundles is lead-only (only the lead's call may write them); on a
+ * change it is open to the lead and the spec-author: it only touches front matter and the
+ * generated indexes, never the text of a criterion or an invariant.
  */
 export function checkBundle(target: string | undefined, fix: boolean, role: Role): string | undefined {
-  if (target === undefined || target === '') return 'give the target: "specs" or a change id.'
+  if (target === undefined || target === '') return 'give the target: "specs", "adrs" or a change id.'
   if (!fix) return undefined
-  if (target === 'specs') return role === 'lead' ? undefined : `\`bundle specs --fix\` is run by the lead only, not ${role}.`
+  if (target === 'specs' || target === 'adrs') {
+    return role === 'lead' ? undefined : `\`bundle ${target} --fix\` is run by the lead only, not ${role}.`
+  }
   return role === 'lead' || role === 'spec-author' ? undefined : `\`bundle ${target} --fix\` is run by lead or spec-author only, not ${role}.`
 }
 

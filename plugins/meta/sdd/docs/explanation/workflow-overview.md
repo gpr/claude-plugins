@@ -8,7 +8,7 @@ sources:
   - resource: ../../README.md
 generated:
   by: claude-code
-  at: 2026-10-17T00:00:00Z
+  at: 2026-10-18T00:00:00Z
 ---
 
 # How the workflow fits together
@@ -25,7 +25,7 @@ flowchart TD
     G1 -- change --> SA
     G1 -- approve --> PL["planner<br/>plan.md, tasks.md"]
 
-    S2 --> PL2["planner"] & AT2["acceptance-tester<br/>test on the existing REQ"]
+    S2 --> PL2["planner"] & AT2["acceptance-tester<br/>test on the existing criterion"]
     PL2 & AT2 --> G2
 
     PL --> G2{{"GATE 2<br/>sdd check, automatic"}}
@@ -35,14 +35,14 @@ flowchart TD
     IM --> VE["verifier<br/>frozen, suites, trace, diff"]
     VE -- PASS --> CR["code-review"]
     VE -- "FAIL: code" --> IM
-    CR -- "bug in a REQ's behavior" --> IM
+    CR -- "bug in a criterion's behavior" --> IM
     CR -- clean --> SY["sdd sync<br/>delta into specs/, ADRs accepted, archive"]
     SY --> FI["sdd finish<br/>PR ready"] --> M([you merge])
 
-    AT -. "scenario untestable" .-> RO
-    IM -. "BLOCKED: REQ" .-> RO
+    AT -. "criterion untestable" .-> RO
+    IM -. "BLOCKED: criterion" .-> RO
     VE -. "FAIL: spec" .-> RO
-    CR -. "needs behavior no REQ has" .-> RO
+    CR -. "needs behavior no criterion has" .-> RO
     RO["reopen: status draft"] -.-> SA
 
     classDef gate fill:#fde68a,stroke:#b45309,color:#000
@@ -55,7 +55,7 @@ Solid arrows are the normal path and dotted arrows the failure path. Each box en
 
 ## The spec is the contract, not the code
 
-The living spec in `specs/` says what the system does now, one requirement (REQ) per observable behavior, each with concrete scenarios. A change never edits it directly. It proposes a **delta** (ADDED, MODIFIED, REMOVED), and the delta is merged only when the change is verified. So at any time `specs/` describes merged behavior, and an open change describes only its own difference.
+The living spec in `specs/` says what the system does now, as OKF concepts: a **Capability** per thing an actor can do, with one acceptance criterion (`AC-NN`, Given/When/Then) per observable behavior, and an **Invariant** per rule that must always hold, with a check that passes on an example and fails on a violation. A change never edits them directly. It proposes new concepts or a **delta** (criteria ADDED, MODIFIED, RETIRED, sections replaced), and the delta is merged only when the change is verified. So at any time `specs/` describes merged behavior, and an open change describes only its own difference.
 
 Decisions with lasting consequences go into ADRs. An ADR is never edited once accepted: a new ADR supersedes it. The reasoning behind a past decision therefore stays readable.
 
@@ -64,20 +64,20 @@ Decisions with lasting consequences go into ADRs. An ADR is never edited once ac
 Not every request deserves the full workflow. The lead sorts each one into one of three paths:
 
 - **Full change**: it changes observable behavior or a public contract, or makes a lasting decision. It gets a spec delta and possibly ADRs.
-- **Fix**: the code diverges from an existing REQ. No new spec is needed, since the REQ already says what is right. The lead writes a failing acceptance test against that REQ first.
+- **Fix**: the code diverges from an existing criterion. No new spec is needed, since the criterion already says what is right. The lead writes a failing acceptance test against it first.
 - **Direct**: refactors, renames, dependency bumps, docs, config. One agent does it and runs the unit tests.
 
 Without triage, either trivial work drowns in ceremony or real behavior changes slip through without a spec.
 
 ## Two gates of different weight
 
-**Gate 1** is the only place where you have to read carefully. You review the why, the requirements with their scenarios, and the decisions. Everything downstream (plan, tests, code) is derived from what you approve here, so this is where a misunderstanding is cheapest to fix.
+**Gate 1** is the only place where you have to read carefully. You review the why, the capabilities with their criteria, the invariants, and the decisions. Everything downstream (plan, tests, code) is derived from what you approve here, so this is where a misunderstanding is cheapest to fix.
 
-**Gate 2** is automatic: `sdd check` proves that every requirement has a scenario, a test task and an implementation task, and that every reference resolves. You see a summary and may object, but it's built not to need you.
+**Gate 2** is automatic: `sdd check` proves that every criterion has Given/When/Then, a test task and an implementation task, that every invariant has a check and a test task, and that every reference resolves. You see a summary and may object, but it's built not to need you.
 
 ## Tests outside, TDD inside
 
-The acceptance-tester writes tests from the scenarios and the plan's Contracts **before** any code exists, confirms they fail for the right reason, and freezes them. Implementers then make those frozen tests pass, each with its own red-green-refactor loop of unit tests.
+The acceptance-tester writes tests from the criteria and the plan's Contracts **before** any code exists, confirms they fail for the right reason, and freezes them. Implementers then make those frozen tests pass, each with its own red-green-refactor loop of unit tests.
 
 Two things follow:
 - The acceptance tests come from the spec, not from the implementation, so they can't be quietly bent to fit the code. The guard and `verify-frozen` enforce this.
@@ -85,11 +85,11 @@ Two things follow:
 
 ## Failure goes back to the spec
 
-When an implementer finds a REQ wrong, contradictory or untestable, it stops with `BLOCKED: REQ-...`. The lead reopens the spec (status back to `draft`), the spec-author fixes it, and you see Gate 1 again for the affected REQs only. The fix never happens in the code or the tests. That keeps the spec true: a REQ that couldn't be implemented as written is corrected where everyone reads it.
+When an implementer finds a criterion wrong, contradictory or untestable, it stops with `BLOCKED: <id>`. The lead reopens the spec (status back to `draft`), the spec-author fixes it, and you see Gate 1 again for the affected units only. The fix never happens in the code or the tests. That keeps the spec true: a criterion that couldn't be implemented as written is corrected where everyone reads it.
 
 ## Verify, review, sync
 
-The verifier checks conformance: frozen tests untouched, suites green, full traceability, and a diff review against the spec, the ADRs and the non-goals. Since conformance doesn't catch bugs outside the scenarios, a `code-review` pass follows. Its findings go to an implementer (test first) or back to the spec.
+The verifier checks conformance: frozen tests untouched, suites green, full traceability, and a diff review against the spec, the ADRs and the non-goals. Since conformance doesn't catch bugs outside the criteria, a `code-review` pass follows. Its findings go to an implementer (test first) or back to the spec.
 
 Only then does `sdd sync` merge the delta into `specs/`, accept the ADRs and archive the change. It does this deterministically, as described in [Why sdd.py exists](determinism.md).
 

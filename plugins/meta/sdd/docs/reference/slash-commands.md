@@ -9,7 +9,7 @@ sources:
   - resource: ../../skills/change/SKILL.md
 generated:
   by: claude-code
-  at: 2026-10-17T00:00:00Z
+  at: 2026-10-18T00:00:00Z
 ---
 
 # Slash commands, band and panes
@@ -46,7 +46,7 @@ The active change is the one whose branch (`sdd/<id>`, made by `sdd start`) is c
 ## Status pane (`/sdd`)
 
 - Header: open count, running agents, archived count.
-- The active change in full: id, status, PR, branch; its title; its phase label and hint; a 12-cell progress bar; every task, done ones dimmed, with all its REQs (`[ ] T3 impl REQ-AUTH-004 REQ-AUTH-005`); its ADRs; `requires`; the last check, with its ERROR/WARN lines (up to 12).
+- The active change in full: id, status, PR, branch; its title; its phase label and hint; a 12-cell progress bar; every task, done ones dimmed, with all its citations (`[ ] T3 impl capabilities/auth/tokens#AC-04`); its ADRs; `requires`; the last check, with its ERROR/WARN lines (up to 12).
 - The other open changes in status groups (`implementing`, `verified`, `approved`, `draft`, then any other status), folded at first. A folded group is one line: `▸ approved (3) add-login, add-sso, fix-typo · 1 check failed`. Press the header, or its digit (`1` for the first group) while the pane has focus, to unfold it (`▾`). An unfolded group lists its changes one line each: phase, tasks, PR, requires, check result, plus the ERROR lines of a failed check. Groups stay unfolded for the session.
 - Running workflow agents with their description.
 - The last guard refusal.

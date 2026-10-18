@@ -8,7 +8,7 @@ sources:
   - resource: ../../skills/change/SKILL.md
 generated:
   by: claude-code
-  at: 2026-10-17T00:00:00Z
+  at: 2026-10-18T00:00:00Z
 ---
 
 # Make a change depend on another
@@ -66,6 +66,6 @@ sdd requires add-sso --clear
 
 Or list only the ones that remain.
 
-## A REQ that exists only in a dependency
+## A criterion that exists only in a dependency
 
-If the spec-author needs to MODIFY a REQ that only exists in an unmerged dependency, `delta-stub` fails because the REQ isn't in the living specs yet. It reports that as an open question rather than re-ADDing the REQ. The fix is to wait for the dependency to merge.
+If the spec-author needs to modify a criterion or invariant that only exists in an unmerged dependency, `delta-stub` fails because it isn't in the living specs yet. It reports that as an open question rather than adding it again. The fix is to wait for the dependency to merge.

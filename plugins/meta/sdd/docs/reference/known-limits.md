@@ -9,7 +9,7 @@ sources:
   - resource: ../../hooks/guard.ts
 generated:
   by: claude-code
-  at: 2026-10-17T00:00:00Z
+  at: 2026-10-18T00:00:00Z
 ---
 
 # Known limits
@@ -24,4 +24,4 @@ generated:
 | The Bash guard is a heuristic on the command text. | `sdd verify-frozen` (verifier, and ideally CI) is the real enforcement. See [Run verify-frozen in CI](../how-to/run-verify-frozen-in-ci.md). |
 | The band and panes refresh on workflow events and every 30 s. Edits made outside Claude Code show late. | `/sdd refresh`. |
 | Front matter is parsed line by line, not as YAML. | Keep `key: value` lines and inline `[a, b]` lists. |
-| Acceptance coverage is a text search for the exact REQ id. | Tag tests with the hyphenated id in a comment or docstring. |
+| Acceptance coverage is a text search for the exact citation (`capabilities/<id>#AC-NN`, `invariants/<id>`). | Cite it in a comment or docstring; a test name cannot hold `/` or `#`. |

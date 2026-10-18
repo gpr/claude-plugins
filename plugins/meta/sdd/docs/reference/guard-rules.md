@@ -9,7 +9,7 @@ sources:
   - resource: ../../tests/guard.test.ts
 generated:
   by: claude-code
-  at: 2026-10-17T00:00:00Z
+  at: 2026-10-18T00:00:00Z
 ---
 
 # Guard rules
@@ -36,7 +36,7 @@ The checks run in this order (`checkPath`). The first one that matches decides:
 
 ```mermaid
 flowchart TD
-    W([write to path]) --> P{"specs/, archive, frozen.json,<br/>state.json, or a non-proposed ADR?"}
+    W([write to path]) --> P{"specs/, archive, frozen.json,<br/>state.json, or a stable/deprecated ADR?"}
     P -- yes --> X1[refuse: everyone]
     P -- no --> L{"role = lead?"}
     L -- yes --> A1[allow]
@@ -65,7 +65,7 @@ The status-line check only refuses a `status:` value that differs from the curre
 | `changes/archive/**` | refused: archived changes are immutable |
 | `changes/**/frozen.json` | refused: written only by `sdd freeze` |
 | `changes/**/state.json` | refused: written only by `sdd.py` |
-| `adr/*` with `status:` `accepted`, `superseded` or `deprecated` | refused: write a superseding ADR with `sdd adr-new <title> --supersedes ADR-NNNN` |
+| `adrs/*` with `status:` `stable` (accepted) or `deprecated` | refused: write a superseding ADR with `sdd adr-new <title> --supersedes ADR-NNNN` |
 
 The lead passes every other write.
 
@@ -75,17 +75,17 @@ The lead passes every other write.
 |---|---|
 | its own memory dirs `.claude/agent-memory/sdd-<role>/`, `.claude/agent-memory-local/sdd-<role>/` | allowed (workflow roles only) |
 | any other path under `.claude/` | refused |
-| a write to an ADR that puts a `status:` line different from the ADR's current status (`proposed` if none) | refused: ADR status moves only through `sdd adr-accept` |
+| a write to an ADR that puts a `status:` line different from the ADR's current status (`draft` if none) | refused: ADR status moves only through `sdd adr-accept` |
 | a write to `changes/<c>/intent.md` that puts a `status:` line different from the change's current status | refused: status moves only through `sdd set-status` |
 
 ### Per role
 
 | Role | May write | While |
 |---|---|---|
-| `spec-author` | `adr/**`; `changes/<c>/intent.md`; `changes/<c>/specs/**` (spec and invariant deltas, nested under capability or category) | intent and delta only while the change is `draft` (or has no status yet). The generated `changes/<c>/index.md` is not writable: it comes from `sdd` |
+| `spec-author` | `adrs/**`; `changes/<c>/intent.md`; `changes/<c>/specs/**` (new concepts and CapabilityDeltas under `capabilities/` and `invariants/`) | intent and delta only while the change is `draft` (or has no status yet). The generated `changes/<c>/index.md` is not writable: it comes from `sdd` |
 | `planner` | `changes/<c>/plan.md`, `changes/<c>/tasks.md` | change is `draft` or `approved` |
 | `acceptance-tester` | `tests/acceptance/**`, `changes/<c>/tasks.md` | any status |
-| `implementer` | anything except `tests/acceptance/**`, `adr/**` and `changes/**` (but `changes/<c>/tasks.md` is allowed) | any status |
+| `implementer` | anything except `tests/acceptance/**`, `adrs/**` and `changes/**` (but `changes/<c>/tasks.md` is allowed) | any status |
 | `verifier` | nothing (its memory dirs aside) | — |
 | `other` | anything not covered by the rules above | — |
 
@@ -98,7 +98,7 @@ The lead's Bash calls are not checked. For subagents:
 3. Otherwise every word containing `/` or ending in `.md` is resolved as a path (relative to the cwd), and:
    - `verifier`: refused.
    - `implementer`: refused if it is under `tests/acceptance/`, or under `changes/` and not a `tasks.md`.
-   - any subagent: refused if it is under `specs/`, `adr/`, `.claude/`, `changes/archive/`, or is a `frozen.json` / `state.json` under `changes/`.
+   - any subagent: refused if it is under `specs/`, `adrs/`, `.claude/`, `changes/archive/`, or is a `frozen.json` / `state.json` under `changes/`.
 
 This check is a heuristic backstop. `sdd verify-frozen`, run by the verifier and ideally in CI, is the real enforcement for the acceptance tests.
 

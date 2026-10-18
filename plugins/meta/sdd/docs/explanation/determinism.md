@@ -9,23 +9,23 @@ sources:
   - resource: ../../README.md
 generated:
   by: claude-code
-  at: 2026-10-17T00:00:00Z
+  at: 2026-10-18T00:00:00Z
 ---
 
 # Why sdd.py exists
 
-A language model is good at writing a requirement. It is bad at copying one exactly: it rephrases, drops a clause, or reorders scenarios. In a workflow where the spec is the contract, a silent paraphrase is a bug nobody reviewed. So every operation that must be exact is done by `tools/sdd.py`, a plain Python script with no model calls, and agents only read its terse output.
+A language model is good at writing a requirement. It is bad at copying one exactly: it rephrases, drops a clause, or reorders criteria. In a workflow where the spec is the contract, a silent paraphrase is a bug nobody reviewed. So every operation that must be exact is done by `tools/sdd.py`, a plain Python script with no model calls, and agents only read its terse output.
 
 ## Sync merges by id, never by prose
 
-`sdd sync` takes each delta block and applies it by REQ or INV id to its concept file. MODIFIED replaces the whole block with the delta's text (or moves it to another concept of the same capability), REMOVED drops it, ADDED appends it, and then the blocks are sorted by id; the indexes and `specs/log.md` are regenerated. Nothing is summarised or rewritten. The text you approved at Gate 1 is the text that lands in `specs/`.
+`sdd sync` writes each new concept as it was approved and merges each CapabilityDelta by unit: MODIFIED replaces the whole criterion with the delta's text, RETIRED keeps only its heading and the reason (so the id is never reused), ADDED inserts it, SECTIONS replace whole sections, and then the criteria are sorted by id; the indexes and `specs/log.md` are regenerated. Nothing is summarised or rewritten. The text you approved at Gate 1 is the text that lands in `specs/`.
 
 ## Base hashes turn races into conflicts
 
-Two open changes may modify the same requirement. When the spec-author runs `delta-stub`, the script copies the living block and records an 8-character hash of it as `<!-- base: ... -->`. If another change syncs first and edits that REQ, the hashes differ, and `sdd check` and `sdd sync` fail with:
+Two open changes may modify the same criterion. When the spec-author runs `delta-stub`, the script copies the living criterion (or section, or invariant) and records an 8-character hash of it as `<!-- base: ... -->`. If another change syncs first and edits that unit, the hashes differ, and `sdd check` and `sdd sync` fail with:
 
 ```
-ERROR changes/polite-greeting/specs/greet/greeting.md REQ-GREET-001: CONFLICT base f1452e6a != current 59e67d47 (living spec changed since this delta was written)
+ERROR changes/polite-greeting/specs/capabilities/greeting.md capabilities/greeting#AC-01: CONFLICT base f1452e6a != current 59e67d47 (living spec changed since this delta was written)
 ```
 
 ```mermaid
@@ -33,22 +33,22 @@ sequenceDiagram
     participant A as change A
     participant S as specs/greet/greeting.md
     participant B as change B
-    A->>S: delta-stub REQ-GREET-001
+    A->>S: delta-stub greeting#AC-01
     S-->>A: copy + base f1452e6a
-    B->>S: delta-stub REQ-GREET-001
+    B->>S: delta-stub greeting#AC-01
     S-->>B: copy + base f1452e6a
     A->>S: sync (base matches)
-    Note over S: REQ-GREET-001 now hashes 59e67d47
+    Note over S: AC-01 now hashes 59e67d47
     B->>S: check / sync
     S-->>B: CONFLICT base f1452e6a != current 59e67d47
-    Note over B: re-stub, re-edit, Gate 1 for that REQ
+    Note over B: re-stub, re-edit, Gate 1 for that criterion
 ```
 
-Without this, the second sync would silently overwrite the first change's work. The hash ignores trailing whitespace, so reformatting alone is not a conflict. Agents are told never to edit a hash: a conflict is real information, and the fix is to re-stub and re-review that REQ.
+Without this, the second sync would silently overwrite the first change's work. The hash ignores trailing whitespace, so reformatting alone is not a conflict. Agents are told never to edit a hash: a conflict is real information, and the fix is to re-stub and re-review that unit. Units are small on purpose: two changes that touch different criteria of one capability do not conflict.
 
 ## Traceability is checked, not hoped for
 
-`sdd check` fails when a REQ has no scenario, no test task or no implementation task, or when anything points at a REQ, ADR or task that doesn't exist. `check --tests` adds that every REQ has an acceptance test mentioning it and every task is ticked. Gate 2 can be automatic because of this. "Is everything covered?" is a question with a mechanical answer, so nobody has to judge it.
+`sdd check` fails when a criterion has no Given/When/Then, no test task or no implementation task, an invariant has no check or no test task, or anything points at a criterion, invariant, ADR or task that doesn't exist. `check --tests` adds that every one has an acceptance test citing it and every task is ticked. Gate 2 can be automatic because of this. "Is everything covered?" is a question with a mechanical answer, so nobody has to judge it.
 
 ## Freezing makes "don't touch the tests" verifiable
 
@@ -56,7 +56,7 @@ Without this, the second sync would silently overwrite the first change's work. 
 
 ## Context bundles are computed, not chosen
 
-`sdd context` assembles each agent's input from the files: the REQ blocks a task cites, the ADR Decision paragraphs, and the plan's Contracts or the whole plan. An agent therefore can't receive a stale or paraphrased copy of the requirement it works on. See [Context bundles](context-bundles.md).
+`sdd context` assembles each agent's input from the files: the criteria and invariants a task cites, the ADR Decision paragraphs, and the plan's Contracts or the whole plan. An agent therefore can't receive a stale or paraphrased copy of the requirement it works on. See [Context bundles](context-bundles.md).
 
 ## Git and gh calls are scripted too
 

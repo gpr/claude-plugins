@@ -43,10 +43,10 @@ The caller's role comes from the tool call's `agentId` (see [Guard rules](guard-
 | `delta-new`, `delta-stub`, `adr-new` | ✓ | ✓ | | | | | |
 | `config`, `status`, `check`, `context`, `verify-frozen`, `deps` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `bundle <target>` (check only) | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `bundle specs --fix` | ✓ | | | | | | |
+| `bundle specs --fix`, `bundle adrs --fix` | ✓ | | | | | | |
 | `bundle <change> --fix` | ✓ | ✓ | | | | | |
 
-A refusal reads ``[sdd] `sdd <sub>` is run by <roles> only, not <role>.`` `bundle` is not in `SDD_RULES`: `checkBundle` decides it, from the target and the `--fix` flag (`--fix` may sit anywhere in `args`). Refusals: ``[sdd] `bundle specs --fix` is run by the lead only, not <role>.``, ``[sdd] `bundle <id> --fix` is run by lead or spec-author only, not <role>.``, `bundle` with other than one target is `usage: bundle <specs|change> [--fix]`.
+A refusal reads ``[sdd] `sdd <sub>` is run by <roles> only, not <role>.`` `bundle` is not in `SDD_RULES`: `checkBundle` decides it, from the target and the `--fix` flag (`--fix` may sit anywhere in `args`). Refusals: ``[sdd] `bundle specs --fix` is run by the lead only, not <role>.`` (`adrs` alike), ``[sdd] `bundle <id> --fix` is run by lead or spec-author only, not <role>.``, `bundle` with other than one target is `usage: bundle <specs|adrs|change> [--fix]`.
 
 If the tool's handler throws, the call is refused with `[sdd] the sdd tool failed unexpectedly; retry once, then tell the lead.`
 
@@ -58,7 +58,7 @@ If the tool's handler throws, the call is refused with `[sdd] the sdd tool faile
 { "target": "add-login", "fix": true }
 ```
 
-`target` (required): `specs` or a change id. `fix` (optional, default false): repair what is marked `[fixable]`. The role rule is the one in the table above: checking is open to all, `--fix` on `specs` is lead-only (only the lead may write `specs/`), `--fix` on a change is lead or spec-author (it touches front matter, delta locations and the generated index, never a requirement's text). A call without `target` is refused: `give the target: "specs" or a change id.` A throwing handler is refused with `[sdd] the bundle tool failed unexpectedly; retry once, then tell the lead.` After a `fix`, the band and panes refresh.
+`target` (required): `specs`, `adrs` or a change id. `fix` (optional, default false): repair what is marked `[fixable]`. The role rule is the one in the table above: checking is open to all, `--fix` on `specs` or `adrs` is lead-only (only the lead may write them), `--fix` on a change is lead or spec-author (it touches front matter and the generated indexes, never the text of a criterion or invariant). A call without `target` is refused: `give the target: "specs", "adrs" or a change id.` A throwing handler is refused with `[sdd] the bundle tool failed unexpectedly; retry once, then tell the lead.` After a `fix`, the band and panes refresh.
 
 The spec-author has this tool; it runs it on its change before handing back.
 

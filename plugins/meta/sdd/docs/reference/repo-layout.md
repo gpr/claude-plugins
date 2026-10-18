@@ -9,29 +9,29 @@ sources:
   - resource: ../../hooks/guard.ts
 generated:
   by: claude-code
-  at: 2026-10-17T00:00:00Z
+  at: 2026-10-18T00:00:00Z
 ---
 
 # Repository layout
 
-Default directory names; each is configurable (see [Configuration](configuration.md)). `specs/` and each change are OKF bundles: see [OKF bundles](bundles.md).
+Default directory names; each is configurable (see [Configuration](configuration.md)). `specs/`, `adrs/` and each change are OKF bundles: see [OKF bundles](bundles.md).
 
 ```
-specs/index.md, specs/log.md             generated: index of the bundle, one line per sync
-specs/<capability>/index.md              generated: the capability's concepts and REQ ids
-specs/<capability>/<concept>.md          living spec: what the system does now, a few REQs
-specs/invariants/<category>/<concept>.md living invariants: rules that always hold, a few INVs
-adr/ADR-NNNN-<slug>.md                   one decision per file
-changes/<id>/index.md                    generated: the change's files and delta ids
+specs/index.md, specs/log.md             generated: okf index of the bundle, one log line per sync
+specs/capabilities/<id>.md               living Capability: what an actor can do, criteria AC-NN
+specs/invariants/<id>.md                 living Invariant: one rule that always holds, with its check
+specs/.templates/                        Capability and Invariant templates (not concepts)
+adrs/NNNN_<slug>.md                      one decision per file; adrs/index.md, log.md, .templates/
+changes/<id>/index.md                    generated: okf index of the change
 changes/<id>/intent.md                   why, scope, non-goals; front matter status/size/adrs
-changes/<id>/specs/<capability>/<concept>.md             spec delta, mirrors the living path
-changes/<id>/specs/invariants/<category>/<concept>.md    invariant delta
+changes/<id>/specs/capabilities/<id>.md  a new Capability, or a CapabilityDelta of a living one
+changes/<id>/specs/invariants/<id>.md    a new Invariant, or the replacement of a living one
 changes/<id>/plan.md                     approach, contracts, components, risks
 changes/<id>/tasks.md                    task checklist
 changes/<id>/frozen.json                 hashes of the frozen acceptance tests
 changes/<id>/state.json                  phase, branch, base, PR, requires
 changes/archive/<YYYY-MM-DD>-<id>/       a synced change, immutable
-tests/acceptance/                        acceptance tests tagged with REQ ids
+tests/acceptance/                        acceptance tests citing criterion and invariant ids
 .claude/sdd.json                         project configuration
 .claude/worktrees/sdd-<id>/              one worktree per change (git-ignored)
 .claude/agent-memory/sdd-<agent>/        per-agent project memory
@@ -44,12 +44,12 @@ How a change's files move at `sdd sync`:
 flowchart LR
     subgraph open ["changes/&lt;id&gt;/ (open)"]
         I[intent.md]
-        DL["specs/&lt;cap&gt;/&lt;concept&gt;.md<br/>delta"]
+        DL["specs/capabilities/, invariants/<br/>new concepts, CapabilityDeltas"]
         PT[plan.md, tasks.md]
         FJ[frozen.json, state.json]
     end
-    DL -- "ADDED / MODIFIED / REMOVED / MOVED<br/>by REQ or INV id" --> LS["specs/&lt;cap&gt;/&lt;concept&gt;.md<br/>+ index.md, log.md"]
-    I -- "adrs: [...]" --> ADR["adr/ADR-NNNN: proposed → accepted"]
+    DL -- "new concepts written; ADDED / MODIFIED / RETIRED<br/>criteria and SECTIONS merged by unit" --> LS["specs/capabilities/, specs/invariants/<br/>status stable, + index.md, log.md"]
+    I -- "adrs: [...]" --> ADR["adrs/NNNN_slug: draft → stable"]
     open -- "moved whole" --> AR["changes/archive/&lt;date&gt;-&lt;id&gt;/"]
 ```
 
@@ -60,10 +60,10 @@ Acceptance tests stay where they are in `tests/acceptance/` and become part of t
 | Path | Written by |
 |---|---|
 | `specs/**` | `sdd sync`; `sdd bundle specs --fix` (lead) for layout, front matter and indexes |
-| `adr/*` (proposed) | spec-author, via `sdd adr-new` then Edit |
-| ADR `status:` | `sdd adr-accept` / `sdd sync` |
+| `adrs/*` (draft) | spec-author, via `sdd adr-new` then Edit |
+| ADR `status:`, `adrs/index.md`, `adrs/log.md` | `sdd adr-new`, `sdd adr-accept` / `sdd sync` |
 | `intent.md` body, delta | spec-author, while `draft` |
-| `changes/<id>/index.md` | `sdd new`, `delta-new`, `delta-stub`, `bundle <id> --fix` |
+| `changes/<id>/**/index.md` | `sdd new`, `delta-new`, `delta-stub`, `checkpoint`, `sync`, `bundle <id> --fix` |
 | `intent.md` `status:` | `sdd set-status` / `sdd sync` |
 | `plan.md`, `tasks.md` | planner, while `draft` or `approved` |
 | task ticks in `tasks.md` | acceptance-tester and implementer, each its own task |

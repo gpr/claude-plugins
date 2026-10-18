@@ -6,9 +6,9 @@ workflow's state live.
 
 ```
 request ─► lead (/sdd:change) ─► triage ──direct──► general-purpose / lead
-                                  │ fix ──► failing test on the existing REQ ║ plan ─► implement ─► verify
+                                  │ fix ──► failing test on the existing AC  ║ plan ─► implement ─► verify
                                   ▼ change: sdd start (branch sdd/<id>, worktree, draft PR)
-                          sdd:spec-author ─► GATE 1 (you: intent, REQs, ADRs)
+                          sdd:spec-author ─► GATE 1 (you: intent, criteria, invariants, ADRs)
                                   ▼
                             sdd:planner ─► GATE 2 (sdd check, automatic)
                                   ▼
@@ -18,7 +18,7 @@ request ─► lead (/sdd:change) ─► triage ──direct──► general-pu
                                   ▼
                            sdd:verifier ─► PASS ─► code-review (findings ─► implementer / reopen)
                                   ▼
-                              sdd sync (delta → specs/, ADRs accepted, archive)
+                              sdd sync (concepts → specs/, ADRs accepted, archive)
                                   ▼
                               sdd finish (commit, push, PR ready)
 ```
@@ -35,7 +35,7 @@ Full documentation (tutorials, how-to guides, reference, explanation): [docs/ind
 
 Install it at **project** scope in the repos that use the workflow: the guard applies
 wherever the plugin is enabled, and at user scope it would block hand edits to `specs/`
-and `adr/` in every repo, and make every session's main conversation the lead.
+and `adrs/` in every repo, and make every session's main conversation the lead.
 
 Requires Python 3.9+ on PATH (for `tools/sdd.py`, no dependencies).
 
@@ -43,42 +43,45 @@ Local test: `claude --plugin-dir ./plugins/meta/sdd`
 
 In a repo, just describe the change: the main conversation is the lead and runs the
 workflow (`/sdd:change <what you want>` does the same explicitly). The first run calls `sdd init`, which
-creates `specs/ adr/ changes/ tests/acceptance/` (`specs/` as an OKF bundle with `index.md`
-and `log.md`) and `.claude/sdd.json`: set `acceptance_cmd` and `unit_cmd` there.
+creates `specs/ adrs/ changes/ tests/acceptance/` (`specs/` and `adrs/` as OKF bundles with
+`index.md`, `log.md` and their concept templates in `.templates/`) and `.claude/sdd.json`:
+set `acceptance_cmd` and `unit_cmd` there.
 
-## Specs, invariants and OKF bundles
-`specs/` and every `changes/<id>/` are [OKF](https://github.com/gpr/claude-plugins/tree/main/plugins/meta/documentalist-agent)
-bundles (`okf_version: "0.2"` in the root `index.md`, `type`/`sources` front matter on
-every concept). Concept files are short (at most `concept_max_blocks`, default 5, REQ/INV
-blocks) and grouped:
+## Capabilities, invariants and OKF bundles
+`specs/`, `adrs/` and every `changes/<id>/` are [OKF](https://docs.rs/okf) v0.2 bundles
+(`okf_version: "0.2"` in the root `index.md`, a dated `log.md`, `type` front matter on every
+concept; synced bundles pass `okf validate`). The concepts follow the lintel templates,
+shipped in `skills/change/templates/` and copied into `specs/.templates/` and
+`adrs/.templates/` by `sdd init`, where a repo may adapt them:
 ```
-specs/index.md  specs/log.md
-specs/<capability>/{index.md,<concept>.md}                living requirements (REQ-<CAP>-NNN)
-specs/invariants/<category>/{index.md,<concept>.md}       living invariants (INV-<CAT>-NNN)
+specs/capabilities/<id>.md     type: Capability: Intent, Scope, acceptance criteria AC-NN
+                               (Given/When/Then), Invariants, Decisions, Verification
+specs/invariants/<id>.md       type: Invariant: Statement, Enforcement (Check), Holds and
+                               Violation examples, one rule per file
+adrs/NNNN_<slug>.md            type: ADR, status draft -> stable -> deprecated
 changes/<id>/{index.md,intent.md,plan.md,tasks.md}
-changes/<id>/specs/<capability>/<concept>.md              spec delta, mirrors the living path
-changes/<id>/specs/invariants/<category>/<concept>.md     invariant delta
+changes/<id>/specs/capabilities/<id>.md   a new Capability, or a CapabilityDelta of a living one
+changes/<id>/specs/invariants/<id>.md     a new Invariant, or the full replacement of one
 ```
-An invariant is a system-wide rule with a `#### Check:` instead of a scenario; it needs a
-test task but no impl task. `sdd sync` applies both deltas (ADDED, MODIFIED, REMOVED, and
-MOVED when a MODIFIED block sits in another concept of the same capability), merges the
-delta `sources`, regenerates the indexes and appends to `specs/log.md`.
+Tasks and acceptance tests cite `capabilities/<id>#AC-NN` and `invariants/<id>`. A criterion
+needs a test task and an impl task; an invariant a test task only. A CapabilityDelta is
+merged one unit at a time: ADDED, MODIFIED and RETIRED criteria (ids are never reused: a
+retired one keeps its heading and reason), and SECTIONS that replace Title, Description,
+Intent, Scope, Invariants, Decisions or Verification. `sdd sync` sets the concepts `stable`,
+merges `sources`, regenerates the indexes the way `okf index` does and adds to `specs/log.md`.
 
-The `bundle` tool (`mcp__sdd__bundle`, or `sdd bundle <specs|change> [--fix]`) checks both
-kinds of bundle and repairs what it marks `[fixable]` (indexes, front matter, block order,
-missing sources, empty concepts). `--fix` also migrates the old layout: `specs/<cap>/spec.md`
-becomes `specs/<cap>/<cap>.md` and flat `changes/<id>/specs/<cap>.md` deltas move below
-`specs/<cap>/`. It is idempotent. Splitting an over-long concept stays a warning: a
-spec-author decides the topics. After upgrading, run `bundle specs --fix` once (sync refuses
-a specs bundle with errors), then `bundle <id> --fix` for each open change.
+The `bundle` tool (`mcp__sdd__bundle`, or `sdd bundle <specs|adrs|change> [--fix]`) checks
+the bundles and repairs what it marks `[fixable]` (indexes, logs, titles, `sources` entries,
+criterion order). It is idempotent. The older REQ/INV block format is reported as an error
+and not migrated: see `docs/how-to/migrate-to-okf-layout.md`.
 
 ## What is in it
 | Part | Where | What it does |
 |---|---|---|
 | Lead workflow | `skills/change` (`/sdd:change`) | triage, gates, routing, close-out, reopen path |
-| Format rules | `skills/formats` (`sdd:formats`) | REQ/scenario/delta/ADR/task formats, preloaded into the authoring agents |
+| Format rules | `skills/formats` (`sdd:formats`) | Capability/Invariant/CapabilityDelta/ADR/task formats, preloaded into the authoring agents |
 | Agents | `agents/` (`sdd:spec-author`, `sdd:planner`, `sdd:acceptance-tester`, `sdd:implementer`, `sdd:verifier`) | one job each, minimal tools, project memory in `.claude/agent-memory/sdd-<agent>/` |
-| Spec tool | `tools/sdd.py`, exposed as the `mcp__sdd__sdd` and `mcp__sdd__bundle` tools | check, context bundles, delta-new from the delta templates, delta-stub with base hashes, freeze/verify-frozen, deterministic sync into the specs bundle, ADR accept/supersede, bundle check/fix |
+| Spec tool | `tools/sdd.py`, exposed as the `mcp__sdd__sdd` and `mcp__sdd__bundle` tools | check, context bundles, delta-new from the concept templates, delta-stub with base hashes, freeze/verify-frozen, deterministic per-unit sync into the specs bundle, ADR accept/supersede, bundle check/fix |
 | Mod | `hooks/register.tsx`, `hooks/guard.ts`, `hooks/phase.ts` | lead role for the main conversation, write guard per agent, the `sdd` tool, status band, `/sdd` and `/sdd phase` panes |
 
 ## Branches, PRs and resume
@@ -121,8 +124,8 @@ remote's default branch), `branch_prefix` (`sdd/`), `worktree_dir` (`.claude/wor
 - **Guard, in-process.** Every Edit/Write/MultiEdit/NotebookEdit/Bash call is checked
   against the calling agent, identified by the call's `agentId`:
   - Nobody edits `specs/` by hand: it changes only through `sdd sync`.
-  - Nobody edits accepted ADRs, `frozen.json`, `state.json` or archived changes.
-  - `spec-author` writes only the intent, the delta and proposed ADRs, and only while
+  - Nobody edits accepted (stable) or deprecated ADRs, `frozen.json`, `state.json` or archived changes.
+  - `spec-author` writes only the intent, the delta and draft ADRs, and only while
     the change is `draft`.
   - `planner` writes only `plan.md` and `tasks.md`, while the change is `draft` or
     `approved`.
@@ -139,15 +142,15 @@ remote's default branch), `branch_prefix` (`sdd/`), `worktree_dir` (`.claude/wor
   - read-only, any role: `deps`
   - lead and acceptance-tester: `freeze`
   - lead and spec-author: `delta-new`, `delta-stub`, `adr-new`
-- **`bundle` tool.** `mcp__sdd__bundle` takes `target` (`specs` or a change id) and `fix`.
-  Checking is open to every role; `fix` on `specs` is lead-only, `fix` on a change is
-  lead or spec-author.
+- **`bundle` tool.** `mcp__sdd__bundle` takes `target` (`specs`, `adrs` or a change id) and
+  `fix`. Checking is open to every role; `fix` on `specs` or `adrs` is lead-only, `fix` on a
+  change is lead or spec-author.
 - **Band above the prompt.** Shows the active change (as in the `/sdd` pane), its phase, its status, task
   progress, the last check result, which workflow agents are running, and how many other
   changes are open. It hides itself when nothing is open.
 - **`/sdd` pane.** The active change in full: the one whose branch (`sdd/<id>`) is checked
   out in the session's directory, else the most active. It shows its title, phase and hint,
-  a progress bar, every task with its REQs, ADRs, requires, and the last check with its
+  a progress bar, every task with its citations, ADRs, requires, and the last check with its
   ERROR lines. The other open changes sit in status groups (implementing, verified,
   approved, draft), folded to one line each (`▸ approved (6) a, b, …`, plus how many checks
   failed). Press a header, or its digit while the pane has focus, to unfold it: one line per
@@ -171,19 +174,24 @@ the ADRs or the frozen tests. With auto memory turned off (`autoMemoryEnabled: f
 the agents run without it.
 
 ## Determinism (why sdd.py exists)
-- **Sync** merges by REQ id; MODIFIED replaces the whole block, nothing is paraphrased.
-- **Conflicts.** Each MODIFIED or REMOVED entry carries the hash of the REQ it was based
-  on, so if another change edited that REQ first you get a CONFLICT, not a silent
-  overwrite.
-- **Traceability.** `check` fails when a REQ has no scenario, no test task or no impl
-  task, or when anything references a REQ, ADR or task that doesn't exist.
-  `check --tests` also fails when a REQ has no acceptance test or a task is still open.
+- **Sync** merges by unit (criterion, section, invariant); MODIFIED replaces the whole unit,
+  nothing is paraphrased.
+- **Conflicts.** Each MODIFIED or RETIRED criterion, replaced section, replaced invariant and
+  deprecation carries the hash of the living text it was based on, so if another change
+  edited that unit first you get a CONFLICT, not a silent overwrite. Changes to different
+  criteria of one capability merge independently.
+- **Traceability.** `check` fails when a criterion has no Given/When/Then, no test task or
+  no impl task, an invariant no check or test task, or when anything cites a criterion,
+  invariant, ADR or task that doesn't exist (or is retired or deprecated).
+  `check --tests` also fails when a unit has no acceptance test or a task is still open.
 - **Freeze.** Records hashes of the acceptance tests; `verify-frozen` catches any edit
   that slipped past the guard.
 - **Context bundles.** `context <change> <task>` gives each agent only its own slice:
-  - every task: the REQ blocks it cites and the ADR Decision paragraphs
+  - every task: the criteria it cites (with their capability's Intent), the invariants it
+    cites in full, and the ADR Decision sections
   - test tasks: the plan's Contracts section, nothing else from the plan
-  - impl tasks: the frozen test paths, plus the full plan with `--plan`
+  - impl tasks: the statements of the invariants in force, the frozen test paths, plus the
+    full plan with `--plan`
 
 ## Development
 ```
