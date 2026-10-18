@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'claude-code/testing'
 
-import { checkBash, checkBundle, checkPath, checkSdd, DEFAULT_CFG, relTo, roleOf } from '../hooks/guard'
+import { checkBash, checkBundle, checkPath, checkSdd, cleanCfg, DEFAULT_CFG, frontStatus, relTo, roleOf, statusesIn } from '../hooks/guard'
 import type { Lookup, Role } from '../hooks/guard'
 
 const ROOT = '/repo'
@@ -10,6 +10,8 @@ const STATUS: Record<string, string> = {
   'adrs/0001_x.md': 'stable',
   'adrs/0002_y.md': 'draft',
   'adrs/0004_w.md': 'deprecated',
+  'adr/ADR-0005-old.md': 'accepted',
+  'adr/ADR-0006-older.md': 'superseded',
 }
 const look: Lookup = {
   changeStatus: async ch => STATUS[`changes/${ch}/intent.md`],
@@ -30,6 +32,9 @@ const FILE_CASES: [Role, string, 'allow' | 'deny'][] = [
   ['lead', 'adrs/0001_x.md', 'deny'],
   ['lead', 'adrs/0002_y.md', 'allow'],
   ['lead', 'adrs/0004_w.md', 'deny'],
+  ['lead', 'specs/.templates/capability.md.tmpl', 'allow'],
+  ['spec-author', 'specs/.templates/capability.md.tmpl', 'deny'],
+  ['implementer', 'specs/.templates/capability.md.tmpl', 'deny'],
   ['lead', 'changes/c1/frozen.json', 'deny'],
   ['lead', 'changes/c1/state.json', 'deny'],
   ['planner', 'changes/c1/state.json', 'deny'],
@@ -194,5 +199,26 @@ describe('bundle files stay generated', () => {
   test('spec-author writes deltas in capability and invariant directories', async () => {
     expect(await write('spec-author', 'changes/c1/specs/capabilities/auth/tokens.md')).toBeUndefined()
     expect(await write('spec-author', 'changes/c1/specs/invariants/no_secrets.md')).toBeUndefined()
+  })
+})
+
+describe('quoted statuses read as sdd.py reads them', () => {
+  test('frontStatus drops YAML quotes', () => {
+    expect(frontStatus('---\nstatus: "stable"\n---\n')).toBe('stable')
+    expect(frontStatus("---\nstatus: 'deprecated'\n---\n")).toBe('deprecated')
+    expect(frontStatus('---\nstatus: draft\n---\n')).toBe('draft')
+  })
+  test('a quoted status in a write is the same status', async () => {
+    expect(statusesIn('status: "draft"')).toEqual(['draft'])
+    expect(await checkPath('adrs/0002_y.md', 'spec-author', DEFAULT_CFG, look, '---\nstatus: "draft"\n---')).toBeUndefined()
+  })
+})
+
+describe('ADRs decided before the OKF templates stay locked', () => {
+  const legacy = cleanCfg({ adr_dir: 'adr' })
+  test('accepted and superseded are refused, proposed is not', async () => {
+    expect(await checkPath('adr/ADR-0005-old.md', 'lead', legacy, look)).toBeDefined()
+    expect(await checkPath('adr/ADR-0006-older.md', 'lead', legacy, look)).toBeDefined()
+    expect(await checkPath('adr/ADR-0007-new.md', 'lead', legacy, look)).toBeUndefined()
   })
 })

@@ -33,7 +33,8 @@ As a <actor>, I can <action>, so that <outcome>.
 <!--
 One criterion = one executable acceptance test.
 - IDs are stable: never renumber or reuse; retire an ID instead.
-- The test references the criterion as `<concept id>#AC-<nn>` (e.g. in its name).
+- The test cites the criterion as `<concept id>#AC-<nn>` (e.g. `capabilities/export_report#AC-01`)
+  in a comment or docstring: a test name cannot hold `/` or `#`.
 - Observable behaviour only: inputs and outputs at the system boundary, no implementation detail.
 -->
 

@@ -102,6 +102,8 @@ INV_SECTIONS = ["Statement", "Scope", "Rationale", "Enforcement", "Examples", "E
 # Units a CapabilityDelta can replace besides its ACs; Title and Description are front matter.
 EDITABLE = ["Title", "Description"] + [s for s in CAP_SECTIONS if s != "Acceptance criteria"]
 DELTA_SECTIONS = ("ADDED", "MODIFIED", "RETIRED", "SECTIONS")
+# Sections whose links are resolved, and whose ADR links count as citing the ADR.
+LINK_SECTIONS = ("Invariants", "Decisions", "Rationale")
 
 
 # ---------------------------------------------------------------- config ---
@@ -222,7 +224,7 @@ def trim(lines: list[str]) -> list[str]:
 
 
 # ------------------------------------------------------------ front matter --
-_PLAIN_RE = re.compile(r"[A-Za-z0-9_./@+-]+|[a-z]+:[^\s:#]+")
+_PLAIN_RE = re.compile(r"[A-Za-z0-9_./@+-]+|[a-z]+:[^\s:#,\[\]{}]+")
 _NUMBERISH_RE = re.compile(r"[-+.]?(\d[\d_]*)?(\.[\d_]*)?([eE][-+]?\d+)?|0x[0-9a-fA-F_]+|0o[0-7_]+")
 
 
@@ -308,31 +310,65 @@ def _parse_block(lines: list[str]):
     return out
 
 
+def _block_scalar(indicator: str, lines: list[str]) -> str:
+    """A `|` or `>` block scalar: literal or folded, with YAML's chomping (`-`, `+`, clip)."""
+    while lines and not lines[-1].strip():
+        lines = lines[:-1]
+    body = [l for l in lines if l.strip()]
+    ind = min((len(l) - len(l.lstrip()) for l in body), default=0)
+    lines = [l[ind:] if l.strip() else "" for l in lines]
+    if indicator.startswith("|"):
+        text = "\n".join(lines)
+    else:  # folded: a line break is a space, an empty line is a newline
+        text, prev_empty = "", True
+        for l in lines:
+            if not l:
+                text += "\n"
+                prev_empty = True
+            else:
+                text += ("" if prev_empty else " ") + l
+                prev_empty = False
+    if "-" in indicator:
+        return text
+    return text + "\n" if text else ""
+
+
 def parse_value(raw: str):
     first, *rest = raw.split("\n")
+    head = first.strip()
+    if re.fullmatch(r"[|>][-+]?\d?", head):
+        return _block_scalar(head, rest)
     rest = [l for l in rest if l.strip() and not l.strip().startswith("#")]
-    if not first.strip() and rest:
+    if not head and rest:
         return _parse_block(rest)
+    if rest and head[:1] not in "[{":
+        # a quoted or plain scalar that goes on over several lines: line breaks fold to spaces
+        return parse_inline(" ".join([head] + [l.strip() for l in rest]))
     return parse_inline(first)
+
+
+def _flow(v) -> str:
+    """A value inside a flow collection or a block entry: null, [..], {..} or a scalar."""
+    if v is None:
+        return "null"
+    if isinstance(v, list):
+        return "[" + ", ".join(_flow(x) for x in v) + "]"
+    if isinstance(v, dict):
+        return "{" + ", ".join(f"{k}: {_flow(x)}" for k, x in v.items()) + "}"
+    return scalar(str(v))
 
 
 def render_value(v) -> str:
     """Text after `key:` for a value (inline with a leading space, or an indented block)."""
-    if v is None:
-        return " null"
     if isinstance(v, dict):
-        return "".join(f"\n  {k}: {scalar(str(x))}" for k, x in v.items()) if v else " {}"
-    if isinstance(v, list):
-        if not v:
-            return " []"
-        if all(isinstance(x, dict) for x in v):
-            out = ""
-            for item in v:
-                for i, (k, x) in enumerate(item.items()):
-                    out += f"\n  {'- ' if i == 0 else '  '}{k}: {scalar(str(x))}"
-            return out
-        return " [" + ", ".join(scalar(str(x)) for x in v) + "]"
-    return " " + scalar(str(v))
+        return "".join(f"\n  {k}: {_flow(x)}" for k, x in v.items()) if v else " {}"
+    if isinstance(v, list) and v and all(isinstance(x, dict) for x in v):
+        out = ""
+        for item in v:
+            for i, (k, x) in enumerate(item.items()):
+                out += f"\n  {'- ' if i == 0 else '  '}{k}: {_flow(x)}"
+        return out
+    return " " + _flow(v)
 
 
 class FM:
@@ -507,12 +543,20 @@ class AC:
 
 
 def split_acs(lines: list[str]) -> tuple[list[str], list[AC]]:
+    """Criteria of a section. A criterion runs to the next `###` heading; lines under any
+    other `###` heading belong to no criterion (`stray_headings` reports them)."""
     pre: list[str] = []
     acs: list[AC] = []
+    stray = False
     for line, m in zip(lines, masked(lines)):
         h = AC_HEAD_RE.match(m)
         if h:
             acs.append(AC(h.group(1), h.group(2).strip(), [line]))
+            stray = False
+        elif m.startswith("### "):
+            stray = True
+        elif stray:
+            continue
         elif not acs:
             pre.append(line)
         else:
@@ -522,6 +566,11 @@ def split_acs(lines: list[str]) -> tuple[list[str], list[AC]]:
             else:
                 acs[-1].lines.append(line)
     return pre, acs
+
+
+def stray_headings(lines: list[str]) -> list[str]:
+    """`###` headings that are not `### AC-NN: <name>`: sync would not keep what they hold."""
+    return [m[4:].strip() for m in masked(lines) if m.startswith("### ") and not AC_HEAD_RE.match(m)]
 
 
 def split_subsections(lines: list[str]) -> tuple[list[str], list[tuple[str, list[str]]]]:
@@ -632,7 +681,10 @@ class Concept:
 
     @property
     def digest(self) -> str:
-        return digest(self.body.split("\n"))
+        """Hash of the whole concept, front matter included (`generated` and `base` aside), so
+        a replacement or deprecation conflicts with any concurrent edit, title or tags too."""
+        fm = "".join(f"{k}:{v}\n" for k, v in self.fm.raw.items() if k not in ("generated", "base"))
+        return digest(fm.split("\n") + self.body.split("\n"))
 
     def render(self) -> str:
         return doc_text(self.fm, self.body)
@@ -679,6 +731,9 @@ def concept_problems(c: Concept, where: str, kind: str) -> list[tuple[str, str]]
             elif name != "Acceptance criteria" and not s.content:
                 err(f"'## {name}' is empty")
         acs = c.acs()
+        crit = c.section("Acceptance criteria")
+        for name in stray_headings(crit.lines) if crit else []:
+            err(f"'### {name}' under Acceptance criteria: only '### AC-NN: <name>' blocks belong there")
         if not acs and not deprecated:
             err("no acceptance criterion (### AC-NN: <name>)")
         seen: set[str] = set()
@@ -715,9 +770,9 @@ def concept_problems(c: Concept, where: str, kind: str) -> list[tuple[str, str]]
 
 
 def link_problems(c: Concept, where: str, target: Path, change: Path | None) -> list[tuple[str, str]]:
-    """Links of the Invariants and Decisions sections that resolve to nothing."""
+    """Links of the Invariants, Decisions and Rationale sections that resolve to nothing."""
     out = []
-    for name in ("Invariants", "Decisions"):
+    for name in LINK_SECTIONS:
         s = c.section(name)
         for link in links_in(s.lines) if s else []:
             if link.startswith(("http://", "https://", "#")) or PLACEHOLDER_RE.search(link):
@@ -830,6 +885,8 @@ class Delta:
     modified: list[AC] = field(default_factory=list)
     retired: list[AC] = field(default_factory=list)
     sections: list[tuple[str, str | None, list[str]]] = field(default_factory=list)  # name, base, lines
+    unknown: list[str] = field(default_factory=list)   # `##` sections a CapabilityDelta does not know
+    stray: list[str] = field(default_factory=list)     # non-criterion `###` headings in ADDED/MODIFIED/RETIRED
 
     @property
     def target(self) -> Path:
@@ -856,6 +913,20 @@ def delta_files(change: Path) -> list[Path]:
     return bundle_files(change / "specs")
 
 
+def section_entries(lines: list[str]) -> list[tuple[str, list[str]]]:
+    """`### <Name>` entries of a SECTIONS block. Only an EDITABLE name opens an entry, so a
+    copied section keeps its own `###` sub-headings; anything else first is an entry too
+    (and an error in check)."""
+    subs: list[tuple[str, list[str]]] = []
+    for line, m in zip(lines, masked(lines)):
+        name = m[4:].strip() if m.startswith("### ") else None
+        if name is not None and (name in EDITABLE or not subs):
+            subs.append((name, []))
+        elif subs:
+            subs[-1][1].append(line)
+    return subs
+
+
 def load_delta(change: Path, f: Path, living: dict[str, Concept]) -> Delta:
     cid = cid_of(f, change / "specs")
     d = Delta(cid, f, read_doc(f))
@@ -863,7 +934,7 @@ def load_delta(change: Path, f: Path, living: dict[str, Concept]) -> Delta:
         d.kind = "modify"
         for s in split_sections(d.doc.body)[1:]:
             if s.name == "SECTIONS":
-                for name, lines in split_subsections(s.lines)[1]:
+                for name, lines in section_entries(s.lines):
                     base = None
                     keep = []
                     for l in lines:
@@ -875,6 +946,9 @@ def load_delta(change: Path, f: Path, living: dict[str, Concept]) -> Delta:
                     d.sections.append((name, base, strip_comments("\n".join(keep), keep_base=False).split("\n")))
             elif s.name in DELTA_SECTIONS:
                 getattr(d, s.name.lower()).extend(split_acs(s.lines)[1])
+                d.stray += [f"{s.name}: {h}" for h in stray_headings(s.lines)]
+            else:
+                d.unknown.append(s.name)
     elif cid in living:
         d.kind = "replace"
     return d
@@ -1008,12 +1082,22 @@ def acceptance_hits(refs: set[str]) -> dict[str, list[Path]]:
 
 
 # ---------------------------------------------------------------- commands --
+# `bundle` and `changes/` give these names another meaning: never a change id.
+RESERVED_IDS = {"specs", "adrs", "archive"}
+
+
+def check_change_id(name: str):
+    if not re.fullmatch(r"[a-z0-9][a-z0-9-]{1,60}", name):
+        die("change id must be kebab-case")
+    if name in RESERVED_IDS:
+        die(f"'{name}' is reserved ({', '.join(sorted(RESERVED_IDS))}): pick another change id")
+
+
 def cmd_new(args):
     if not args:
         die("usage: new <change> [--title T]")
     name = args[0]
-    if not re.fullmatch(r"[a-z0-9][a-z0-9-]{1,60}", name):
-        die("change id must be kebab-case")
+    check_change_id(name)
     title = args[args.index("--title") + 1] if "--title" in args else name
     d = CHANGES / name
     if d.exists():
@@ -1321,7 +1405,8 @@ def build_indexes(root: Path) -> dict[Path, str]:
     """Every index.md of a bundle, as `okf index` writes them: entries grouped under a
     `# <type>` heading, sorted by title, subdirectories described from their entries.
     Dot-directories (.templates/) are left out."""
-    md = [f for f in root.rglob("*.md") if not is_hidden(f.relative_to(root))] if root.exists() else []
+    md = [f for f in root.rglob("*.md") if f.name not in RESERVED and not is_hidden(f.relative_to(root))] \
+        if root.exists() else []
     dirs = {root}
     for f in md:
         p = f.parent
@@ -1442,10 +1527,6 @@ def check_log(rep: Report, root: Path):
         rep.issue("WARN", f"{rel(log)}: old sdd log lines (`- <date> ...`); OKF groups entries under `## <date>`")
 
 
-def _fix_concept(path: Path, fm: FM, body: str):
-    write_doc(path, fm, body)
-
-
 def check_specs(rep: Report):
     if not SPECS.exists():
         rep.issue("ERROR", f"{rel(SPECS)}/ missing", lambda: SPECS.mkdir(parents=True))
@@ -1483,15 +1564,19 @@ def check_specs(rep: Report):
             fm.set("sources", kept)
             changed.append("sources")
         body = doc.body
-        if c.type == "Capability":
+        crit = c.section("Acceptance criteria") if c.type == "Capability" else None
+        if crit is not None:
             ids = [ac_sort_key(a) for a in c.acs()]
-            if ids != sorted(ids):
+            if ids != sorted(ids) and stray_headings(crit.lines):
+                rep.issue("ERROR", f"{rel(f)}: acceptance criteria not sorted by id (not fixable while "
+                          "a stray `###` heading is there: it would be lost)")
+            elif ids != sorted(ids):
                 rep.issue("ERROR", f"{rel(f)}: acceptance criteria not sorted by id", lambda: None)
                 c.set_acs(c.acs())
                 body = c.body
                 changed.append("order")
         if rep.fix and changed:
-            _fix_concept(f, fm, body)
+            write_doc(f, fm, body)
     check_indexes(rep, SPECS)
     check_log(rep, SPECS)
     for d in sorted((p for p in SPECS.rglob("*") if p.is_dir() and not is_hidden(p.relative_to(SPECS))),
@@ -1557,7 +1642,6 @@ def check_change(rep: Report, change: Path):
                 fm.raw.update({k: v for k, v in doc.fm.raw.items() if k != "type"})
                 write_doc(f, fm, doc.body)
             rep.issue("WARN", f"{rel(f)}: front matter lacks 'type: {kind}'", fix)
-    living = living_concepts()
     ddir = change / "specs"
     for f in delta_files(change):
         cid = cid_of(f, ddir)
@@ -1637,6 +1721,12 @@ def check_delta(d: Delta, living: dict[str, Concept], change: Path, errs: list, 
         if cur.status == "deprecated":
             errs.append(f"{where}: {d.cid} is deprecated")
             return
+        for name in d.unknown:
+            errs.append(f"{where}: unknown section '## {name}' (a CapabilityDelta has "
+                        f"{', '.join('## ' + x for x in DELTA_SECTIONS)}); its content would be ignored")
+        for h in d.stray:
+            errs.append(f"{where}: '### {h.split(': ', 1)[1]}' under ## {h.split(':', 1)[0]} is not a criterion "
+                        "('### AC-NN: <name>'); sync would drop it")
         acs = {a.id: a for a in cur.acs()}
         for a in d.added:
             if a.id in acs:
@@ -1666,7 +1756,11 @@ def check_delta(d: Delta, living: dict[str, Concept], change: Path, errs: list, 
                 elif not a.retired or PLACEHOLDER_RE.search(a.retired):
                     errs.append(f"{where} {ref}: RETIRED needs '- **Retired**: <reason>'")
                 touch(ref, kind, Unit(ref, cur, a))
+        seen_sections: set[str] = set()
         for name, base, lines in d.sections:
+            if name in seen_sections:
+                errs.append(f"{where} {d.cid} {name}: appears twice under SECTIONS")
+            seen_sections.add(name)
             if name not in EDITABLE:
                 errs.append(f"{where}: '### {name}' under SECTIONS is not one of {', '.join(EDITABLE)}")
                 continue
@@ -1788,14 +1882,15 @@ def collect(change: Path):
     linked = set()
     for d in deltas:
         if d.kind != "modify":
-            s = d.concept().section("Decisions")
-            linked |= {x for x in (adr_of_link(l) for l in links_in(s.lines)) if x} if s else set()
+            c = d.concept()
+            for s in (c.section(n) for n in LINK_SECTIONS):
+                linked |= {x for x in (adr_of_link(l) for l in links_in(s.lines)) if x} if s else set()
         for name, _, lines in d.sections:
             if name == "Decisions":
                 linked |= {x for x in (adr_of_link(l) for l in links_in(lines)) if x}
     for a in sorted(linked - referenced_adrs):
         if a in adrs and read_doc(adrs[a]).fm.str("status") == "draft":
-            warns.append(f"{a} is linked under Decisions but not in intent.md adrs: sync will not accept it")
+            warns.append(f"{a} is linked from a concept but not in intent.md adrs: sync will not accept it")
     plan = change / "plan.md"
     if plan.exists():
         ptxt = strip_comments(plan.read_text())
@@ -2211,8 +2306,7 @@ def cmd_start(args):
     if not args or args[0].startswith("-"):
         die("usage: start <change> --title T [--pr-title P] [--base B] [--requires a,b]")
     name = args[0]
-    if not CHANGE_ID_RE.fullmatch(name):
-        die("change id must be kebab-case")
+    check_change_id(name)
     requires = parse_requires([opt(args, "--requires") or ""], name)
     title = opt(args, "--title") or name
     pr_title = opt(args, "--pr-title") or title

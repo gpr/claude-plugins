@@ -64,6 +64,7 @@ A log is `# Update Log`, then `## YYYY-MM-DD` groups, newest first, of `* **<Kin
 | a missing required section, an empty Intent or Scope | ERROR | no |
 | no live criterion (capability not deprecated) | ERROR | no |
 | a criterion twice, or without Given/When/Then | ERROR | no |
+| a `###` heading under Acceptance criteria that is not a criterion | ERROR | no |
 | criteria not sorted by number | ERROR | yes |
 | invariant without Statement, `- Check:`, Holds or Violation | ERROR | no |
 | no Rationale or Exceptions | WARN | no |

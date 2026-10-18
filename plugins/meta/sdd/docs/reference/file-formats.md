@@ -36,7 +36,7 @@ A citation is matched as a whole: `specs/capabilities/x#AC-01` (preceded by `/`)
 
 ## Front matter
 
-Parsed as a small YAML subset: `key: value` scalars (plain, `"double"` or `'single'` quoted), flow lists `[a, b]` and mappings `{k: v}`, and one level of indented block (`generated:` with `by`/`at`, `sources:` as `- resource: <path>` entries). Keys sdd does not manage round-trip unchanged. `sources` given as plain strings are read as their `resource`; `bundle --fix` rewrites them as entries.
+Parsed as a small YAML subset: `key: value` scalars (plain, `"double"` or `'single'` quoted, also over several lines, and `|` / `>` block scalars with `-`/`+` chomping), flow lists `[a, b]` and mappings `{k: v}` (nested, `null` kept), and one level of indented block (`generated:` with `by`/`at`, `sources:` as `- resource: <path>` entries). Keys sdd does not manage round-trip unchanged. `sources` given as plain strings are read as their `resource`; `bundle --fix` rewrites them as entries.
 
 ## Capability
 
@@ -78,9 +78,9 @@ sources:
 ```
 
 - Sections are lines `## <name>` outside HTML comments. Intent, Scope and Acceptance criteria are required; Intent and Scope must not be empty.
-- A criterion starts at `### AC-NN: <name>` (two or more digits) and runs to the next `###` or `##` heading. A live criterion needs lines starting `- **Given**`, `- **When**` and `- **Then**`. A retired one holds `- **Retired**: <reason>` instead and stays forever, so its id is never reused.
+- A criterion starts at `### AC-NN: <name>` (two or more digits) and runs to the next `###` or `##` heading. Any other `###` heading under Acceptance criteria is an error: sync would not keep what it holds. A live criterion needs lines starting `- **Given**`, `- **When**` and `- **Then**`. A retired one holds `- **Retired**: <reason>` instead and stays forever, so its id is never reused.
 - Criteria are kept sorted by number; sync and `bundle --fix` reorder them.
-- Links in Invariants and Decisions are resolved relative to the living file; one that resolves to nothing, or to a deprecated concept, is a warning. A Decisions link to `adrs/NNNN_<slug>.md` counts as citing `ADR-NNNN`.
+- Links in Invariants, Decisions and (for an invariant) Rationale are resolved relative to the living file; one that resolves to nothing, or to a deprecated concept, is a warning. A link there to `adrs/NNNN_<slug>.md` counts as citing `ADR-NNNN`.
 - A deprecated capability needs no live criterion.
 
 ## Invariant
@@ -140,15 +140,15 @@ sources: []
 (complete new section)
 ```
 
-- Sections are lines exactly `## ADDED`, `## MODIFIED`, `## RETIRED`, `## SECTIONS`; criteria outside them are ignored, and so are HTML comments other than base markers.
+- Sections are lines exactly `## ADDED`, `## MODIFIED`, `## RETIRED`, `## SECTIONS` (case included); any other `##` section is an error, and so is a `###` heading under ADDED/MODIFIED/RETIRED that is not a criterion. HTML comments other than base markers are ignored.
 - ADDED ids must not exist in the living capability, retired ones included. MODIFIED and RETIRED ids must exist, be live, and carry the base of the living criterion. RETIRED needs a reason.
-- SECTIONS entries are `### <name>` with one of Title, Description, Intent, Scope, Invariants, Decisions, Verification; Title and Description replace the front matter value (Title also the `#` heading). An entry needs the base of the current section when the capability has it.
+- SECTIONS entries are `### <name>` with one of Title, Description, Intent, Scope, Invariants, Decisions, Verification; any other `###` line inside an entry is part of it, so a section keeps its own sub-headings. Each name at most once; Title and Description replace the front matter value (Title also the `#` heading). An entry needs the base of the current section when the capability has it.
 - Front matter `status: deprecated` plus `base:` (the whole capability's hash) deprecates it; all its live criteria count as retired, and no ADDED or MODIFIED is allowed.
 - `sources` are merged (union, sorted by resource) into the capability at sync.
 
 ### Base hash
 
-The first 8 hex chars of sha256 over the unit's text with HTML comments removed, trailing spaces stripped and blank lines at both ends dropped. The unit is a criterion block (heading included), a section's content, or a whole concept body. `delta-stub` writes `<!-- base: <hash> -->` (or `base:` in front matter); never type it. A different current hash is a CONFLICT.
+The first 8 hex chars of sha256 over the unit's text with HTML comments removed, trailing spaces stripped and blank lines at both ends dropped. The unit is a criterion block (heading included), a section's content, or a whole concept: its body plus its front matter, `generated` and `base` aside, so a concurrent change to a title, description, tags or sources conflicts too. `delta-stub` writes `<!-- base: <hash> -->` (or `base:` in front matter); never type it. A different current hash is a CONFLICT.
 
 ## intent.md
 

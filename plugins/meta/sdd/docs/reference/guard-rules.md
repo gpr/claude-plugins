@@ -65,7 +65,8 @@ The status-line check only refuses a `status:` value that differs from the curre
 | `changes/archive/**` | refused: archived changes are immutable |
 | `changes/**/frozen.json` | refused: written only by `sdd freeze` |
 | `changes/**/state.json` | refused: written only by `sdd.py` |
-| `adrs/*` with `status:` `stable` (accepted) or `deprecated` | refused: write a superseding ADR with `sdd adr-new <title> --supersedes ADR-NNNN` |
+| `specs/.templates/**` | the lead only: the repo's concept templates |
+| `adrs/*` with `status:` `stable` or `deprecated` (or `accepted`/`superseded` in an ADR not yet migrated; quoted values count) | refused: write a superseding ADR with `sdd adr-new <title> --supersedes ADR-NNNN` |
 
 The lead passes every other write.
 

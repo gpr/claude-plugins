@@ -31,6 +31,10 @@ export type Lookup = {
   adrStatus: (relPath: string) => Promise<string | undefined>
 }
 
+/** ADR statuses that lock the file: OKF's stable/deprecated, and accepted/superseded of the
+ * ADRs written before the OKF templates (a repo that has not migrated them yet). */
+const DECIDED = new Set(['stable', 'deprecated', 'accepted', 'superseded'])
+
 export const WRITE_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit'])
 
 const ROLES: Role[] = ['spec-author', 'planner', 'acceptance-tester', 'implementer', 'verifier']
@@ -101,7 +105,12 @@ function changeOf(rel: string, cfg: Cfg): string | undefined {
 
 /** `status:` values a write would put at the start of a line (front matter). */
 export function statusesIn(text: string): string[] {
-  return [...text.matchAll(/^status:[ \t]*(\S*)/gm)].map(m => m[1] ?? '')
+  return [...text.matchAll(/^status:[ \t]*(\S*)/gm)].map(m => unquote(m[1] ?? ''))
+}
+
+/** A YAML scalar without its quotes: `"stable"` and `'stable'` read as `stable`, as sdd.py reads them. */
+export function unquote(v: string): string {
+  return v.length >= 2 && (v[0] === '"' || v[0] === "'") && v[v.length - 1] === v[0] ? v.slice(1, -1) : v
 }
 
 /**
@@ -116,15 +125,18 @@ export async function checkPath(
   written?: string,
 ): Promise<string | undefined> {
   const { specs_dir: S, changes_dir: C, adr_dir: A, acceptance_dir: T } = cfg
-  // everyone
+  // everyone (the repo's concept templates aside: the lead may adapt them)
+  if (under(rel, `${S}/.templates`)) {
+    return role === 'lead' ? undefined : `${rel}: concept templates are changed by the lead only.`
+  }
   if (under(rel, S)) return `${rel}: living specs change only through \`sdd sync <change>\`.`
   if (under(rel, `${C}/archive`)) return `${rel}: archived changes are immutable.`
   if (under(rel, C) && rel.endsWith('/frozen.json')) return `${rel}: written only by \`sdd freeze\`.`
   if (under(rel, C) && rel.endsWith('/state.json')) return `${rel}: written only by \`sdd start\`, \`checkpoint\`, \`set-pr\` and \`finish\`.`
   const isAdr = under(rel, A) && rel !== A
   const adrSt = isAdr ? await look.adrStatus(rel) : undefined
-  if (adrSt === 'stable' || adrSt === 'deprecated') {
-    return `${rel}: this ADR is ${adrSt === 'stable' ? 'accepted (stable)' : 'deprecated'}. Write a new one with \`sdd adr-new <title> --supersedes ADR-NNNN\`.`
+  if (adrSt !== undefined && DECIDED.has(adrSt)) {
+    return `${rel}: this ADR is ${adrSt} (decided). Write a new one with \`sdd adr-new <title> --supersedes ADR-NNNN\`.`
   }
   if (role === 'lead') return undefined
   // every subagent
@@ -269,5 +281,6 @@ export function frontStatus(text: string): string | undefined {
   if (!text.startsWith('---')) return undefined
   const end = text.indexOf('\n---', 3)
   const head = end < 0 ? text : text.slice(0, end)
-  return /^status:\s*(\S+)/m.exec(head)?.[1]
+  const v = /^status:[ \t]*(\S+)/m.exec(head)?.[1]
+  return v === undefined ? undefined : unquote(v)
 }

@@ -34,7 +34,7 @@ Agents and the lead call `sdd.py` through the `mcp__sdd__sdd` tool, with the sub
 
 | Subcommand | Role | Effect |
 |---|---|---|
-| `new <change> [--title T]` | lead | Creates `changes/<change>/` with `intent.md`, `plan.md`, `tasks.md` from the templates, the generated `index.md`, and an empty `specs/`. The id must be kebab-case, 2–61 chars (`[a-z0-9][a-z0-9-]{1,60}`). Fails if the directory exists. Normally run by `start`, not by hand. |
+| `new <change> [--title T]` | lead | Creates `changes/<change>/` with `intent.md`, `plan.md`, `tasks.md` from the templates, the generated `index.md`, and an empty `specs/`. The id must be kebab-case, 2–61 chars (`[a-z0-9][a-z0-9-]{1,60}`), and not `specs`, `adrs` or `archive`. Fails if the directory exists. Normally run by `start`, not by hand. |
 | `set-status <change> <status>` | lead | Rewrites `status:` in `intent.md` front matter. Status is one of `draft approved implementing verified archived`. Prints `<change>: <old> -> <new>`. |
 
 ## Concepts, deltas and ADRs
@@ -66,7 +66,7 @@ Errors (exit 1):
 - A unit (criterion or invariant) appears twice in the change.
 - A new concept's structure: see [File formats](file-formats.md#capability) (type, title, status, required sections, Given/When/Then, Statement, `- Check:`, Holds and Violation).
 - A full Capability over a living one; a CapabilityDelta for a capability that does not exist or is deprecated; a base on a new concept.
-- CapabilityDelta: an ADDED id that exists (retired ones included; the message names the next free id); a MODIFIED or RETIRED id that is not live; a missing base, or one that differs from the current hash: `CONFLICT base <a> != current <b>`; RETIRED without a reason; a SECTIONS entry that is not editable, empty, or whose base differs; a deprecation without base or with ADDED/MODIFIED criteria.
+- CapabilityDelta: a `##` section other than ADDED/MODIFIED/RETIRED/SECTIONS, or a non-criterion `###` heading under the first three; a SECTIONS name given twice; an ADDED id that exists (retired ones included; the message names the next free id); a MODIFIED or RETIRED id that is not live; a missing base, or one that differs from the current hash: `CONFLICT base <a> != current <b>`; RETIRED without a reason; a SECTIONS entry that is not editable, empty, or whose base differs; a deprecation without base or with ADDED/MODIFIED criteria.
 - An invariant replacement without base, or with a stale one (CONFLICT).
 - Task problems: duplicate id, `blocked-by` an unknown task; a citation of an unknown unit, of a bare capability, of a criterion on an invariant, of a retired criterion or deprecated invariant; a `(test)` task on a unit this change retires or deprecates; a `(test)`/`(impl)` task citing nothing.
 - A referenced ADR (in `intent.md` `adrs:` or a task) has no file, or is `deprecated`.
@@ -79,7 +79,7 @@ Warnings:
 - No spec delta (unless `size: fix`), or a CapabilityDelta that changes nothing.
 - A missing description, a placeholder left, a link that does not resolve or points to a deprecated concept.
 - A living capability that still lists an invariant this change deprecates.
-- A draft ADR linked under Decisions but not listed in `intent.md` `adrs:` (sync would not accept it).
+- A draft ADR linked from a concept (Decisions, Rationale) but not listed in `intent.md` `adrs:` (sync would not accept it).
 - Any bundle WARN of the change, prefixed `bundle:` (a stale `index.md`, a missing `type:`).
 - The stored phase does not fit the status (see [Phases and states](phases-and-states.md#phase-and-status)).
 - An `(impl)` task not `blocked-by` the `(test)` task(s) covering its criteria.

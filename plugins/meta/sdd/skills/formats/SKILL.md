@@ -153,7 +153,8 @@ sources: []
 <!-- base: 5e6f7a8b -->
 (the complete new section)
 ```
-- SECTIONS takes Title, Description, Intent, Scope, Invariants, Decisions, Verification;
+- SECTIONS takes Title, Description, Intent, Scope, Invariants, Decisions, Verification, each
+  at most once (a section's own `###` sub-headings stay inside its entry);
   each entry replaces the whole section (Title and Description: the front matter line).
 - MODIFIED holds the complete new criterion. Sync replaces the whole block.
 - `sdd delta-stub <c> <cap> --deprecate` deprecates the capability: all its criteria retire.

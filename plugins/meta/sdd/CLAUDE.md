@@ -36,7 +36,8 @@
   `changes/<id>/`) are parsed by `sdd.py` and described in `skills/formats/SKILL.md` and
   `docs/reference/file-formats.md`. Change them together. The Capability, Invariant and ADR
   templates in `skills/change/templates/*.md.tmpl` are copies of lintel's
-  (`specs/.templates/`, `adrs/.templates/`): keep the section names `sdd.py` checks in step.
+  (`specs/.templates/`, `adrs/.templates/`), except that capability.md.tmpl says how a test
+  cites a criterion (comment or docstring, not the name): keep the section names `sdd.py` checks in step.
 - `build_indexes` mirrors `okf index` (okf-core `index.rs`) byte for byte, dot-directories
   aside; `TestSync.test_synced_bundles_are_okf_conformant` diffs them when `okf` is on PATH.
 - `sdd.py bundle` (`bundle_check`, `check_specs`, `check_adrs`, `check_change`) is the one

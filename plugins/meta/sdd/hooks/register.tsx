@@ -183,7 +183,7 @@ export const register: Register = on => {
       inputSchema: {
         type: 'object',
         properties: {
-          target: { type: 'string', description: '"specs" or a change id, e.g. "add-login"' },
+          target: { type: 'string', description: '"specs", "adrs" or a change id, e.g. "add-login"' },
           fix: { type: 'boolean', description: 'repair the fixable findings (default: only report)' },
         },
         required: ['target'],
@@ -235,7 +235,7 @@ export const register: Register = on => {
       args[0] === 'bundle'
         ? bundleTarget.length === 1
           ? checkBundle(bundleTarget[0], args.includes('--fix'), role)
-          : 'usage: bundle <specs|change> [--fix]'
+          : 'usage: bundle <specs|adrs|change> [--fix]'
         : checkSdd(args[0], role)
     if (refusal !== undefined) return { deny: `[sdd] ${refusal}` }
 

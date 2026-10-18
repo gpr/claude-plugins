@@ -668,7 +668,7 @@ class TestAdr(SddCase):
                   "## Decisions\n\n- [Token format](../../adrs/0001_token_format.md)\n\n## Acceptance criteria")
         code, out = self.sdd("check", "c1")
         self.assertEqual(code, 0, out)
-        self.assertIn("ADR-0001 is linked under Decisions but not in intent.md adrs", out)
+        self.assertIn("ADR-0001 is linked from a concept but not in intent.md adrs", out)
         self.assertNotIn("does not resolve", out)
 
     def test_bundle_adrs_flags_the_old_naming(self):
@@ -1450,6 +1450,122 @@ class TestBundle(SddCase):
 
     def test_unknown_change(self):
         self.assert_fails(self.sdd("bundle", "nope"), "no change 'nope'", code=2)
+
+
+class TestReviewFixes(SddCase):
+    """Regressions from the code review of the concept format."""
+
+    def test_block_scalar_description_reads_and_indexes_stably(self):
+        self.write(f"specs/{LOGIN_REF}.md", LOGIN.replace('description: "A user can log in."',
+                                                          "description: >\n  A user can\n  log in."))
+        self.assert_ok(self.sdd("bundle", "specs", "--fix"))
+        self.assertIn("* [Login](login.md) - A user can log in. ", self.read("specs/capabilities/auth/index.md"))
+        code, out = self.sdd("bundle", "specs")
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("stale", out)
+        self.assertNotIn("description", out)
+
+    def test_multi_line_quoted_description(self):
+        self.write(f"specs/{LOGIN_REF}.md", LOGIN.replace('description: "A user can log in."',
+                                                          'description: "A user can\n  log in."'))
+        self.assert_ok(self.sdd("bundle", "specs", "--fix"))
+        self.assertIn("* [Login](login.md) - A user can log in.\n", self.read("specs/capabilities/auth/index.md"))
+
+    def test_nested_nulls_and_lists_survive_a_sync(self):
+        self.write("src/a.py", "x\n")
+        self.living()
+        self.edit(f"specs/{LOGIN_REF}.md", "sources: []",
+                  "sources:\n  - resource: src/a.py\n    note:\n    tags: [a, \"b,c\"]")
+        self.new_change()
+        self.assert_ok(self.sdd("delta-stub", "c1", f"{LOGIN_REF}#AC-01"))
+        self.set_tasks("c1", f"- [x] T1 (test) x — {LOGIN_REF}#AC-01", f"- [x] T2 (impl) y — {LOGIN_REF}#AC-01 | blocked-by: T1")
+        self.sdd("set-status", "c1", "verified")
+        self.assert_ok(self.sdd("sync", "c1"))
+        spec = self.read(f"specs/{LOGIN_REF}.md")
+        self.assertIn("  - resource: src/a.py\n    note: null\n    tags: [a, \"b,c\"]\n", spec)
+
+    def test_invariant_replace_conflicts_on_a_front_matter_change(self):
+        self.write("specs/invariants/no_secrets.md", NO_SECRETS)
+        self.assert_ok(self.sdd("bundle", "specs", "--fix"))
+        self.new_change()
+        self.assert_ok(self.sdd("delta-stub", "c1", "invariants/no_secrets"))
+        self.set_tasks("c1", "- [ ] T1 (test) x — invariants/no_secrets")
+        self.assert_ok(self.sdd("check", "c1"))
+        self.edit("specs/invariants/no_secrets.md", "No password is logged.", "No password or key is logged.")
+        self.assert_fails(self.sdd("check", "c1"), "invariants/no_secrets: CONFLICT")
+
+    def test_section_with_sub_headings_is_one_unit(self):
+        self.write(f"specs/{LOGIN_REF}.md", LOGIN.replace("- In: password login\n- Out: SSO",
+                                                          "### In scope\n\n- password login\n\n### Out of scope\n\n- SSO"))
+        self.assert_ok(self.sdd("bundle", "specs", "--fix"))
+        self.new_change()
+        self.assert_ok(self.sdd("delta-stub", "c1", LOGIN_REF, "--section", "Scope"))
+        self.edit(self.delta(), "- SSO", "- SSO, passkeys")
+        self.set_tasks("c1", "- [x] T1 (chore) scope wording")
+        self.assert_ok(self.sdd("check", "c1"))
+        self.sdd("set-status", "c1", "verified")
+        self.assert_ok(self.sdd("sync", "c1"))
+        spec = self.read(f"specs/{LOGIN_REF}.md")
+        self.assertIn("## Scope\n\n### In scope\n\n- password login\n\n### Out of scope\n\n- SSO, passkeys\n", spec)
+
+    def test_duplicate_section_and_unknown_delta_section_are_errors(self):
+        self.living()
+        self.new_change()
+        self.assert_ok(self.sdd("delta-stub", "c1", LOGIN_REF, "--section", "Scope"))
+        self.edit(self.delta(), "## SECTIONS\n", "## SECTIONS\n\n### Scope\n\n- In: x\n")
+        self.edit(self.delta(), "## ADDED\n", "## Added\n\n" + AC_03 + "\n## ADDED\n")
+        self.assert_fails(self.sdd("check", "c1"), "Scope: appears twice under SECTIONS",
+                          "unknown section '## Added'")
+
+    def test_stray_heading_under_criteria_is_an_error(self):
+        self.write(f"specs/{LOGIN_REF}.md", LOGIN.replace("## Invariants", "### Notes\n\nSome notes.\n\n## Invariants"))
+        self.assert_fails(self.sdd("bundle", "specs"), "'### Notes' under Acceptance criteria")
+        self.living()
+        self.new_change()
+        self.assert_ok(self.sdd("delta-stub", "c1", f"{LOGIN_REF}#AC-02"))
+        self.edit(self.delta(), "the response is 423", "the response is 423\n\n### Notes\n\nx")
+        self.assert_fails(self.sdd("check", "c1"), "'### Notes' under ## MODIFIED is not a criterion")
+
+    def test_fix_never_drops_a_stray_heading(self):
+        ac1 = LOGIN.split("### AC-01")[1].split("### AC-02")[0]
+        ac2 = LOGIN.split("### AC-02")[1].split("## Invariants")[0]
+        self.write(f"specs/{LOGIN_REF}.md", LOGIN.split("### AC-01")[0] + "### AC-02" + ac2 + "### Notes\n\nKEEP ME\n\n"
+                   + "### AC-01" + ac1 + "## Invariants" + LOGIN.split("## Invariants")[1])
+        self.assert_fails(self.sdd("bundle", "specs", "--fix"), "not fixable while")
+        self.assertIn("KEEP ME", self.read(f"specs/{LOGIN_REF}.md"))
+
+    def test_stray_heading_does_not_change_the_criterion_hash(self):
+        self.living()
+        self.new_change()
+        self.assert_ok(self.sdd("delta-stub", "c1", f"{LOGIN_REF}#AC-02"))
+        self.edit(f"specs/{LOGIN_REF}.md", "## Invariants", "### Notes\n\nx\n\n## Invariants")
+        code, out = self.sdd("check", "c1")
+        self.assertNotIn("CONFLICT", out)
+
+    def test_rationale_adr_link_is_resolved_and_counted(self):
+        self.sdd("adr-new", "Redact logs")
+        self.new_change()
+        self.write("changes/c1/specs/invariants/no_secrets.md", NO_SECRETS.replace(
+            "Logs are widely readable.", "Logs are widely readable.\n\n- Decided in: [Redact](../../adrs/0001_redact_logs.md)\n"
+            "- Also: [gone](../../adrs/0009_gone.md)").replace("status: stable", "status: draft"))
+        self.set_tasks("c1", "- [ ] T1 (test) x — invariants/no_secrets")
+        code, out = self.sdd("check", "c1")
+        self.assertIn("ADR-0001 is linked from a concept but not in intent.md adrs", out)
+        self.assertIn("link '../../adrs/0009_gone.md' in '## Rationale' does not resolve", out)
+
+    def test_directory_with_only_an_index_is_not_listed(self):
+        self.living()
+        self.write("specs/capabilities/empty/index.md", "# Capability\n")
+        code, out = self.sdd("bundle", "specs", "--fix")
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("empty", self.read("specs/capabilities/index.md"))
+        self.assertFalse((self.root / "specs/capabilities/empty/index.md").exists())
+        code, out = self.sdd("bundle", "specs", "--fix")
+        self.assertNotIn("FIXED", out)
+
+    def test_reserved_change_ids(self):
+        for name in ("specs", "adrs", "archive"):
+            self.assert_fails(self.sdd("new", name), "is reserved", code=2)
 
 
 CAP_INV_OLD = "capabilities/auth/old.md"
