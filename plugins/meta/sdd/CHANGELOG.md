@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## sdd-0.9.1 - 2026-10-24
+#### Bug Fixes
+- align plugin instructions with Opus 5.5 prompting guide (#27) - (fe5dee0) - Grégory R.
+
+- - -
+
 ## sdd-0.9.0 - 2026-10-18
 #### Features
 - <span style="background-color: #d73a49; color: white; padding: 2px 6px; border-radius: 3px; font-weight: bold; font-size: 0.85em;">BREAKING</span>(**sdd**) generate Capability and Invariant concepts from the lintel templates (#25) - (046639f) - Grégory R.
