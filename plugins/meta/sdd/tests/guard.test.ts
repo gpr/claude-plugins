@@ -1,7 +1,20 @@
 import { describe, expect, test } from 'claude-code/testing'
 
-import { checkBash, checkBundle, checkPath, checkSdd, cleanCfg, DEFAULT_CFG, frontStatus, relTo, roleOf, statusesIn } from '../hooks/guard'
-import type { Lookup, Role } from '../hooks/guard'
+import {
+  applyEdit,
+  checkBash,
+  checkBundle,
+  checkPath,
+  checkSdd,
+  cleanCfg,
+  DEFAULT_CFG,
+  frontStatus,
+  relTo,
+  roleOf,
+  segments,
+  statusesIn,
+} from '../hooks/guard'
+import type { Lookup, Role, Write } from '../hooks/guard'
 
 const ROOT = '/repo'
 const STATUS: Record<string, string> = {
@@ -70,6 +83,12 @@ const FILE_CASES: [Role, string, 'allow' | 'deny'][] = [
   ['other', '.claude/agent-memory/sdd-other/MEMORY.md', 'deny'],
   ['other', 'src/app.py', 'allow'],
   ['other', 'specs/auth/spec.md', 'deny'],
+  ['spec-author', 'adrs/index.md', 'deny'],
+  ['spec-author', 'adrs/log.md', 'deny'],
+  ['spec-author', 'adrs/.templates/adr.md.tmpl', 'deny'],
+  ['implementer', 'adrs/.templates/adr.md.tmpl', 'deny'],
+  ['lead', 'adrs/.templates/adr.md.tmpl', 'allow'],
+  ['lead', 'adrs/index.md', 'allow'],
 ]
 
 describe('file writes', () => {
@@ -108,20 +127,67 @@ describe('bash', () => {
   })
   test('a relative path is resolved against the cwd once', () =>
     expect(checkBash("sed -i 's/a/b/' ../tests/acceptance/test_a.py", 'implementer', DEFAULT_CFG, [`${ROOT}/src`, ROOT])).toBeDefined())
+  test('the verifier cannot write a file whose name has no slash', () => {
+    expect(bash('verifier', 'echo pwned > notes.txt')).toBe('deny')
+    expect(bash('verifier', 'echo pwned>notes.txt')).toBe('deny')
+    expect(bash('verifier', 'touch notes.txt')).toBe('deny')
+    expect(bash('verifier', 'cd src && sed -i -e "s,x,y,g" app.py')).toBe('deny')
+  })
+  test('a cd into the acceptance tests is followed', () => {
+    expect(bash('implementer', 'cd tests; cd acceptance; sed -i "s,assert,pass," test_a.py')).toBe('deny')
+    expect(bash('implementer', 'cd tests/acceptance && echo pass > test_a.py')).toBe('deny')
+    expect(bash('implementer', '(cd tests/acceptance && cp ../../x.py test_a.py)')).toBe('deny')
+    expect(bash('implementer', 'cd src && echo x > app.py')).toBe('allow')
+  })
+  test('test runs and their output stay allowed', () => {
+    expect(bash('verifier', 'pytest -q tests/acceptance 2>&1 | tee /tmp/out.txt')).toBe('allow')
+    expect(bash('verifier', 'pytest -q tests/acceptance > /tmp/out.txt 2>&1')).toBe('allow')
+    expect(bash('verifier', 'npm install && npm test')).toBe('allow')
+    expect(bash('implementer', 'cd src && pytest -q ../tests/acceptance/test_a.py 2>&1 | tail -5')).toBe('allow')
+  })
+  test('segments split on shell separators outside quotes only', () => {
+    expect(segments('a && b; c | d\ne')).toEqual(['a', 'b', 'c', 'd', 'e'])
+    expect(segments('echo "a; b" && c 2>&1')).toEqual(['echo "a; b"', 'c 2>&1'])
+    expect(segments('x &> log')).toEqual(['x &> log'])
+  })
 })
 
 describe('status changes stay in sdd', () => {
-  const write = (role: Role, rel: string, text: string) => checkPath(rel, role, DEFAULT_CFG, look, text)
-  test('spec-author cannot approve its own change', async () => {
-    expect(await write('spec-author', 'changes/c1/intent.md', 'status: approved')).toBeDefined()
-    expect(await write('spec-author', 'changes/c1/intent.md', '---\nstatus: draft\n---\n# x')).toBeUndefined()
+  const INTENT = '---\ntype: intent\nstatus: draft\nsize: change\n---\n# x\n'
+  const ADR = '---\ntype: ADR\nstatus: draft\n---\n## Decision\nUse x.\n'
+  const write = (role: Role, rel: string, w: Write) => checkPath(rel, role, DEFAULT_CFG, look, w)
+  const edit = (before: string, old_string: string, new_string: string): Write => ({
+    before,
+    after: applyEdit(before, 'Edit', { old_string, new_string }),
+    added: new_string,
   })
-  test('spec-author cannot accept its own ADR', async () => {
-    expect(await write('spec-author', 'adrs/0002_y.md', 'status: stable')).toBeDefined()
-    expect(await write('spec-author', 'adrs/0003_z.md', '---\nstatus: draft\n---')).toBeUndefined()
+  test('spec-author cannot approve its own change', async () => {
+    expect(await write('spec-author', 'changes/c1/intent.md', edit(INTENT, 'status: draft', 'status: approved'))).toBeDefined()
+    expect(await write('spec-author', 'changes/c1/intent.md', edit(INTENT, '# x', '# y'))).toBeUndefined()
+  })
+  test('an Edit that splices a status in mid-line is a status change too', async () => {
+    expect(await write('spec-author', 'changes/c1/intent.md', edit(INTENT, 'draft', 'approved'))).toBeDefined()
+    expect(await write('spec-author', 'changes/c1/intent.md', edit(INTENT, 'us: draft', 'us: approved'))).toBeDefined()
+    expect(await write('spec-author', 'adrs/0002_y.md', edit(ADR, 'draft', 'stable'))).toBeDefined()
+  })
+  test('removing the status line is a change', async () =>
+    expect(await write('spec-author', 'adrs/0002_y.md', edit(ADR, 'status: draft\n', ''))).toBeDefined())
+  test('MultiEdit is applied edit by edit', async () => {
+    const after = applyEdit(ADR, 'MultiEdit', { edits: [{ old_string: 'Use x.', new_string: 'Use y.' }, { old_string: 'dr', new_string: 'st' }] })
+    expect(after).toContain('status: staft')
+    expect(await write('spec-author', 'adrs/0002_y.md', { before: ADR, after, added: 'st' })).toBeDefined()
+  })
+  test('a new ADR may be draft or have no status, never decided', async () => {
+    expect(await write('spec-author', 'adrs/0003_z.md', { after: '---\nstatus: draft\n---', added: '' })).toBeUndefined()
+    expect(await write('spec-author', 'adrs/0003_z.md', { after: '# z', added: '' })).toBeUndefined()
+    expect(await write('spec-author', 'adrs/0003_z.md', { after: '---\nstatus: stable\n---', added: '' })).toBeDefined()
+  })
+  test('without the file text, the status lines a write adds are checked', async () => {
+    expect(await write('spec-author', 'changes/c1/intent.md', { added: 'status: approved' })).toBeDefined()
+    expect(await write('spec-author', 'adrs/0002_y.md', { added: 'status: "draft"' })).toBeUndefined()
   })
   test('the lead may still edit status by hand', async () =>
-    expect(await write('lead', 'changes/c1/intent.md', 'status: approved')).toBeUndefined())
+    expect(await write('lead', 'changes/c1/intent.md', edit(INTENT, 'draft', 'approved'))).toBeUndefined())
 })
 
 describe('sdd subcommands', () => {
@@ -136,8 +202,9 @@ describe('sdd subcommands', () => {
     expect(checkSdd('baseline-tree', 'acceptance-tester')).toBeDefined()
   })
 
-  test('freeze: acceptance-tester yes, implementer no', () => {
-    expect(checkSdd('freeze', 'acceptance-tester')).toBeUndefined()
+  test('freeze is lead-only: one snapshot after the batch of test tasks', () => {
+    expect(checkSdd('freeze', 'lead')).toBeUndefined()
+    expect(checkSdd('freeze', 'acceptance-tester')).toBeDefined()
     expect(checkSdd('freeze', 'implementer')).toBeDefined()
   })
   test('delta-new: spec-author yes, implementer no', () => {
@@ -195,7 +262,7 @@ describe('bundle tool', () => {
 })
 
 describe('bundle files stay generated', () => {
-  const write = (role: Role, rel: string) => checkPath(rel, role, DEFAULT_CFG, look, 'x')
+  const write = (role: Role, rel: string) => checkPath(rel, role, DEFAULT_CFG, look, { added: 'x' })
   test('nobody but sdd writes the specs bundle or a change index', async () => {
     expect(await write('lead', 'specs/capabilities/index.md')).toBeDefined()
     expect(await write('lead', 'specs/invariants/no_secrets.md')).toBeDefined()
@@ -217,7 +284,9 @@ describe('quoted statuses read as sdd.py reads them', () => {
   })
   test('a quoted status in a write is the same status', async () => {
     expect(statusesIn('status: "draft"')).toEqual(['draft'])
-    expect(await checkPath('adrs/0002_y.md', 'spec-author', DEFAULT_CFG, look, '---\nstatus: "draft"\n---')).toBeUndefined()
+    const before = '---\nstatus: draft\n---\n'
+    const w = { before, after: '---\nstatus: "draft"\n---\n', added: 'status: "draft"' }
+    expect(await checkPath('adrs/0002_y.md', 'spec-author', DEFAULT_CFG, look, w)).toBeUndefined()
   })
 })
 

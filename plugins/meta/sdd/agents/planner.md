@@ -35,7 +35,7 @@ Steps
      changed invariant needs a `(test)` task too, but no `(impl)` task. Retired criteria
      and deprecated invariants get no test task.
    - `(impl)` tasks small enough for one focused session, each `blocked-by` its test
-     task(s), each with `files:` so the lead can parallelize disjoint ones.
+     task(s), each with `files:` (the files it may change: the implementer stays inside them).
    - A Baseline criterion gets a `(test)` task and no `(impl)` task. A `size: baseline`
      change has only `(test)` tasks; its Contracts are the existing public surface, with
      the file that defines each entry.

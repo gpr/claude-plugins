@@ -12,15 +12,15 @@ request ─► lead (/sdd:change) ─► triage ──direct──► general-pu
                                   ▼
                             sdd:planner ─► GATE 2 (sdd check, automatic)
                                   ▼
-                      sdd:acceptance-tester ─► sdd freeze
+                      sdd:acceptance-tester(s) ─► sdd freeze (lead, once)
                                   ▼
-                        sdd:implementer(s)  (inner TDD; BLOCKED ─► reopen spec ─► GATE 1)
+                        sdd:implementer, one task at a time  (inner TDD; BLOCKED ─► reopen spec ─► GATE 1)
                                   ▼
                            sdd:verifier ─► PASS ─► code-review (findings ─► implementer / reopen)
                                   ▼
-                              sdd sync (concepts → specs/, ADRs accepted, archive)
+                              sdd sync (merge origin/<base>, concepts → specs/, ADRs accepted, archive)
                                   ▼
-                              sdd finish (commit, push, PR ready)
+                              sdd finish (commit, merge a moved base, push, PR ready)
 ```
 Each artifact is committed and pushed with `sdd checkpoint`, which also stores the phase.
 
@@ -44,8 +44,10 @@ Local test: `claude --plugin-dir ./plugins/meta/sdd`
 In a repo, just describe the change: the main conversation is the lead and runs the
 workflow (`/sdd:change <what you want>` does the same explicitly). The first run calls `sdd init`, which
 creates `specs/ adrs/ changes/ tests/acceptance/` (`specs/` and `adrs/` as OKF bundles with
-`index.md`, `log.md` and their concept templates in `.templates/`) and `.claude/sdd.json`:
-set `acceptance_cmd` and `unit_cmd` there.
+`index.md`, `log.md` and their concept templates in `.templates/`), `.claude/sdd.json`
+(set `acceptance_cmd` and `unit_cmd` there) and `.gitattributes` lines that merge the two
+`log.md` files by union, so concurrent changes don't conflict on them. In a repo initialised
+by an older sdd, run `sdd init` again and commit `.gitattributes`.
 
 ## Existing repositories
 sdd imports nothing. It writes current behavior down as it goes:
@@ -130,8 +132,12 @@ For a full change or a fix the lead runs `sdd start <id>` before any artifact ex
 - **Continue a change**: `/sdd:change resume <id>` runs `sdd resume <id>` (or `--pr <n>`):
   `git fetch` the PR branch, create or reuse the worktree, fast-forward it, print the stored
   phase and the step to continue at. The lead enters the worktree and carries on.
-- `sdd finish <id>` after `sync`: phase `done`, commit, push, `gh pr ready`. Merging stays
-  with you. The worktree is kept.
+- `sdd sync <id>` first merges `origin/<base>` into the branch when the base moved, so the
+  delta's base hashes are checked against the living spec as it is now.
+- `sdd finish <id>` after `sync`: phase `done`, commit, merge `origin/<base>` again if it
+  moved since the sync, push, `gh pr ready`. Merging stays with you. The worktree is kept.
+- Every commit sdd makes lists the new files; one that looks like a secret (`.env`, `*.pem`,
+  `*.key`, `id_rsa`, `credentials.json`, ...) is unstaged and the commit refused.
 
 Needs a git remote named `origin` with `.claude/sdd.json` committed on the base branch;
 `gh` (authenticated) only for the PR steps. Config keys: `base_branch` (default: the
@@ -145,6 +151,8 @@ remote's default branch), `branch_prefix` (`sdd/`), `worktree_dir` (`.claude/wor
   against the calling agent, identified by the call's `agentId`:
   - Nobody edits `specs/` by hand: it changes only through `sdd sync`.
   - Nobody edits accepted (stable) or deprecated ADRs, `frozen.json`, `state.json` or archived changes.
+  - Only the lead edits the concept templates (`specs/.templates/`, `adrs/.templates/`) and
+    the ADR bundle's `index.md` and `log.md`.
   - `spec-author` writes only the intent, the delta and draft ADRs, and only while
     the change is `draft`.
   - `planner` writes only `plan.md` and `tasks.md`, while the change is `draft` or
@@ -152,15 +160,16 @@ remote's default branch), `branch_prefix` (`sdd/`), `worktree_dir` (`.claude/wor
   - `acceptance-tester` writes only the acceptance tests and `tasks.md`.
   - `implementer` can never touch the acceptance tests, the spec or the ADRs.
   - `verifier` writes nothing but its memory.
-  - No subagent edits `.claude/` outside its own memory directory, or changes a `status:` line in `intent.md` or an ADR
-    (that is `sdd set-status` / `sdd adr-accept`, lead only).
+  - No subagent edits `.claude/` outside its own memory directory, or changes the `status:` of `intent.md` or an ADR
+    (that is `sdd set-status` / `sdd adr-accept`, lead only). The guard compares the file's
+    front matter before and after the write, so a status spliced in by an Edit counts.
 
-  If the guard itself fails, it refuses subagents' calls and lets the lead's through.
+  If the guard itself fails, or a call comes from an agent the session does not list, it
+  refuses subagents' calls and lets the lead's through.
 - **`sdd` tool.** Agents call `mcp__sdd__sdd` with `args` instead of a script path, and
   the tool applies role rules per subcommand:
-  - lead only: `sync`, `set-status`, `new`, `init`, `adr-accept`, `start`, `checkpoint`, `set-pr`, `requires`, `resume`, `finish`
+  - lead only: `sync`, `set-status`, `new`, `init`, `adr-accept`, `start`, `checkpoint`, `set-pr`, `requires`, `resume`, `finish`, `freeze`
   - read-only, any role: `deps`
-  - lead and acceptance-tester: `freeze`
   - lead and verifier: `baseline-tree`
   - lead and spec-author: `delta-new`, `delta-stub`, `adr-new`
 - **`bundle` tool.** `mcp__sdd__bundle` takes `target` (`specs`, `adrs` or a change id) and
@@ -199,14 +208,20 @@ the agents run without it.
   nothing is paraphrased.
 - **Conflicts.** Each MODIFIED or RETIRED criterion, replaced section, replaced invariant and
   deprecation carries the hash of the living text it was based on, so if another change
-  edited that unit first you get a CONFLICT, not a silent overwrite. Changes to different
-  criteria of one capability merge independently.
+  edited that unit first you get a CONFLICT, not a silent overwrite. Since each change lives
+  on its own branch, `sync` first merges `origin/<base>` in, so "first" means "merged into
+  the base". Changes to different criteria of one capability merge independently, in sdd and
+  in git (a merge keeps the capability's `generated.at`; the logs merge by union). A change
+  merged into the base *after* this one synced, and that edited the same unit, shows up as a
+  git conflict at `finish`: see `docs/how-to/resolve-sync-conflict.md`.
 - **Traceability.** `check` fails when a criterion has no Given/When/Then, no test task or
   no impl task, an invariant no check or test task, or when anything cites a criterion,
   invariant, ADR or task that doesn't exist (or is retired or deprecated).
   `check --tests` also fails when a unit has no acceptance test or a task is still open.
-- **Freeze.** Records hashes of the acceptance tests; `verify-frozen` catches any edit
-  that slipped past the guard.
+- **Freeze.** The lead runs it once per batch of test tasks. It records hashes of every file
+  in the acceptance dir (tests, helpers, fixtures) and the base commit; `verify-frozen`
+  catches any edit, deletion or new file that slipped past the guard, and accepts only what
+  a merge of the base brought in.
 - **Context bundles.** `context <change> <task>` gives each agent only its own slice:
   - every task: the criteria it cites (with their capability's Intent), the invariants it
     cites in full, and the ADR Decision sections
@@ -227,10 +242,12 @@ python3 -m unittest discover -s plugins/meta/sdd/tests -p 'test_*.py'   # sdd.py
   the files, you resolve it by hand and checkpoint.
 - "Merged" means the dependency's archive directory is on `origin/<base>`: squash merges
   are fine, a dependency that is closed without merging stays blocked until `requires --clear`.
-- Parallel implementer worktrees (`isolation: "worktree"`) started from inside the change's
-  worktree are untested with nested worktrees; run implementers sequentially if it fails.
-- The Bash check is heuristic. `verify-frozen`, run by the verifier and ideally in CI,
-  is the real enforcement for tests.
-- Parallel implementers in worktrees still need the lead to merge their branches.
+- Implementers run one at a time. Claude Code's isolated worktrees start from the default
+  branch, without the change's tasks, plan and frozen tests, so the workflow does not use them.
+- The Bash check is heuristic: it follows `cd` and redirects, but code that builds a path at
+  run time (a `python -c` one-liner) gets past it. `verify-frozen`, run by the verifier and
+  ideally in CI, is the real enforcement for the acceptance dir.
+- Two changes in review at the same time that both edit one unit: the second one's `finish`
+  stops on a git conflict, resolved by hand (`docs/how-to/resolve-sync-conflict.md`).
 - The band and pane refresh on workflow events and every 30 s; edits made outside
   Claude Code show on the next refresh or with `/sdd refresh`.

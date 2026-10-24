@@ -30,9 +30,9 @@ flowchart TD
     PL2 & AT2 --> G2
 
     PL --> G2{{"GATE 2<br/>sdd check, automatic"}}
-    G2 -- "full change" --> AT["acceptance-tester<br/>failing tests, then sdd freeze"]
+    G2 -- "full change" --> AT["acceptance-tester(s)<br/>failing tests; lead: sdd freeze"]
     AT --> IM
-    G2 -- fix --> IM["implementer(s)<br/>inner TDD"]
+    G2 -- fix --> IM["implementer, one task at a time<br/>inner TDD"]
     IM --> VE["verifier<br/>frozen, suites, trace, diff"]
     VE -- PASS --> CR["code-review"]
     VE -- "FAIL: code" --> IM
@@ -80,7 +80,7 @@ Without triage, either trivial work drowns in ceremony or real behavior changes 
 
 ## Tests outside, TDD inside
 
-The acceptance-tester writes tests from the criteria and the plan's Contracts **before** any code exists, confirms they fail for the right reason, and freezes them. Implementers then make those frozen tests pass, each with its own red-green-refactor loop of unit tests.
+The acceptance-tester writes tests from the criteria and the plan's Contracts **before** any code exists and confirms they fail for the right reason. Once every test task is back, the lead freezes the whole acceptance dir in one snapshot. Implementers then make those frozen tests pass, one task at a time, each with its own red-green-refactor loop of unit tests.
 
 Two things follow:
 - The acceptance tests come from the spec, not from the implementation, so they can't be quietly bent to fit the code. The guard and `verify-frozen` enforce this.

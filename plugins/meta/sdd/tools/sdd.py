@@ -29,14 +29,16 @@ Commands
   adr-accept <ADR-NNNN>              draft -> stable (+ deprecates the superseded one)
   check <change> [--tests]           traceability + conflicts (+ acceptance coverage)
   context <change> <task> [--plan]   minimal context bundle for one task
-  freeze <change> [--after-code]     record hashes of the change's acceptance tests (and the base
-                                     commit their Baseline tests pass on)
+  freeze <change> [--after-code]     record hashes of the whole acceptance dir and the base commit
+                                     (and the commit the Baseline tests pass on)
   baseline-tree <change> [--remove] [--link PATH ...]
                                      worktree at that commit with the acceptance tests (and links to
                                      installed dependencies), to re-run the Baseline tests there
-  verify-frozen <change>             fail if frozen acceptance tests were modified
+  verify-frozen <change>             fail if an acceptance file was modified, deleted or added after
+                                     freeze (a change the base merged in is accepted)
   sync <change> [--dry-run] [--force]
-                                     merge the delta into living specs, accept ADRs, archive
+                                     merge origin/<base> in first (started changes), then the delta
+                                     into living specs, accept ADRs, archive
   bundle <specs|adrs|change> [--fix] validate (and repair) an OKF bundle
 Branch / PR / resume (git + gh; the lead runs them)
   start <change> --title T [--pr-title P] [--base B] [--requires a,b]
@@ -49,7 +51,8 @@ Branch / PR / resume (git + gh; the lead runs them)
   set-pr <change> <number> [--url U]  record a PR created by hand
   resume <change> [--pr N]           fetch the branch, (re)create its worktree, show the phase;
                                      refuses while a required change is not merged into the base
-  finish <change>                    after sync: phase done, commit, push, mark the PR ready
+  finish <change>                    after sync: phase done, commit, merge a moved base, push,
+                                     mark the PR ready
 Exit code: 0 ok, 1 errors found, 2 usage error.
 """
 from __future__ import annotations
@@ -148,8 +151,15 @@ CFG = {
 DEFAULT_CFG = dict(CFG)
 _cfg_file = ROOT / ".claude" / "sdd.json"
 if _cfg_file.exists():
-    CFG.update(json.loads(_cfg_file.read_text()))
-
+    try:
+        _raw_cfg = json.loads(_cfg_file.read_text())
+    except ValueError as e:
+        _raw_cfg = f"invalid JSON ({e})"
+    if not isinstance(_raw_cfg, dict):
+        # every command (and the mod's `status --json`) reads it: a clear error, not a traceback
+        print(f"ERROR .claude/sdd.json: {_raw_cfg if isinstance(_raw_cfg, str) else 'not a JSON object'}; fix the file")
+        sys.exit(2)
+    CFG.update(_raw_cfg)
 
 
 def use_config(cfg: dict):
@@ -1028,9 +1038,12 @@ def apply_delta(d: Delta, living: dict[str, Concept]) -> tuple[Concept, list[str
         merge_sources(c.fm, sources_entries(d.doc.fm))
     gen = c.fm.get("generated")
     gen = dict(gen) if isinstance(gen, dict) else {}
-    gen.setdefault("by", author())
-    gen["at"] = stamp
-    c.fm.set("generated", gen)
+    if d.kind != "modify" or not gen.get("at"):
+        # a CapabilityDelta merge keeps `at`: two changes merging different criteria of one
+        # capability would otherwise always conflict on that line in git (log.md records the merge)
+        gen.setdefault("by", author())
+        gen["at"] = stamp
+        c.fm.set("generated", gen)
     c.fm.set("sources", sources_entries(c.fm))
     return c, log
 
@@ -1051,6 +1064,9 @@ def save_state(change: Path, st: dict):
 
 # ------------------------------------------------------------------ change --
 def change_dir(name: str) -> Path:
+    # an id, never a path: `archive/<date>-x` or `../x` would let a tool call write where the guard refuses
+    if not CHANGE_ID_RE.fullmatch(name) or name in RESERVED_IDS:
+        die(f"'{name}' is not a change id (kebab-case, not {', '.join(sorted(RESERVED_IDS))})")
     p = CHANGES / name
     if not (p / "intent.md").exists():
         die(f"no change '{name}' (expected {p.relative_to(ROOT)}/intent.md)")
@@ -1116,10 +1132,11 @@ def acceptance_hits(refs: set[str]) -> dict[str, list[Path]]:
 # ---------------------------------------------------------------- commands --
 # `bundle` and `changes/` give these names another meaning: never a change id.
 RESERVED_IDS = {"specs", "adrs", "archive"}
+CHANGE_ID_RE = re.compile(r"[a-z0-9][a-z0-9-]{1,60}")
 
 
 def check_change_id(name: str):
-    if not re.fullmatch(r"[a-z0-9][a-z0-9-]{1,60}", name):
+    if not CHANGE_ID_RE.fullmatch(name):
         die("change id must be kebab-case")
     if name in RESERVED_IDS:
         die(f"'{name}' is reserved ({', '.join(sorted(RESERVED_IDS))}): pick another change id")
@@ -1130,7 +1147,7 @@ def cmd_new(args):
         die("usage: new <change> [--title T]")
     name = args[0]
     check_change_id(name)
-    title = args[args.index("--title") + 1] if "--title" in args else name
+    title = opt(args, "--title") or name
     d = CHANGES / name
     if d.exists():
         die(f"{d.relative_to(ROOT)} already exists")
@@ -1261,6 +1278,20 @@ def init_values(sets: list[str]) -> dict:
     return cfg
 
 
+def add_lines(path: Path, lines: list[str]) -> bool:
+    """Append the `lines` that `path` lacks; True when it changed."""
+    old = path.read_text() if path.exists() else ""
+    missing = [l for l in lines if l not in old.splitlines()]
+    if missing:
+        atomic_write(path, old + ("" if not old or old.endswith("\n") else "\n") + "\n".join(missing) + "\n")
+    return bool(missing)
+
+
+def union_lines() -> list[str]:
+    """.gitattributes lines that let two branches each add a log entry without a git conflict."""
+    return [f"/{CFG[k].strip('/')}/log.md merge=union" for k in ("specs_dir", "adr_dir")]
+
+
 def cmd_init(args):
     survey_only = "--survey" in args
     sets = [a for a in args if a != "--survey"]
@@ -1310,12 +1341,11 @@ def cmd_init(args):
         if not p.exists() and not foreign[bundle]:
             atomic_write(p, (TEMPLATES / name).read_text())
             made.append(str(p.relative_to(ROOT)))
-    ignore = ROOT / ".gitignore"
     line = f"/{CFG['worktree_dir'].strip('/')}/"
-    old = ignore.read_text() if ignore.exists() else ""
-    if line not in old.splitlines():
-        atomic_write(ignore, old + ("" if not old or old.endswith("\n") else "\n") + line + "\n")
+    if add_lines(ROOT / ".gitignore", [line]):
         made.append(f".gitignore ({line})")
+    if add_lines(ROOT / ".gitattributes", union_lines()):
+        made.append(".gitattributes (merge=union for the logs)")
     print("created: " + (", ".join(made) if made else "nothing, already initialised"))
     if any(foreign.values()):
         sys.exit(1)
@@ -1512,10 +1542,9 @@ def cmd_delta_stub(args):
 def cmd_adr_new(args):
     if not args:
         die("usage: adr-new <title> [--supersedes ADR-NNNN]")
-    sup = None
-    if "--supersedes" in args:
+    sup = opt(args, "--supersedes")
+    if sup is not None:
         i = args.index("--supersedes")
-        sup = args[i + 1] if i + 1 < len(args) else ""
         args = args[:i] + args[i + 2:]
         if sup not in adr_files():
             die(f"{sup} does not exist")
@@ -2268,10 +2297,40 @@ def cmd_context(args):
             print(m.group(1).strip() + "\n")
 
 
+# Generated by test runs, never frozen: they change whenever the tests run.
+CACHE_PARTS = {"__pycache__", "node_modules"}
+
+
+def acceptance_files() -> list[str]:
+    """Every file of the acceptance dir, helpers and fixtures included (git's view when there is
+    one, so ignored files stay out), without caches the test runs write."""
+    code, out = git("-c", "core.quotePath=false", "ls-files", "--cached", "--others", "--exclude-standard",
+                    "--", CFG["acceptance_dir"])
+    paths = out.splitlines() if code == 0 else \
+        [rel(f) for f in ACCEPT.rglob("*") if f.is_file()] if ACCEPT.is_dir() else []
+    return sorted({x for x in paths if (ROOT / x).is_file() and not x.endswith(".pyc")
+                   and not any(part.startswith(".") or part in CACHE_PARTS for part in Path(x).parts)})
+
+
+def sha(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def blob_sha(ref: str, path: str) -> str | None:
+    """sha256 of `path` as it is at git `ref`, None when it is not there (or without git)."""
+    try:
+        p = subprocess.run(["git", "show", f"{ref}:{path}"], cwd=ROOT, capture_output=True, timeout=60)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    return hashlib.sha256(p.stdout).hexdigest() if p.returncode == 0 else None
+
+
 def frozen_set(d: Path) -> dict[str, str]:
+    """Hashes of the whole acceptance dir, once some test there cites this change's units."""
     _, _, info = collect(d)
-    files = {f for fs in acceptance_hits(info["test_refs"]).values() for f in fs}
-    return {str(f.relative_to(ROOT)): hashlib.sha256(f.read_bytes()).hexdigest() for f in sorted(files)}
+    if not any(acceptance_hits(info["test_refs"]).values()):
+        return {}
+    return {x: sha(ROOT / x) for x in acceptance_files()}
 
 
 def base_commit(d: Path) -> str | None:
@@ -2329,7 +2388,10 @@ def cmd_freeze(args):
     if not snap:
         die("no acceptance test references this change's criteria or invariants; nothing to freeze", 1)
     freeze_baseline(d, "--after-code" in args)
-    atomic_write(d / "frozen.json", json.dumps(snap, indent=2) + "\n")
+    # v2: the whole acceptance dir, and the base commit, so verify-frozen can tell a test the
+    # base merged in from one changed in this branch
+    frozen = {"version": 2, "base": base_commit(d), "files": snap}
+    atomic_write(d / "frozen.json", json.dumps(frozen, indent=2) + "\n")
     print(f"froze {len(snap)} file(s) -> {(d / 'frozen.json').relative_to(ROOT)}")
 
 
@@ -2388,16 +2450,36 @@ def cmd_verify_frozen(args):
     f = d / "frozen.json"
     if not f.exists():
         die("no frozen.json; run freeze after the acceptance tests are written", 1)
-    snap = json.loads(f.read_text())
+    raw = json.loads(f.read_text())
+    v2 = raw.get("version") == 2
+    snap, then = (raw.get("files", {}), raw.get("base")) if v2 else (raw, None)
+    base = base_of(load_state(d))
+
+    # without both commits (no git, a shallow clone) nothing can come from the base: strict
+    refs_ok = then is not None and all(git("rev-parse", "--verify", "-q", f"{r}^{{commit}}")[0] == 0
+                                       for r in (then, f"origin/{base}"))
+
+    def from_base(path: str, now: str | None) -> bool:
+        """The base changed `path` after freeze (a merge brought it in), and it is as the base has it:
+        not tampering. Reverting a test to its pre-freeze content stays an error."""
+        if not refs_ok:
+            return False
+        on_base = blob_sha(f"origin/{base}", path)
+        return on_base == now and on_base != blob_sha(then, path)
+
     bad = 0
-    for rel_path, h in snap.items():
+    current = set(acceptance_files()) if v2 else set()
+    for rel_path in sorted(set(snap) | current):
         p = ROOT / rel_path
-        if not p.exists():
-            print(f"ERROR {rel_path} deleted after freeze")
-            bad += 1
-        elif hashlib.sha256(p.read_bytes()).hexdigest() != h:
-            print(f"ERROR {rel_path} modified after freeze")
-            bad += 1
+        now = sha(p) if p.is_file() else None
+        if now == snap.get(rel_path):
+            continue
+        what = "deleted" if now is None else "modified" if rel_path in snap else "added"
+        if from_base(rel_path, now):
+            print(f"WARN  {rel_path} {what} by origin/{base} after freeze (accepted)")
+            continue
+        print(f"ERROR {rel_path} {what} after freeze")
+        bad += 1
     print(f"{'FAIL' if bad else 'OK'} {len(snap)} frozen file(s), {bad} tampered")
     sys.exit(1 if bad else 0)
 
@@ -2411,6 +2493,18 @@ def cmd_sync(args):
     fm = doc.fm
     if fm.str("status") != "verified" and not force:
         die(f"status is {fm.str('status')}; sync requires verified (or --force)", 1)
+    st = load_state(d)
+    if st.get("branch"):
+        # base hashes are only worth checking against the living spec as it is on the base now
+        require_branch(st, d.name)
+        base = base_of(st)
+        if base_moved(base):
+            if dry:
+                print(f"WARN origin/{base} has commits this branch lacks: sync merges it first, "
+                      "then checks the delta again")
+            else:
+                bring_in_base(ROOT, base, why="the living specs are current",
+                              then="then `checkpoint` and run `sync` again")
     errs, _, info = collect(d)
     errs += [f"specs bundle: {e}" for e in bundle_check("specs").errs]
     if errs:
@@ -2487,20 +2581,41 @@ def push(wt: Path):
         die(f"push failed: {out.splitlines()[-1] if out else code}", 1)
 
 
+# New files that look like credentials: commit_all pushes everything, so these are refused.
+SECRET_NAME_RE = re.compile(r"\.env(\..+)?|.+\.(pem|key|p12|pfx)|id_(rsa|dsa|ecdsa|ed25519)(\..+)?"
+                            r"|credentials(\.(json|ya?ml|ini|txt|csv|xml))?")
+SECRET_SAFE_RE = re.compile(r".+\.(example|sample|template|pub)")
+
+
 def commit_all(wt: Path, msg: str) -> bool:
-    """Stage everything, commit if something is staged. True when a commit was made."""
+    """Stage everything, commit if something is staged. True when a commit was made. New files
+    are listed; one that looks like a secret is unstaged and the commit refused."""
     git_ok("add", "-A", cwd=wt)
     if git("diff", "--cached", "--quiet", cwd=wt)[0] == 0:
         return False
+    _, added = git("-c", "core.quotePath=false", "diff", "--cached", "--name-only", "--diff-filter=A", cwd=wt)
+    added_files = [f for f in added.splitlines() if f]
+    secrets = [f for f in added_files if SECRET_NAME_RE.fullmatch(f.rsplit("/", 1)[-1])
+               and not SECRET_SAFE_RE.fullmatch(f.rsplit("/", 1)[-1])]
+    if secrets:
+        git("reset", "-q", "--", *secrets, cwd=wt)
+        die(f"refusing to commit and push files that look like secrets: {', '.join(secrets)}. "
+            "Add them to .gitignore or delete them, then retry", 1)
+    if added_files:
+        print(f"added {len(added_files)} new file(s): {', '.join(added_files[:10])}"
+              + (f" (+{len(added_files) - 10})" if len(added_files) > 10 else ""))
     git_ok("commit", "-m", msg, cwd=wt)
     return True
 
 
 def opt(args: list[str], flag: str) -> str | None:
-    return args[args.index(flag) + 1] if flag in args and args.index(flag) + 1 < len(args) else None
-
-
-CHANGE_ID_RE = re.compile(r"[a-z0-9][a-z0-9-]{1,60}")
+    """The value after `flag`, None when the flag is absent; a flag given without a value is a usage error."""
+    if flag not in args:
+        return None
+    i = args.index(flag) + 1
+    if i >= len(args):
+        die(f"{flag} needs a value")
+    return args[i]
 
 
 def parse_requires(raw: list[str], name: str) -> list[str]:
@@ -2610,7 +2725,15 @@ def missing(rows: list[dict]) -> bool:
     return any(r["state"] == "missing" for r in rows)
 
 
-def bring_in_base(wt: Path, base: str):
+def base_moved(base: str) -> bool:
+    """Fetch origin/<base>; True when it has commits HEAD lacks (False offline or without the ref)."""
+    if git("fetch", "origin", base)[0] != 0:
+        return False
+    return git("merge-base", "--is-ancestor", f"origin/{base}", "HEAD")[0] == 1
+
+
+def bring_in_base(wt: Path, base: str, why: str = "required changes arrived",
+                  then: str = "then run `checkpoint` again"):
     if git("status", "--porcelain", cwd=wt)[1]:
         die(f"uncommitted changes in {wt}: commit or stash them (or `checkpoint`), then retry", 1)
     code, out = git("merge", "--no-edit", f"origin/{base}", cwd=wt)
@@ -2619,9 +2742,9 @@ def bring_in_base(wt: Path, base: str):
         git("merge", "--abort", cwd=wt)
         die(f"merging origin/{base} into the change branch failed "
             f"({files or (out.splitlines() or ['no output'])[-1]}): "
-            f"merge it by hand in {wt}, then run `checkpoint` again", 1)
+            f"merge it by hand in {wt}, {then}", 1)
     push(wt)
-    print(f"merged origin/{base} into the branch (required changes arrived)")
+    print(f"merged origin/{base} into the branch ({why})")
 
 
 def cmd_start(args):
@@ -2642,6 +2765,10 @@ def cmd_start(args):
         git_ok("fetch", "origin", base)
     if git("cat-file", "-e", f"origin/{base}:.claude/sdd.json")[0] != 0:
         die(f"commit and push .claude/sdd.json (and .gitignore) to {base} first: the worktree starts from origin/{base}", 1)
+    attrs = git("show", f"origin/{base}:.gitattributes")[1].splitlines()
+    if any(l not in attrs for l in union_lines()):
+        print(f"WARN .gitattributes on {base} lacks merge=union for the spec logs: run `sdd init` there "
+              "and commit it, or concurrent changes conflict on log.md")
     git_ok("worktree", "add", str(wt), "-b", branch, f"origin/{base}")
     try:
         code, out = sh([sys.executable, str(Path(__file__).resolve()), "new", name, "--title", title], wt)
@@ -2786,6 +2913,7 @@ def cmd_resume(args):
     if not args or args[0].startswith("-"):
         die("usage: resume <change> [--pr N]")
     name = args[0]
+    check_change_id(name)  # it names the worktree directory
     branch = None
     if opt(args, "--pr"):
         code, out = sh(["gh", "pr", "view", opt(args, "--pr"), "--json", "headRefName", "-q", ".headRefName"])
@@ -2833,6 +2961,7 @@ def cmd_finish(args):
     if not args:
         die("usage: finish <change>")
     name = args[0]
+    check_change_id(name)
     hits = sorted(p for p in (CHANGES / "archive").glob(f"*-{name}")
                   if is_archive_of(p.name, name))
     if not hits:
@@ -2845,6 +2974,12 @@ def cmd_finish(args):
     st["phase"] = "done"
     save_state(d, st)
     made = commit_all(ROOT, f"chore(sdd): sync {name}")
+    base = base_of(st)
+    if base_moved(base):
+        # another change merged after this sync: git now shows any unit both changed
+        bring_in_base(ROOT, base, why="merged after this sync",
+                      then="see `Conflict after sync` in docs/how-to/resolve-sync-conflict.md, "
+                           "then run `finish` again")
     push(ROOT)
     print(f"{'committed' if made else 'nothing to commit'}, pushed {st['branch']}")
     if not st.get("pr"):

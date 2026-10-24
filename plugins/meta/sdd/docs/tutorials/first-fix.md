@@ -62,7 +62,7 @@ Open `/sdd phase`. A fix has its own order, with no Spec and no Gate 1:
 · 6. Sync
 ```
 
-The contract is the existing CLI, so the test doesn't need to wait for a plan. The acceptance-tester and the planner run **at the same time**. The tester writes a test citing `capabilities/greeting#AC-01`, sees it fail on `Hello, Ada`, and freezes it. The planner adds an impl task `blocked-by: T1`.
+The contract is the existing CLI, so the test doesn't need to wait for a plan. The acceptance-tester and the planner run **at the same time**. The tester writes a test citing `capabilities/greeting#AC-01`, sees it fail on `Hello, Ada`, and ticks T1; the lead then freezes it with `sdd freeze`. The planner adds an impl task `blocked-by: T1`.
 
 ## 4. Gate 2, implement, verify
 

@@ -28,7 +28,7 @@ changes/<id>/specs/capabilities/<id>.md  a new Capability, or a CapabilityDelta 
 changes/<id>/specs/invariants/<id>.md    a new Invariant, or the replacement of a living one
 changes/<id>/plan.md                     approach, contracts, components, risks
 changes/<id>/tasks.md                    task checklist
-changes/<id>/frozen.json                 hashes of the frozen acceptance tests
+changes/<id>/frozen.json                 hashes of the whole acceptance dir at freeze, and the base commit
 changes/<id>/state.json                  phase, branch, base, PR, requires
 changes/archive/<YYYY-MM-DD>-<id>/       a synced change, immutable
 tests/acceptance/                        acceptance tests citing criterion and invariant ids
@@ -68,7 +68,7 @@ Acceptance tests stay where they are in `tests/acceptance/` and become part of t
 | `plan.md`, `tasks.md` | planner, while `draft` or `approved` |
 | task ticks in `tasks.md` | acceptance-tester and implementer, each its own task |
 | `tests/acceptance/**` | acceptance-tester |
-| `frozen.json` | `sdd freeze` |
+| `frozen.json` | `sdd freeze` (the lead) |
 | `state.json` | `sdd start`, `checkpoint`, `set-pr`, `requires`, `finish`; `freeze` (the `baseline` record) |
 | `changes/archive/**` | `sdd sync` (move), `sdd finish` (`state.json` phase) |
 | source code, unit tests | implementer (or `general-purpose` on the direct path) |
@@ -78,4 +78,4 @@ Enforcement: [Guard rules](guard-rules.md).
 
 ## What to commit
 
-Commit everything above except `.claude/worktrees/` (`sdd init` adds it to `.gitignore`). `.claude/sdd.json` must be committed and pushed to the base branch before `sdd start`. Committing `.claude/agent-memory/` is optional: see [Share agent memory](../how-to/share-agent-memory.md).
+Commit everything above except `.claude/worktrees/` (`sdd init` adds it to `.gitignore`), and the `.gitattributes` lines `sdd init` adds (the two `log.md` files merge by union). `.claude/sdd.json` must be committed and pushed to the base branch before `sdd start`. Committing `.claude/agent-memory/` is optional: see [Share agent memory](../how-to/share-agent-memory.md).

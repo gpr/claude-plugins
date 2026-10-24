@@ -25,10 +25,19 @@
   `skills/change`, as pure functions tested in `tests/phase.test.ts`. A new step or
   status in the workflow changes `PHASES`/`phaseOf` and their tests together.
 - Every workflow agent has `memory: project`. Claude Code names the directory after the
-  agent type with non-alphanumerics folded to `-` (`.claude/agent-memory/sdd-planner/`);
+  agent type with every character but `[a-zA-Z0-9_-]` folded to `-` (`.claude/agent-memory/sdd-planner/`);
   `memoryDirs` in guard.ts is the only `.claude/` exception for subagents. An agent added
   or renamed keeps its `memory:` line and its role-specific Memory section.
 - Guard failure policy: refuse for subagents, allow for the lead (`.catch` in register.tsx).
+  An `agentId` that `$.agent.list()` does not know throws in `roleFor`, so it takes that path.
+- The status rule compares front matter before and after the write (`applyEdit`,
+  `statusChanged`); register.tsx reads the file only when `statusMatters`.
+- `sync` and `finish` merge `origin/<base>` into a started change first (`base_moved`,
+  `bring_in_base`), and a CapabilityDelta merge never touches `generated.at`: together with
+  the `merge=union` lines `init` writes for the logs, that keeps concurrent changes
+  mergeable in git. `freeze` is lead-only and hashes the whole acceptance dir
+  (`frozen.json` v2); `verify-frozen` accepts only what a base merge brought in.
+- A `<change>` argument is an id, never a path: `change_dir` validates it.
 - The `sdd` tool's per-subcommand roles live in `SDD_RULES` (guard.ts) and are restated in
   the tool description and README. Change all three together.
 - Agents call `mcp__sdd__sdd`, never `python3 .../sdd.py`; the guard refuses the latter

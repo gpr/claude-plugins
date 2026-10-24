@@ -3,6 +3,7 @@ import type { EngineInterface, Register } from 'claude-code'
 
 import type { SddAgent, SddChange, SddCheck } from '../types'
 import {
+  applyEdit,
   checkBash,
   checkBundle,
   checkPath,
@@ -11,9 +12,10 @@ import {
   frontStatus,
   relTo,
   roleOf,
+  statusMatters,
   WRITE_TOOLS,
 } from './guard'
-import type { Cfg, Lookup, Role } from './guard'
+import type { Cfg, EditInput, Lookup, Role } from './guard'
 import { activeOf, byActivity, byStatus, infoOf, labelOf, phaseOf, phasesOf, stepOf } from './phase'
 
 type $ = EngineInterface
@@ -37,7 +39,7 @@ const MUTATING = new Set(['init', 'new', 'set-status', 'delta-new', 'delta-stub'
 
 const TOOL_DESCRIPTION = `Runs the spec-driven workflow tool (sdd.py) in the project. Pass the subcommand and its arguments as \`args\`, e.g. ["check", "add-login"].
 Subcommands: init [--survey] [key=value ...] | config | status [<change>] | new <change> --title T | set-status <change> <draft|approved|implementing|verified|archived> | delta-new <change> <capabilities/<id>|invariants/<id>> [--title T] | delta-stub <change> <capabilities/<id>#AC-NN [--retire] | capabilities/<id> --section <Title|Description|Intent|Scope|Invariants|Decisions|Verification> | capabilities/<id> --deprecate | invariants/<id> [--deprecate]> | adr-new <title> [--supersedes ADR-NNNN] | adr-accept <ADR> | check <change> [--tests] | context <change> <task> [--plan] | freeze <change> [--after-code] | baseline-tree <change> [--remove] [--link PATH ...] | verify-frozen <change> | sync <change> [--dry-run] [--force] | bundle <specs|adrs|change> [--fix] | start <change> --title T [--pr-title P] [--base B] [--requires a,b] | requires <change> [<dep>... | --clear] | deps <change> | checkpoint <change> [--phase P] [-m MSG] | set-pr <change> <number> [--url U] | resume <change> [--pr N] | finish <change>.
-Lead-only: init, new, set-status, sync, adr-accept, start, checkpoint, set-pr, requires, resume, finish. deps is read-only. freeze: lead and acceptance-tester. baseline-tree: lead and verifier. delta-new, delta-stub, adr-new: lead and spec-author. Output is terse; ERROR lines name the file and the fix. Bundle validation and repair of specs/, adrs/ and changes/<id>/ is the separate \`bundle\` tool (also reachable as \`sdd bundle <specs|adrs|change> [--fix]\`, with the same role rules).`
+Lead-only: init, new, set-status, sync, adr-accept, start, checkpoint, set-pr, requires, resume, finish, freeze. deps is read-only. baseline-tree: lead and verifier. delta-new, delta-stub, adr-new: lead and spec-author. Output is terse; ERROR lines name the file and the fix. Bundle validation and repair of specs/, adrs/ and changes/<id>/ is the separate \`bundle\` tool (also reachable as \`sdd bundle <specs|adrs|change> [--fix]\`, with the same role rules).`
 
 const BUNDLE_DESCRIPTION = `Checks an OKF bundle of the spec-driven workflow and, with \`fix\`, repairs it. \`target\` is "specs" (the living specs/capabilities/ and specs/invariants/ concepts, their indexes and log), "adrs" (adrs/NNNN_<slug>.md, index, log) or a change id (changes/<id>/: intent, plan, tasks, the new concepts and CapabilityDeltas under specs/, indexes). Checks: layout, snake_case concept ids, Capability/Invariant/ADR structure and front matter, AC order, indexes as \`okf index\` writes them, log date groups, missing sources, the old REQ/INV format (reported, never migrated). Output: FIXED/WARN/ERROR lines, then OK or FAIL. \`fix\` repairs what is marked [fixable] and is idempotent. Check is open to every role; fix on "specs" or "adrs" is lead-only, fix on a change is lead or spec-author.`
 
@@ -54,8 +56,10 @@ async function roleFor($: $, agentId: string | undefined): Promise<Role> {
   let type = agentTypes.get(agentId)
   if (type === undefined) {
     const found = (await $.agent.list()).find(a => a.id === agentId)
-    type = found?.type ?? ''
-    if (found) agentTypes.set(agentId, type)
+    // an agent the session does not list has no role to check: each hook's .catch refuses the call
+    if (!found) throw new Error(`unknown agent ${agentId}`)
+    type = found.type
+    agentTypes.set(agentId, type)
   }
   return roleOf(type)
 }
@@ -288,16 +292,13 @@ export const register: Register = on => {
     const cwd = await $.session.cwd()
     const bases = cwd === root ? [root] : [cwd, root]
     const cfg = await loadCfg($, root)
-    const input = e as unknown as {
+    const input = e as unknown as EditInput & {
       file_path?: string
       notebook_path?: string
       command?: string
-      content?: string
-      new_string?: string
       new_source?: string
-      edits?: { new_string?: string }[]
     }
-    const written = [input.content, input.new_string, input.new_source, ...(input.edits ?? []).map(x => x.new_string)]
+    const added = [input.content, input.new_string, input.new_source, ...(input.edits ?? []).map(x => x.new_string)]
       .filter((s): s is string => typeof s === 'string')
       .join('\n')
 
@@ -312,7 +313,10 @@ export const register: Register = on => {
         if (hit === undefined) {
           reason = role === 'lead' ? undefined : `${path} is outside the project.`
         } else {
-          reason = await checkPath(hit.rel, role, cfg, lookupAt($, hit.base, cfg), written)
+          // the file as the write would leave it: a status spliced in mid-line counts too
+          const before = role !== 'lead' && statusMatters(hit.rel, cfg) ? await readText($, `${hit.base}/${hit.rel}`) : undefined
+          const write = { before, after: applyEdit(before, tool, input), added }
+          reason = await checkPath(hit.rel, role, cfg, lookupAt($, hit.base, cfg), write)
           touchesChanges = hit.rel.startsWith(`${cfg.changes_dir}/`)
         }
       }

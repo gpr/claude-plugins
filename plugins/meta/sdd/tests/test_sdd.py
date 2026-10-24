@@ -8,6 +8,7 @@ Run: python3 -m unittest discover -s plugins/meta/sdd/tests -p 'test_*.py'
 from __future__ import annotations
 
 import datetime as _dt
+import hashlib
 import json
 import os
 import re
@@ -277,6 +278,30 @@ class TestInitConfigNew(SddCase):
 
     def test_unknown_change_is_usage_error(self):
         self.assert_fails(self.sdd("check", "ghost"), "no change 'ghost'", code=2)
+
+    def test_change_ids_are_never_paths(self):
+        # an archived change or a dir outside changes/ has an intent.md too: tools must not reach it
+        self.write("changes/archive/2026-01-01-old/intent.md", "---\ntype: intent\nstatus: archived\n---\n")
+        self.write("outside/intent.md", "---\nstatus: draft\n---\n")
+        self.assert_fails(self.sdd("delta-new", "archive/2026-01-01-old", "capabilities/x"), "not a change id", code=2)
+        self.assert_fails(self.sdd("bundle", "archive/2026-01-01-old", "--fix"), "not a change id", code=2)
+        self.assert_fails(self.sdd("set-status", "../outside", "approved"), "not a change id", code=2)
+        self.assert_fails(self.sdd("freeze", "archive"), "not a change id", code=2)
+        self.assertEqual(self.read("outside/intent.md"), "---\nstatus: draft\n---\n")
+        self.assertFalse((self.root / "changes/archive/2026-01-01-old/specs").exists())
+
+    def test_invalid_config_is_a_clear_error(self):
+        self.write(".claude/sdd.json", "{bad")
+        code, out = self.sdd("status", "--json")
+        self.assertEqual(code, 2, out)
+        self.assertIn("ERROR .claude/sdd.json: invalid JSON", out)
+        self.assertNotIn("Traceback", out)
+        self.write(".claude/sdd.json", "[]")
+        self.assert_fails(self.sdd("config"), "not a JSON object", code=2)
+
+    def test_flag_without_value_is_usage_error(self):
+        self.assert_fails(self.sdd("new", "c1", "--title"), "--title needs a value", code=2)
+        self.assertFalse((self.root / "changes/c1").exists())
 
 
 class TestInitBrownfield(unittest.TestCase):
@@ -862,10 +887,16 @@ class TestFreeze(SddCase):
     def test_freeze_then_tamper(self):
         rel = self.accept_test()
         self.write("tests/acceptance/unrelated.py", "# nothing here\n")
+        self.write("tests/acceptance/__pycache__/x.cpython-312.pyc", "cache")
         code, out = self.sdd("freeze", "c1")
         self.assertEqual(code, 0, out)
         frozen = json.loads(self.read("changes/c1/frozen.json"))
-        self.assertEqual(list(frozen), [rel])
+        self.assertEqual(frozen["version"], 2)
+        # the whole acceptance dir, helpers included, caches left out
+        self.assertEqual(list(frozen["files"]), [rel, "tests/acceptance/unrelated.py"])
+        self.assert_ok(self.sdd("verify-frozen", "c1"))
+
+        self.write("tests/acceptance/__pycache__/x.cpython-312.pyc", "rewritten by a test run")
         self.assert_ok(self.sdd("verify-frozen", "c1"))
 
         self.write(rel, self.read(rel) + "    assert 1 == 1\n")
@@ -873,6 +904,24 @@ class TestFreeze(SddCase):
 
         (self.root / rel).unlink()
         self.assert_fails(self.sdd("verify-frozen", "c1"), f"{rel} deleted after freeze")
+
+    def test_a_helper_changed_or_added_after_freeze_is_tampering(self):
+        self.accept_test()
+        self.write("tests/acceptance/helpers.py", "def ok(): return True\n")
+        self.assert_ok(self.sdd("freeze", "c1"))
+        self.write("tests/acceptance/helpers.py", "def ok(): return False\n")
+        self.assert_fails(self.sdd("verify-frozen", "c1"), "tests/acceptance/helpers.py modified after freeze")
+        self.write("tests/acceptance/helpers.py", "def ok(): return True\n")
+        self.write("tests/acceptance/conftest.py", "import pytest\n")
+        self.assert_fails(self.sdd("verify-frozen", "c1"), "tests/acceptance/conftest.py added after freeze")
+
+    def test_legacy_frozen_json_is_still_verified(self):
+        rel = self.accept_test()
+        self.write("changes/c1/frozen.json", json.dumps({rel: hashlib.sha256((self.root / rel).read_bytes()).hexdigest()}))
+        self.write("tests/acceptance/conftest.py", "import pytest\n")  # not checked by the old format
+        self.assert_ok(self.sdd("verify-frozen", "c1"))
+        self.write(rel, "# tampered\n")
+        self.assert_fails(self.sdd("verify-frozen", "c1"), f"{rel} modified after freeze")
 
 
 # ------------------------------------------------------------------- ADRs ---
@@ -889,6 +938,7 @@ class TestAdr(SddCase):
         self.assertIn("[Use JWT](0001_use_jwt.md)", self.read("adrs/index.md"))
 
         self.assert_fails(self.sdd("adr-new", "X", "--supersedes", "ADR-0009"), "does not exist", code=2)
+        self.assert_fails(self.sdd("adr-new", "X", "--supersedes"), "--supersedes needs a value", code=2)
 
         self.assert_ok(self.sdd("adr-accept", "ADR-0001"))
         self.assertIn("status: stable", self.read("adrs/0001_use_jwt.md"))
@@ -1053,7 +1103,8 @@ class TestSync(SddCase):
         self.assertEqual(re.findall(r"^### (AC-\d+)", spec, re.M), ["AC-01", "AC-02", "AC-03"])
         self.assertIn("status: stable", spec)
         self.assertIn("by: human:jdoe", spec)
-        self.assertNotIn('at: "2026-01-01T00:00:00Z"', spec)
+        # a CapabilityDelta merge keeps `at`, so concurrent merges of other criteria don't conflict on it
+        self.assertIn('at: "2026-01-01T00:00:00Z"', spec)
         self.assertIn("sources:\n  - resource: src/a.py\n  - resource: src/b.py\n", spec)
 
         self.assertIn("status: stable", self.read("adrs/0001_token_format.md"))
@@ -1297,6 +1348,22 @@ class TestCheckpoint(GitCase):
         self.assertEqual(code, 0, out)
         self.assertIn("nothing to commit", out)
         self.assertEqual(self.sdd("checkpoint", "c1", "--phase", "nope", cwd=wt)[0], 2)
+
+    def test_checkpoint_refuses_files_that_look_like_secrets(self):
+        wt = self.start()
+        put(wt / ".env", "TOKEN=x\n")
+        put(wt / "config/id_ed25519", "key\n")
+        put(wt / ".env.example", "TOKEN=\n")
+        put(wt / "src/auth/credentials.py", "def load(): ...\n")
+        code, out = self.sdd("checkpoint", "c1", "-m", "x", cwd=wt)
+        self.assertEqual(code, 1, out)
+        self.assertIn("look like secrets: .env, config/id_ed25519", out)
+        self.assertNotIn(".env", self.git("ls-files", cwd=wt).splitlines())
+        (wt / ".env").unlink()
+        (wt / "config/id_ed25519").unlink()
+        code, out = self.sdd("checkpoint", "c1", "-m", "y", cwd=wt)
+        self.assertEqual(code, 0, out)
+        self.assertIn("added 2 new file(s): .env.example, src/auth/credentials.py", out)
 
     def test_checkpoint_refuses_on_another_branch(self):
         wt = self.start()
@@ -1659,6 +1726,139 @@ class TestFinishAndStatus(GitCase):
         self.assertEqual(json.loads((arch / "state.json").read_text())["phase"], "done")
         self.git("fetch", "-q", "origin", "sdd/c1")
         self.assertEqual(self.remote_subjects("sdd/c1")[0], "chore(sdd): sync c1")
+
+
+class TestSyncAcrossBranches(GitCase):
+    """Two changes on their own branches touching one living capability."""
+
+    def setUp(self):
+        super().setUp()
+        put(self.root / f"specs/{LOGIN_REF}.md", LOGIN)
+        self.assertEqual(self.sdd("bundle", "specs", "--fix")[0], 0)
+        self.git("add", "-A")
+        self.git("commit", "-qm", "living login")
+        self.git("push", "-q")
+
+    def verified(self, name: str, ac: str, then: str) -> Path:
+        """A started change that MODIFIES `ac`, verified and checkpointed, ready to sync."""
+        wt = self.start(name)
+        self.assertEqual(self.sdd("delta-stub", name, f"{LOGIN_REF}#{ac}", cwd=wt)[0], 0)
+        f = wt / f"changes/{name}/specs/{LOGIN_REF}.md"
+        old = "the response is 423" if ac == "AC-02" else "the response is 200"
+        f.write_text(f.read_text().replace(old, then, 1))
+        put(wt / f"changes/{name}/tasks.md", "---\ntype: tasks\n---\n\n"
+            f"- [x] T1 (test) t — {LOGIN_REF}#{ac}\n- [x] T2 (impl) i — {LOGIN_REF}#{ac} | blocked-by: T1\n")
+        put(wt / f"tests/acceptance/test_{name.replace('-', '_')}.py", f"# {LOGIN_REF}#{ac}\ndef test_x():\n    assert True\n")
+        self.assertEqual(self.sdd("set-status", name, "verified", cwd=wt)[0], 0)
+        code, out = self.sdd("checkpoint", name, "--phase", "sync", "-m", f"chore({name}): verified", cwd=wt)
+        self.assertEqual(code, 0, out)
+        return wt
+
+    def synced(self, name: str, wt: Path):
+        code, out = self.sdd("sync", name, cwd=wt)
+        self.assertEqual(code, 0, out)
+
+    def merge_into_main(self, name: str):
+        self.git("fetch", "-q", "origin", f"sdd/{name}")
+        self.git("merge", "-q", "--no-edit", f"origin/sdd/{name}")
+        self.git("push", "-q")
+
+    def test_init_makes_the_logs_merge_by_union(self):
+        attrs = (self.root / ".gitattributes").read_text().splitlines()
+        self.assertIn("/specs/log.md merge=union", attrs)
+        self.assertIn("/adrs/log.md merge=union", attrs)
+
+    def test_sync_checks_the_delta_against_the_base_as_it_is_now(self):
+        a, b = self.verified("ca", "AC-02", "the response is 429"), self.verified("cb", "AC-02", "the response is 403")
+        self.synced("ca", a)
+        self.assertEqual(self.sdd("finish", "ca", cwd=a)[0], 0)
+        self.merge_into_main("ca")
+        code, out = self.sdd("sync", "cb", "--dry-run", cwd=b)
+        self.assertIn("WARN origin/main has commits this branch lacks", out)
+        code, out = self.sdd("sync", "cb", cwd=b)
+        self.assertEqual(code, 1, out)
+        self.assertIn("merged origin/main into the branch", out)
+        self.assertIn(f"{LOGIN_REF}#AC-02: CONFLICT base", out)
+        self.assertTrue((b / "changes/cb/intent.md").exists(), "nothing archived")
+
+    def test_changes_to_different_criteria_merge_cleanly_after_sync(self):
+        a, b = self.verified("ca", "AC-01", "the response is 201"), self.verified("cb", "AC-02", "the response is 429")
+        self.synced("ca", a)
+        self.synced("cb", b)  # both synced before either is merged
+        self.assertEqual(self.sdd("finish", "ca", cwd=a)[0], 0)
+        self.merge_into_main("ca")
+        code, out = self.sdd("finish", "cb", cwd=b)
+        self.assertEqual(code, 0, out)
+        self.assertIn("merged origin/main into the branch (merged after this sync)", out)
+        spec = (b / f"specs/{LOGIN_REF}.md").read_text()
+        self.assertIn("the response is 201", spec)
+        self.assertIn("the response is 429", spec)
+        self.assertIn('at: "2026-01-01T00:00:00Z"', spec, "a merge keeps generated.at")
+        log = (b / "specs/log.md").read_text()
+        self.assertIn("ca: MODIFIED capabilities/auth/login#AC-01", log)
+        self.assertIn("cb: MODIFIED capabilities/auth/login#AC-02", log)
+        self.assertNotIn("<<<<<<<", log + spec)
+
+    def test_a_unit_both_changed_after_sync_stops_finish(self):
+        a, b = self.verified("ca", "AC-02", "the response is 429"), self.verified("cb", "AC-02", "the response is 403")
+        self.synced("ca", a)
+        self.synced("cb", b)
+        self.assertEqual(self.sdd("finish", "ca", cwd=a)[0], 0)
+        self.merge_into_main("ca")
+        code, out = self.sdd("finish", "cb", cwd=b)
+        self.assertEqual(code, 1, out)
+        self.assertIn(f"failed (specs/{LOGIN_REF}.md)", out)
+        self.assertIn("Conflict after sync", out)
+        self.assertEqual(self.git("status", "--porcelain", cwd=b), "", "the merge was aborted")
+
+
+class TestFreezeAcrossBase(GitCase):
+    """verify-frozen tells a test the base merged in from one changed on the change's branch."""
+
+    def test_base_merge_is_accepted_and_a_revert_is_not(self):
+        put(self.root / "tests/acceptance/helpers.py", "def ok(): return True\n")
+        put(self.root / "tests/acceptance/test_login.py", f"# {LOGIN_REF}#AC-01\ndef test_v1(): pass\n")
+        self.git("add", "-A")
+        self.git("commit", "-qm", "base tests")
+        self.git("push", "-q")
+        wt = self.start()
+        put(wt / "changes/c1/specs/capabilities/tokens.md", NEW_CAP)
+        put(wt / "changes/c1/tasks.md", TOKEN_TASKS)
+        put(wt / "tests/acceptance/test_tokens.py", "# capabilities/tokens#AC-01\ndef test_x(): pass\n")
+        put(wt / "tests/acceptance/test_login.py", f"# {LOGIN_REF}#AC-01\ndef test_v2(): pass\n")
+        code, out = self.sdd("freeze", "c1", cwd=wt)
+        self.assertEqual(code, 0, out)
+        self.assertEqual(self.sdd("checkpoint", "c1", "-m", "test(c1): T1", cwd=wt)[0], 0)
+
+        put(self.root / "tests/acceptance/helpers.py", "def ok(): return 1\n")  # another change, merged
+        self.git("commit", "-qam", "helpers v2")
+        self.git("push", "-q")
+        self.git("fetch", "-q", "origin", "main", cwd=wt)
+        self.git("merge", "-q", "--no-edit", "origin/main", cwd=wt)
+        code, out = self.sdd("verify-frozen", "c1", cwd=wt)
+        self.assertEqual(code, 0, out)
+        self.assertIn("tests/acceptance/helpers.py modified by origin/main after freeze (accepted)", out)
+
+        put(wt / "tests/acceptance/test_login.py", f"# {LOGIN_REF}#AC-01\ndef test_v1(): pass\n")  # as on the base
+        code, out = self.sdd("verify-frozen", "c1", cwd=wt)
+        self.assertEqual(code, 1, out)
+        self.assertIn("tests/acceptance/test_login.py modified after freeze", out)
+
+    def test_without_the_base_ref_nothing_is_accepted(self):
+        put(self.root / "tests/acceptance/helpers.py", "def ok(): return True\n")
+        self.git("add", "-A")
+        self.git("commit", "-qm", "base helpers")
+        self.git("push", "-q")
+        wt = self.start()
+        put(wt / "changes/c1/specs/capabilities/tokens.md", NEW_CAP)
+        put(wt / "changes/c1/tasks.md", TOKEN_TASKS)
+        put(wt / "tests/acceptance/test_tokens.py", "# capabilities/tokens#AC-01\ndef test_x(): pass\n")
+        self.assertEqual(self.sdd("freeze", "c1", cwd=wt)[0], 0)
+        (wt / "tests/acceptance/helpers.py").unlink()
+        self.git("update-ref", "-d", "refs/remotes/origin/main")  # a shallow CI checkout has no base ref
+        code, out = self.sdd("verify-frozen", "c1", cwd=wt)
+        self.assertEqual(code, 1, out)
+        self.assertIn("tests/acceptance/helpers.py deleted after freeze", out)
 
 
 OLD_REQ = """\
