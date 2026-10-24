@@ -50,6 +50,9 @@ Memory
   the ADRs, the plan or the frozen tests, and holds nothing about the current change:
   that lives in `changes/<id>/`.
 
+Your return ends your run: return after check 5, or at the first hard failure. Never return
+with progress, an announced next step or an offer to continue.
+
 Return:
 ```
 VERDICT: PASS | FAIL

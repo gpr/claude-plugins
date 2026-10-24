@@ -33,7 +33,7 @@ Every `SKILL.md`, `rails-backend.md`, `hooks.json`, `monitors.json`, and `*.sh` 
 
 ## Target model
 
-Default authoring model is **Opus 4.7** (`claude-opus-4-7`). When specifying `model:` in agent frontmatter:
+Default authoring model is **Opus 5.5** (`claude-opus-5-5`). When specifying `model:` in agent frontmatter:
 
 - `opus` — multi-file reasoning, architectural changes.
 - `sonnet` — the existing `rails-backend` agent (keep as-is).

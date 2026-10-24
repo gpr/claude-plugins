@@ -38,3 +38,4 @@ All colors via CSS variables defined in `globals.css` and consumed as `bg-backgr
 - No Tailwind `@apply` outside `globals.css`
 - No CSS-in-JS (no styled-components, no emotion)
 - No inline `style={{}}` except for dynamic numeric values (computed positions, percentages)
+- No decorative defaults the design system doesn't call for: cream/off-white page backgrounds, italic accent words in headings, numbered "01/02/03" section labels, `font-mono` labels, pill-shaped (`rounded-full`) buttons

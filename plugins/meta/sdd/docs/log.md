@@ -6,6 +6,8 @@
 
 **Update** Existing repositories: Baseline criteria (`- **Baseline**: <path>`, a test task and no impl task, the test passes on the current code, dropped by sync), `size: baseline` changes (`/sdd:change adopt <area>`, no Implement step), `sdd init --survey` and `init key=value`, existing ADR dirs left alone. New page: how-to/adopt-an-existing-repo. Updated: cli, file-formats, phases-and-states, configuration, workflow overview, install, keep-in-sync. Command outputs are from real `sdd.py` runs in a scratch repository.
 
+**Update** The spec-author, planner and verifier return only when done or blocked, never to report progress or offer to continue; the lead dispatches parallel test and impl tasks in one message. Updated: agents.
+
 ## 2026-10-18
 
 **Update** Review fixes: block and multi-line YAML scalars, nested `null` and lists kept on rewrite, whole-concept hashes cover the front matter, SECTIONS keep sub-headings and reject duplicates, unknown CapabilityDelta sections and stray `###` headings are errors, Rationale links resolved, `specs`/`adrs`/`archive` reserved as change ids, the lead may edit `specs/.templates/`, quoted and pre-OKF ADR statuses stay locked. Updated: file-formats, bundles, cli, guard-rules.

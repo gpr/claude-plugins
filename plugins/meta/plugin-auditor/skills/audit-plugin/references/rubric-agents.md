@@ -7,11 +7,11 @@ Applied to every `agents/<name>.md`.
 - `name` is kebab-case and matches the filename.
 - `description` leads with **when to trigger**, not what the agent is. Claude routes on this field.
 - `description` names concrete scenarios. Include `<example>` blocks when the agent's trigger conditions are non-obvious.
-- `model` is one of `opus` / `sonnet` / `haiku` and is justified by the task:
+- `model` is an alias (`opus` / `sonnet` / `haiku` / `fable`), a full model ID, or `inherit`, and is justified by the task:
   - `haiku` — trivial dispatch, fixed-format checks.
   - `sonnet` — standard multi-file work.
   - `opus` — architectural reasoning, cross-cutting refactors.
-- `effort` (`low`/`medium`/`high`) and `maxTurns` are set when present; a 30-turn default is fine for most agents.
+- `effort` (`low`/`medium`/`high`/`xhigh`/`max`; available levels depend on the model) and `maxTurns` are set when present; a 30-turn default is fine for most agents.
 - `tools` list (if present) is minimal — every entry must be referenced in the system prompt.
 
 ## System prompt

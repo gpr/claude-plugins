@@ -12,9 +12,9 @@ Drive one cross-cutting library migration per invocation. Produce a single, revi
 
 ## Workflow
 1. Confirm the migration scope: source library/version → target. If ambiguous, ask before touching files
-2. Audit current usage: enumerate every import site, config touchpoint, and test that depends on the old API
+2. Audit current usage: enumerate every import site, config touchpoint, and test that depends on the old API. Track them as a todo checklist
 3. Plan the migration in writing (in the conversation, not a file): codemod-style replacements, manual rewrites, deprecation removals
-4. Apply changes file-by-file, committing logical chunks
+4. Apply changes file-by-file, checking items off the list, committing logical chunks
 5. Run `pnpm install`, `pnpm exec tsc --noEmit`, `pnpm exec vitest run`, and `pnpm exec eslint .` — fix every regression before continuing
 6. Update README/docs if the migration changes user-facing setup
 7. Hand off the finished worktree branch to the `reviewer` agent for the convention pass
@@ -24,6 +24,7 @@ Drive one cross-cutting library migration per invocation. Produce a single, revi
 - No deprecation shims, dual-package compatibility, or feature flags. Replace, don't deprecate
 - Tests stay green at every commit. If a migration requires updating tests, the test update is part of the migration commit, not a follow-up
 - If the target library's API requires data-shape changes that touch backend contracts, stop and ask — that's a backend coordination, not a frontend migration
+- Keep going until every checklist item is done and step 5 is green. Don't end the turn with a summary that announces the next step instead of taking it, an offer to continue, a list of decisions that don't block the remaining work, or a pause because a milestone is done — put status notes in the same message as your next tool call. The only stops are the ask-first cases above and below
 
 ## Don'ts
 - Don't migrate skills/agents/hooks themselves — those are plugin payload, not user code
