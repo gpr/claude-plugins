@@ -10,6 +10,8 @@ created: {{date}}
 
 # {{title}}
 
+<!-- size: change (default) | fix (a test on an existing criterion) | baseline (records existing behavior only) -->
+
 ## Why
 <!-- The problem, who has it, what it costs today. 2-5 sentences. -->
 

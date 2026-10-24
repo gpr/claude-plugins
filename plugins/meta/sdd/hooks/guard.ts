@@ -249,6 +249,7 @@ const SDD_RULES: Record<string, Role[]> = {
   resume: ['lead'],
   finish: ['lead'],
   freeze: ['lead', 'acceptance-tester'],
+  'baseline-tree': ['lead', 'verifier'],
   'delta-new': ['lead', 'spec-author'],
   'delta-stub': ['lead', 'spec-author'],
   'adr-new': ['lead', 'spec-author'],

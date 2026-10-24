@@ -63,7 +63,7 @@ stateDiagram-v2
 
 ### Order for a fix
 
-A change with `size: fix` in `intent.md` skips Spec and Gate 1, and writes its acceptance test alongside the plan, before Gate 2:
+A change with `size: fix` in `intent.md` skips Spec and Gate 1, and writes its acceptance test alongside the plan, before Gate 2. A fix in code that no criterion covers first adds the criterion: it starts with Spec and a short Gate 1 (its stored phase is `spec` or `gate1`, or it has files under `changes/<id>/specs/`), still in status `draft`:
 
 ```mermaid
 flowchart LR
@@ -71,10 +71,23 @@ flowchart LR
         direction LR
         b3[plan] --> b5[acceptance] --> b4[gate2] --> b6[implement] --> b7[verify] --> b8[sync] --> b9[done]
     end
+    subgraph fixc ["size: fix that adds a criterion"]
+        direction LR
+        d1[spec] --> d2[gate1] --> d3[plan] --> d5[acceptance] --> d4[gate2] --> d6[implement] --> d7[verify] --> d8[sync] --> d9[done]
+    end
     subgraph full ["full change"]
         direction LR
         a1[spec] --> a2[gate1] --> a3[plan] --> a4[gate2] --> a5[acceptance] --> a6[implement] --> a7[verify] --> a8[sync] --> a9[done]
     end
+```
+
+### Order for a baseline
+
+A change with `size: baseline` (an adopt) writes down what the code does, so it has no Implement step: acceptance goes straight to verify.
+
+```mermaid
+flowchart LR
+    c1[spec] --> c2[gate1] --> c3[plan] --> c4[gate2] --> c5[acceptance] --> c7[verify] --> c8[sync] --> c9[done]
 ```
 
 ### Derived phase
@@ -84,8 +97,10 @@ The band and panes show the stored phase. For a change without one (made before 
 | Status | Derived phase |
 |---|---|
 | `draft`, full change | `spec` while spec-author runs, else `gate1` |
+| `draft`, fix with a delta and no tasks | `spec` while spec-author runs, else `gate1` |
 | `draft`, fix | `plan` while planner runs or no `(impl)` task yet; then `acceptance` while acceptance-tester runs or a `(test)` task is open; else `gate2` |
 | `approved` | `plan` while planner runs or no tasks; else `gate2` |
+| `implementing`, baseline | `acceptance` while acceptance-tester runs or a `(test)` task is open; else `verify` |
 | `implementing` | `acceptance` while acceptance-tester runs or a `(test)` task is open; `implement` while implementer runs or an `(impl)`/`(chore)` task is open; else `verify` |
 | `verified` | `sync` |
 
@@ -101,6 +116,7 @@ The band and panes show the stored phase. For a change without one (made before 
 | `pr` | int \| null | `start` (via `gh`), `set-pr` | PR number |
 | `pr_url` | string \| null | `start`, `set-pr --url` | PR URL |
 | `requires` | string[] | `start --requires`, `requires` | changes that must be merged first |
+| `baseline` | `{commit, files}` | `freeze` | the base commit the Baseline tests pass on, and their hashes; `baseline-tree` re-creates that commit |
 | `updated` | ISO date | every save | last write |
 
 ## Dependency states

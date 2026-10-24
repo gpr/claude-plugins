@@ -25,7 +25,8 @@ flowchart TD
     G1 -- change --> SA
     G1 -- approve --> PL["planner<br/>plan.md, tasks.md"]
 
-    S2 --> PL2["planner"] & AT2["acceptance-tester<br/>test on the existing criterion"]
+    S2 --> PL2["planner"] & AT2["acceptance-tester<br/>test on the criterion"]
+    S2 -- "no criterion yet" --> SF["spec-author<br/>ADDED criteria only"] --> GF{{"short GATE 1"}} --> PL2 & AT2
     PL2 & AT2 --> G2
 
     PL --> G2{{"GATE 2<br/>sdd check, automatic"}}
@@ -47,7 +48,7 @@ flowchart TD
 
     classDef gate fill:#fde68a,stroke:#b45309,color:#000
     classDef you fill:#bbf7d0,stroke:#15803d,color:#000
-    class G1,G2 gate
+    class G1,G2,GF gate
     class R,M you
 ```
 
@@ -66,6 +67,8 @@ Not every request deserves the full workflow. The lead sorts each one into one o
 - **Full change**: it changes observable behavior or a public contract, or makes a lasting decision. It gets a spec delta and possibly ADRs.
 - **Fix**: the code diverges from an existing criterion. No new spec is needed, since the criterion already says what is right. The lead writes a failing acceptance test against it first.
 - **Direct**: refactors, renames, dependency bumps, docs, config. One agent does it and runs the unit tests.
+
+In an existing repository `specs/` starts empty, so "existing criterion" is rare at first. A change that touches code no capability covers writes down the behavior it keeps as **Baseline** criteria (tested, already implemented), next to the criteria for what it changes. A bug without a criterion is a fix that first adds the criterion stating the correct behavior, reviewed in a short Gate 1. `adopt <area>` does the writing-down up front, for one area, without touching code. See [Adopt sdd in an existing repository](../how-to/adopt-an-existing-repo.md).
 
 Without triage, either trivial work drowns in ceremony or real behavior changes slip through without a spec.
 

@@ -16,7 +16,7 @@ generated:
 
 ## .claude/sdd.json
 
-Created by `sdd init` with every key below except `req_id_pattern`. Keys you omit take the default. `sdd config` prints the effective values.
+Created by `sdd init` with every key below except `req_id_pattern`; `sdd init key=value ...` sets the first values (in an existing repo, before the folders exist). Keys you omit take the default. `sdd config` prints the effective values.
 
 | Key | Default | Used for |
 |---|---|---|

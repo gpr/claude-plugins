@@ -2,6 +2,10 @@
 
 ## 2026-10-24
 
+**Update** Baseline proof: `freeze` records the base commit and refuses new Baseline tests once production code changed (`--after-code` for the lead), and the verifier re-runs them there with `baseline-tree`. A `size: fix` may add criteria (ADDED only), with Spec and a short Gate 1. The `init` survey finds ADR and test dirs by content. Updated: cli, sdd-tool-roles, phases-and-states, file-formats, known-limits, keep-in-sync, workflow overview, adopt how-to.
+
+**Update** Existing repositories: Baseline criteria (`- **Baseline**: <path>`, a test task and no impl task, the test passes on the current code, dropped by sync), `size: baseline` changes (`/sdd:change adopt <area>`, no Implement step), `sdd init --survey` and `init key=value`, existing ADR dirs left alone. New page: how-to/adopt-an-existing-repo. Updated: cli, file-formats, phases-and-states, configuration, workflow overview, install, keep-in-sync. Command outputs are from real `sdd.py` runs in a scratch repository.
+
 **Update** The spec-author, planner and verifier return only when done or blocked, never to report progress or offer to continue; the lead dispatches parallel test and impl tasks in one message. Updated: agents.
 
 ## 2026-10-18

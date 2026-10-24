@@ -21,6 +21,8 @@ const CASES: [string, SddChange, string[], string | undefined][] = [
   ['draft fix while planner runs', change('draft', [task('T1', 'test', false), task('T2', 'impl', false)], 'fix'), ['planner'], 'plan'],
   ['draft fix, planned, test open', change('draft', [task('T1', 'test', false), task('T2', 'impl', false)], 'fix'), [], 'acceptance'],
   ['draft fix, planned, tester running', change('draft', [task('T1', 'test', true), task('T2', 'impl', false)], 'fix'), ['acceptance-tester'], 'acceptance'],
+  ['draft fix with a delta, spec-author running', { ...change('draft', [], 'fix'), delta: true }, ['spec-author'], 'spec'],
+  ['draft fix with a delta, written: its Gate 1', { ...change('draft', [], 'fix'), delta: true }, [], 'gate1'],
   ['draft fix, planned and tested', change('draft', [task('T1', 'test', true), task('T2', 'impl', false)], 'fix'), [], 'gate2'],
   ['approved without tasks', change('approved'), [], 'plan'],
   ['approved while planner runs', change('approved', [task('T1', 'test', false)]), ['planner'], 'plan'],
@@ -29,6 +31,9 @@ const CASES: [string, SddChange, string[], string | undefined][] = [
   ['implementing, tests done', change('implementing', [task('T1', 'test', true), task('T2', 'impl', false)]), [], 'implement'],
   ['implementing, all done', change('implementing', [task('T1', 'test', true), task('T2', 'impl', true)]), [], 'verify'],
   ['implementing, all done, verifier running', change('implementing', [task('T1', 'test', true)]), ['verifier'], 'verify'],
+  ['baseline, tests done: nothing to implement', change('implementing', [task('T1', 'test', true)], 'baseline'), [], 'verify'],
+  ['baseline, test open', change('implementing', [task('T1', 'test', false)], 'baseline'), [], 'acceptance'],
+  ['baseline, chore open: still no Implement step', change('implementing', [task('T1', 'test', true), task('T2', 'chore', false)], 'baseline'), [], 'verify'],
   ['verified', change('verified'), [], 'sync'],
   ['unknown status', change('?'), [], undefined],
 ]
@@ -39,7 +44,9 @@ const STORED: [string, SddChange, string[], string | undefined][] = [
   ['stored phase beats derivation (draft would be gate1)', stored('plan', change('draft')), [], 'plan'],
   ['stored phase beats running agents', stored('implement', change('implementing')), ['verifier'], 'implement'],
   ['unknown stored phase falls back', stored('bogus', change('verified')), [], 'sync'],
-  ['stored spec on a fix is not a fix phase: derived', { ...stored('spec', change('draft', [], 'fix')) }, [], 'plan'],
+  ['stored spec on a fix: it adds a criterion first', stored('spec', change('draft', [], 'fix')), [], 'spec'],
+  ['stored acceptance on a fix is kept', stored('acceptance', change('draft', [task('T1', 'test', false)], 'fix')), [], 'acceptance'],
+  ['stored implement on a baseline is not a baseline phase: derived', stored('implement', change('implementing', [task('T1', 'test', true)], 'baseline')), [], 'verify'],
   ['stored done has no phase', stored('done', change('archived')), [], undefined],
 ]
 
@@ -52,6 +59,16 @@ for (const [name, c, running, want] of [...CASES, ...STORED]) {
 test('a fix lists no spec or Gate 1 step, and its tests come before Gate 2', () => {
   expect(phasesOf(change('draft', [], 'fix')).map(p => p.id)).toEqual(['plan', 'acceptance', 'gate2', 'implement', 'verify', 'sync'])
   expect(phasesOf(change('draft')).length).toBe(8)
+})
+
+test('a fix that adds a criterion lists Spec and Gate 1 first', () => {
+  const ids = ['spec', 'gate1', 'plan', 'acceptance', 'gate2', 'implement', 'verify', 'sync']
+  expect(phasesOf({ ...change('draft', [], 'fix'), delta: true }).map(p => p.id)).toEqual(ids)
+  expect(phasesOf(stored('gate1', change('draft', [], 'fix'))).map(p => p.id)).toEqual(ids)
+})
+
+test('a baseline lists no Implement step', () => {
+  expect(phasesOf(change('draft', [], 'baseline')).map(p => p.id)).toEqual(['spec', 'gate1', 'plan', 'gate2', 'acceptance', 'verify', 'sync'])
 })
 
 const named = (id: string, c: SddChange): SddChange => ({ ...c, id })

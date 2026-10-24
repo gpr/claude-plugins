@@ -129,6 +129,13 @@ describe('sdd subcommands', () => {
     expect(checkSdd('sync', 'implementer')).toBeDefined()
     expect(checkSdd('sync', 'lead')).toBeUndefined()
   })
+  test('baseline-tree: verifier yes, implementer and acceptance-tester no', () => {
+    expect(checkSdd('baseline-tree', 'verifier')).toBeUndefined()
+    expect(checkSdd('baseline-tree', 'lead')).toBeUndefined()
+    expect(checkSdd('baseline-tree', 'implementer')).toBeDefined()
+    expect(checkSdd('baseline-tree', 'acceptance-tester')).toBeDefined()
+  })
+
   test('freeze: acceptance-tester yes, implementer no', () => {
     expect(checkSdd('freeze', 'acceptance-tester')).toBeUndefined()
     expect(checkSdd('freeze', 'implementer')).toBeDefined()

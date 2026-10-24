@@ -26,7 +26,7 @@ Agents and the lead call `sdd.py` through the `mcp__sdd__sdd` tool, with the sub
 
 | Subcommand | Role | Effect |
 |---|---|---|
-| `init` | lead | Creates `specs/` and `adrs/` (each with its `index.md`, `log.md` and `.templates/` concept templates), `changes/`, `tests/acceptance/` (configured names), writes `.claude/sdd.json` with the defaults if missing, adds `/<worktree_dir>/` to `.gitignore`. Idempotent: prints `created: nothing, already initialised`. |
+| `init [--survey] [key=value ...]` | lead | Creates `specs/` and `adrs/` (each with its `index.md`, `log.md` and `.templates/` concept templates), `changes/`, `tests/acceptance/` (configured names), writes `.claude/sdd.json` with the defaults if missing, adds `/<worktree_dir>/` to `.gitignore`. Idempotent: prints `created: nothing, already initialised`. First prints `found:` with what the repo already has, from a walk up to 4 levels deep that skips hidden, vendored and build dirs: ADR-like dirs (the usual names, or 2+ `.md` files mostly numbered `NNNN-` or with Status and Decision headings; not an sdd bundle), test dirs (the topmost dir holding `test_*.py`, `*_test.go`, `*.test.ts`, `*.spec.js`, `*_spec.rb`, `*Test.java` and similar files, or a test-named dir with them below), build manifests; at most 10 per kind. A `specs_dir` or `adr_dir` that holds `.md` files but none of `index.md`, `log.md`, `.templates/` (sdd's own, whose lost `index.md` init recreates) gets `WARN ... sdd did not create` and exit 1: without `.claude/sdd.json` nothing is written, with one that folder is left alone and the rest is created. `key=value` (any key of [the config](configuration.md)) writes a new `.claude/sdd.json` with those values and initialises with it, once the checks pass; it refuses once the file exists, and a `*_dir` value must be a relative path inside the repo (not empty, `.`, absolute or with `..`). `--survey` prints `found:` and the WARNs and writes nothing (it takes no `key=value`). See [Adopt sdd in an existing repository](../how-to/adopt-an-existing-repo.md). |
 | `config` | any | Prints the effective configuration as JSON, with `root`. |
 | `status [<change>] [--json]` | any | One line per open change: `status`, `tasks=done/total`, `size`, and `phase`, `pr`, `requires` when stored. With a change id, also one line per task. `--json` is what the band and panes read. Also counts archived changes. |
 
@@ -56,13 +56,14 @@ Agents and the lead call `sdd.py` through the `mcp__sdd__sdd` tool, with the sub
 | `check <change> [--tests]` | any | Traceability, conflict and bundle check, see [the rules](#check-rules). Ends with `OK|FAIL <change>: <n> unit(s), <n> tasks, <n> errors, <n> warnings`. Exit 1 on any error. |
 | `context <change> <task> [--plan]` | any | Prints the minimal bundle for one task, see [Context bundles](../explanation/context-bundles.md). For an `(impl)` task it also lists `id: title — statement` of every invariant in force (living and not deprecated, plus the change's new or replaced ones, minus those it deprecates) that the task does not name. |
 | `bundle <specs\|adrs\|change> [--fix]` | any; `--fix` on `specs` or `adrs`: lead; `--fix` on a change: lead, spec-author | Validates an OKF bundle: `specs/`, `adrs/` or `changes/<change>/`, see [OKF bundles](bundles.md#bundle-checks). Prints `FIXED`, `WARN`, `ERROR` lines then `OK|FAIL <target>: <n> errors, <n> warnings` (`, <n> fixed` with `--fix`). `--fix` repairs findings marked `[fixable]` and is idempotent. Exit 1 on any ERROR. The same check is the `mcp__sdd__bundle` tool ([roles](sdd-tool-roles.md#the-bundle-tool)). |
-| `freeze <change>` | lead, acceptance-tester | Writes `changes/<change>/frozen.json`: sha256 of every file under the acceptance dir that cites one of the change's test units. Fails (exit 1) if no file mentions them. Re-running replaces the snapshot. |
+| `freeze <change> [--after-code]` | lead, acceptance-tester | Writes `changes/<change>/frozen.json`: sha256 of every file under the acceptance dir that cites one of the change's test units. Fails (exit 1) if no file mentions them. Re-running replaces the snapshot. When the change has Baseline criteria and their test files are new or changed, it records `baseline: {commit, files}` in `state.json`, where `commit` is the merge-base with `origin/<base>`. It refuses (exit 1, nothing written) once files outside `changes/`, the acceptance dir, `specs/`, `adrs/`, `.claude/` and `.gitignore` differ from that commit; `--after-code` (the lead, on a reopen) freezes anyway with a WARN. Without git or an origin base: `WARN no git base`, nothing recorded. A Baseline test file that also cites a non-Baseline unit gets a WARN: the base run runs whole files. |
+| `baseline-tree <change> [--remove] [--link PATH ...]` | lead, verifier | Needs the `baseline` record. Creates a detached worktree `<worktree_dir>/sdd-<change>-baseline` at the recorded commit, copies the current acceptance dir into it, symlinks `node_modules`, `.venv`, `venv` and each `--link` path (inside the repo) from the change's tree, and prints `worktree`, `commit`, `files`, `linked` and `run: <acceptance_cmd with the Baseline files>`. sdd.py never runs it. `--remove` deletes the worktree. |
 | `verify-frozen <change>` | any | Re-hashes the frozen files. `ERROR <file> modified after freeze` or `deleted after freeze`; summary `OK|FAIL <n> frozen file(s), <n> tampered`. Exit 1 if `frozen.json` is missing or anything changed. |
 
 ### check rules
 
 Errors (exit 1):
-- `intent.md` status not one of the five statuses.
+- `intent.md` status not one of the five statuses, or `size` not one of `change fix baseline`.
 - A unit (criterion or invariant) appears twice in the change.
 - A new concept's structure: see [File formats](file-formats.md#capability) (type, title, status, required sections, Given/When/Then, Statement, `- Check:`, Holds and Violation).
 - A full Capability over a living one; a CapabilityDelta for a capability that does not exist or is deprecated; a base on a new concept.
@@ -71,7 +72,10 @@ Errors (exit 1):
 - Task problems: duplicate id, `blocked-by` an unknown task; a citation of an unknown unit, of a bare capability, of a criterion on an invariant, of a retired criterion or deprecated invariant; a `(test)` task on a unit this change retires or deprecates; a `(test)`/`(impl)` task citing nothing.
 - A referenced ADR (in `intent.md` `adrs:` or a task) has no file, or is `deprecated`.
 - `plan.md` cites an unknown unit or ADR (HTML comments ignored).
-- Once `tasks.md` has tasks: an added or modified criterion with no `(test)` task or no `(impl)` task; an added or modified invariant with no `(test)` task.
+- Once `tasks.md` has tasks: an added or modified criterion with no `(test)` task or no `(impl)` task (a Baseline criterion needs no `(impl)` task); an added or modified invariant with no `(test)` task.
+- A `- **Baseline**` line on a MODIFIED or RETIRED criterion, or one without a location.
+- `size: fix`: a touched unit that is not an ADDED criterion (MODIFIED, RETIRED, deprecated, an invariant), a SECTIONS entry, or ADRs in `intent.md`.
+- `size: baseline`: a criterion that is not Baseline, any MODIFIED, RETIRED or deprecated unit, a SECTIONS entry, any `(impl)` task.
 - Any bundle ERROR of the change (see [OKF bundles](bundles.md#change)), printed with a `bundle:` prefix.
 - No tasks while status is not `draft`.
 
@@ -83,6 +87,7 @@ Warnings:
 - Any bundle WARN of the change, prefixed `bundle:` (a stale `index.md`, a missing `type:`).
 - The stored phase does not fit the status (see [Phases and states](phases-and-states.md#phase-and-status)).
 - An `(impl)` task not `blocked-by` the `(test)` task(s) covering its criteria.
+- An `(impl)` task that cites only Baseline criteria.
 
 With `--tests`, also:
 - Error: a unit to be tested (added or modified, plus existing units that a `(test)` task targets, the fix path) is cited by no file under the acceptance dir.
@@ -93,7 +98,7 @@ With `--tests`, also:
 
 | Subcommand | Role | Effect |
 |---|---|---|
-| `sync <change> [--dry-run] [--force]` | lead | Requires status `verified` (`--force` skips that, not the checks), a clean `check`, and no error in `bundle specs`. Writes each new concept to `specs/` and replaces each invariant replacement, with template comments and `base:` dropped and `status: stable` (or `deprecated`). Merges each CapabilityDelta unit by unit: MODIFIED replaces the criterion, RETIRED leaves its heading and the reason, ADDED inserts, criteria are sorted, SECTIONS replace whole sections, `sources` are merged. Sets `generated.at` to now on every concept it writes. Prints one line per unit (`ADDED`, `MODIFIED`, `RETIRED`, `SECTION`, `DEPRECATED`), regenerates the indexes, appends `* **Update**: <change>: <units>` to `specs/log.md`, accepts the listed ADRs, sets `status: archived` and `archived: <date>`, and moves the change to `changes/archive/<YYYY-MM-DD>-<change>/`. `--dry-run` prints the plan and writes nothing. Nothing is written if any check fails. |
+| `sync <change> [--dry-run] [--force]` | lead | Requires status `verified` (`--force` skips that, not the checks), a clean `check`, and no error in `bundle specs`. Writes each new concept to `specs/` and replaces each invariant replacement, with template comments, `base:` and `- **Baseline**` lines dropped and `status: stable` (or `deprecated`). Merges each CapabilityDelta unit by unit: MODIFIED replaces the criterion, RETIRED leaves its heading and the reason, ADDED inserts, criteria are sorted, SECTIONS replace whole sections, `sources` are merged. Sets `generated.at` to now on every concept it writes. Prints one line per unit (`ADDED`, `MODIFIED`, `RETIRED`, `SECTION`, `DEPRECATED`), regenerates the indexes, appends `* **Update**: <change>: <units>` to `specs/log.md`, accepts the listed ADRs, sets `status: archived` and `archived: <date>`, and moves the change to `changes/archive/<YYYY-MM-DD>-<change>/`. `--dry-run` prints the plan and writes nothing. Nothing is written if any check fails. |
 
 ## Branch, PR and resume
 
@@ -109,7 +114,7 @@ These need git with a remote named `origin`; the PR steps need an authenticated 
 | `resume <change> [--pr N]` | lead | Finds the branch (from `state.json`, else `<branch_prefix><change>`, or via `gh pr view N`), fetches it, reuses its worktree or creates one, fast-forwards it (`git pull --ff-only`), prints `worktree`, `branch`, `pr`, `status`, `phase <p>: <step>`. With requires: prints their states, and exits 1 with `blocked` / `next:` if any is unmerged, or merges `origin/<base>` in if one is missing. Ends with `next: EnterWorktree path=...`. |
 | `finish <change>` | lead | After `sync`: on the change's branch, sets the archived `state.json` phase to `done`, commits `chore(sdd): sync <change>`, pushes, runs `gh pr ready`. Prints a WARN instead of failing if `gh` cannot mark it ready. Merging stays with you. |
 
-Only `sdd.py` writes `state.json` (`start`, `checkpoint`, `set-pr`, `requires`, `finish`); the guard refuses every other write.
+Only `sdd.py` writes `state.json` (`start`, `checkpoint`, `set-pr`, `requires`, `finish`, and `freeze` for the Baseline record); the guard refuses every other write.
 
 ## Related
 

@@ -24,7 +24,7 @@ generated:
 
    Choose project scope when asked. At user scope the plugin would guard `specs/` and `adrs/` and make the main conversation a lead in every repo.
 
-2. Initialise. Ask Claude to change something, or run `/sdd:change` with a request. The lead calls `sdd init` on first use. Or run it yourself:
+2. Initialise. In a repository that already has code, tests or ADRs, follow [Adopt sdd in an existing repository](adopt-an-existing-repo.md) instead. Ask Claude to change something, or run `/sdd:change` with a request. The lead calls `sdd init` on first use. Or run it yourself:
 
    ```
    python3 <plugin>/tools/sdd.py init

@@ -14,11 +14,13 @@
   the `sdd:lead` section (`LEAD`). Keep it a short router: the workflow lives in
   `skills/change`. Not an agent with `settings.json` `agent`: a plugin agent's prompt
   would replace Claude Code's whole system prompt.
-- `state.json` (phase, branch, base, PR, requires) is written only by `sdd.py` (`start`, `checkpoint`,
-  `set-pr`, `requires`, `finish`); the guard refuses other writes. `PHASES` in `sdd.py` and
+- `state.json` (phase, branch, base, PR, requires, baseline) is written only by `sdd.py` (`start`,
+  `checkpoint`, `set-pr`, `requires`, `finish`, `freeze`); the guard refuses other writes. `PHASES` in `sdd.py` and
   `hooks/phase.ts` list the same ids (plus `done`): change both, and `PHASE_STATUSES`
   and the step names in `skills/change`, together. The git and `gh` calls stay in `sdd.py`
   (deterministic, tested against a real bare origin with a fake `gh` in `tests/test_sdd.py`).
+  `baseline-tree` creates the base worktree for the Baseline re-run, but the agents run the
+  test commands: sdd.py never runs `acceptance_cmd` or `unit_cmd`.
 - `hooks/phase.ts` maps a change (status, tasks, running agents) to a phase of
   `skills/change`, as pure functions tested in `tests/phase.test.ts`. A new step or
   status in the workflow changes `PHASES`/`phaseOf` and their tests together.
@@ -37,7 +39,8 @@
   `docs/reference/file-formats.md`. Change them together. The Capability, Invariant and ADR
   templates in `skills/change/templates/*.md.tmpl` are copies of lintel's
   (`specs/.templates/`, `adrs/.templates/`), except that capability.md.tmpl says how a test
-  cites a criterion (comment or docstring, not the name): keep the section names `sdd.py` checks in step.
+  cites a criterion (comment or docstring, not the name) and when to add a Baseline line:
+  keep the section names `sdd.py` checks in step.
 - `build_indexes` mirrors `okf index` (okf-core `index.rs`) byte for byte, dot-directories
   aside; `TestSync.test_synced_bundles_are_okf_conformant` diffs them when `okf` is on PATH.
 - `sdd.py bundle` (`bundle_check`, `check_specs`, `check_adrs`, `check_change`) is the one

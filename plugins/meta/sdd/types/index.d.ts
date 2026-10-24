@@ -13,6 +13,10 @@ export type SddChange = {
   branch?: string | null
   /** From state.json: changes that must be merged into the base before this one continues. */
   requires?: string[]
+  /** The change has concept files under changes/<id>/specs/ (a fix that adds a criterion). */
+  delta?: boolean
+  /** state.json records the base commit its Baseline tests pass on. */
+  baseline?: boolean
 }
 
 export type SddCheck = { isOk: boolean; summary: string; lines: string[]; at: number; withTests: boolean }
