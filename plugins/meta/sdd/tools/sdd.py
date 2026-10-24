@@ -2455,10 +2455,14 @@ def cmd_verify_frozen(args):
     snap, then = (raw.get("files", {}), raw.get("base")) if v2 else (raw, None)
     base = base_of(load_state(d))
 
+    # without both commits (no git, a shallow clone) nothing can come from the base: strict
+    refs_ok = then is not None and all(git("rev-parse", "--verify", "-q", f"{r}^{{commit}}")[0] == 0
+                                       for r in (then, f"origin/{base}"))
+
     def from_base(path: str, now: str | None) -> bool:
         """The base changed `path` after freeze (a merge brought it in), and it is as the base has it:
         not tampering. Reverting a test to its pre-freeze content stays an error."""
-        if then is None:
+        if not refs_ok:
             return False
         on_base = blob_sha(f"origin/{base}", path)
         return on_base == now and on_base != blob_sha(then, path)
@@ -2957,6 +2961,7 @@ def cmd_finish(args):
     if not args:
         die("usage: finish <change>")
     name = args[0]
+    check_change_id(name)
     hits = sorted(p for p in (CHANGES / "archive").glob(f"*-{name}")
                   if is_archive_of(p.name, name))
     if not hits:

@@ -1844,6 +1844,22 @@ class TestFreezeAcrossBase(GitCase):
         self.assertEqual(code, 1, out)
         self.assertIn("tests/acceptance/test_login.py modified after freeze", out)
 
+    def test_without_the_base_ref_nothing_is_accepted(self):
+        put(self.root / "tests/acceptance/helpers.py", "def ok(): return True\n")
+        self.git("add", "-A")
+        self.git("commit", "-qm", "base helpers")
+        self.git("push", "-q")
+        wt = self.start()
+        put(wt / "changes/c1/specs/capabilities/tokens.md", NEW_CAP)
+        put(wt / "changes/c1/tasks.md", TOKEN_TASKS)
+        put(wt / "tests/acceptance/test_tokens.py", "# capabilities/tokens#AC-01\ndef test_x(): pass\n")
+        self.assertEqual(self.sdd("freeze", "c1", cwd=wt)[0], 0)
+        (wt / "tests/acceptance/helpers.py").unlink()
+        self.git("update-ref", "-d", "refs/remotes/origin/main")  # a shallow CI checkout has no base ref
+        code, out = self.sdd("verify-frozen", "c1", cwd=wt)
+        self.assertEqual(code, 1, out)
+        self.assertIn("tests/acceptance/helpers.py deleted after freeze", out)
+
 
 OLD_REQ = """\
 ---
