@@ -121,3 +121,4 @@ Provide structured analysis with:
 - When classifying, look at the actual content, not just the title
 - Flag documents that mix types - this is the most common Diataxis violation
 - Suggest concrete next steps based on findings
+- Cover every document and area in scope before returning; no user is there to answer, so don't stop partway to report progress or offer to continue
