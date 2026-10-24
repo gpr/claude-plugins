@@ -27,7 +27,7 @@ Analyze existing documentation and report on Diataxis compliance, coverage gaps,
    - Count documents by location
 
 2. **Analyze documentation**:
-   - Use `@agent-diataxis:doc-analyzer` to examine each document
+   - Use `@agent-diataxis:doc-analyzer` to examine each document; for many documents, dispatch several analyzers in parallel, each on a batch, alongside step 3
    - Classify each document by Diataxis type based on actual content (not location)
    - Identify documents that mix types inappropriately
 

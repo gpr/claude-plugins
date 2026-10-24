@@ -40,6 +40,8 @@ All five have the tools `Read, Grep, Glob, Bash, mcp__sdd__sdd`. All but the ver
 
 ## Hard rules per agent
 
+An agent's return ends its run. The spec-author, planner and verifier return only when their steps are done or something blocks them (a missing fact, a decision without an ADR, a hard failure), never to report progress, announce a next step or offer to continue.
+
 - **spec-author**: never paste spec text back. Fill every template placeholder, give every criterion Given/When/Then and every invariant a Check with Holds and Violation examples, change existing concepts only through `delta-stub`, run `bundle` with `fix: true` on the change before handing back. Never type a base hash: re-run `delta-stub` after a CONFLICT. If a criterion to change lives in a required change that is not merged yet, report it as an open question, never add it again.
 - **planner**: never change the spec. If a decision meets the ADR bar and has none, stop and report. For a `size: fix`, add lines to `tasks.md` with Edit; never rewrite it or touch T1's line.
 - **acceptance-tester**: test only through the public surface in Contracts (or the existing surface, for a fix). Tests must fail for the right reason. An untestable or ambiguous criterion is a spec bug: report it.
