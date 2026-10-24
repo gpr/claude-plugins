@@ -90,7 +90,7 @@ const under = (rel: string, dir: string) => rel === dir || rel.startsWith(`${dir
 
 /**
  * A workflow agent's own `memory:` directories. Claude Code names them after the agent type
- * with non-alphanumerics folded to `-` (`sdd:planner` -> `sdd-planner`).
+ * with every character but `[a-zA-Z0-9_-]` folded to `-` (`sdd:planner` -> `sdd-planner`).
  */
 export function memoryDirs(role: Role): string[] {
   return [`.claude/agent-memory/sdd-${role}`, `.claude/agent-memory-local/sdd-${role}`]
