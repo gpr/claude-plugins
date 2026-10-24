@@ -12,8 +12,9 @@ criteria AC-NN) and `specs/invariants/<id>.md` (type Invariant). Tests and tasks
 Usually called through the plugin's `sdd` tool (mcp__sdd__sdd), args as a list.
 
 Commands
-  init                               create specs/ adrs/ changes/ tests/acceptance/, the concept
-                                     templates and .claude/sdd.json
+  init [--survey] [key=value ...]    create specs/ adrs/ changes/ tests/acceptance/, the concept
+                                     templates and .claude/sdd.json (key=value: its first values);
+                                     lists existing ADR/test dirs; --survey writes nothing
   config                             print the effective configuration (test commands, dirs)
   new <change> [--title T]           scaffold changes/<change>/
   status [<change>] [--json]         list changes / show one
@@ -61,6 +62,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 STATUSES = ["draft", "approved", "implementing", "verified", "archived"]
+# intent.md `size`: a full change, a fix of an existing criterion, or a baseline (adopt) that
+# only writes down behavior the code already has.
+SIZES = ["change", "fix", "baseline"]
 # Workflow phases (same ids as hooks/phase.ts PHASES, plus `done`), with the statuses a
 # change may have while in each (a fix is still `draft` through plan and acceptance).
 PHASES = ["spec", "gate1", "plan", "gate2", "acceptance", "implement", "verify", "sync", "done"]
@@ -94,6 +98,7 @@ REF_RE = re.compile(rf"(?<![\w/.-])((?:{CAP}|{INV})(?:/{SEG})+)(#AC-\d{{2,}})?(?
 AC_ID_RE = re.compile(r"AC-\d{2,}")
 AC_HEAD_RE = re.compile(r"^### (AC-\d{2,}):\s*(.*)$")
 RETIRED_RE = re.compile(r"^- \*\*Retired\*\*:?\s*(.*)$")
+BASELINE_RE = re.compile(r"^- \*\*Baseline\*\*:?\s*(.*)$")
 ADR_RE = re.compile(r"ADR-\d{4}")
 ADR_FILE_RE = re.compile(r"(\d{4})_([a-z0-9_]+)\.md")
 OKF_STATUSES = ("draft", "stable", "deprecated")
@@ -538,6 +543,19 @@ class AC:
                 return m.group(1).strip()
         return None
 
+    @property
+    def baseline(self) -> str | None:
+        """Where existing code already does this ('' when unnamed), or None for new behavior."""
+        for l in self.lines[1:]:
+            m = BASELINE_RE.match(l.strip())
+            if m:
+                return m.group(1).strip()
+        return None
+
+    def without_baseline(self) -> "AC":
+        """The criterion as it is merged into the living spec: the marker only matters in a change."""
+        return AC(self.id, self.title, [l for l in self.lines if not BASELINE_RE.match(l.strip())], self.base)
+
     def has(self, word: str) -> bool:
         return any(l.strip().startswith(f"- **{word}**") for l in self.lines)
 
@@ -967,7 +985,7 @@ def apply_delta(d: Delta, living: dict[str, Concept]) -> tuple[Concept, list[str
         if not d.deprecate:
             c.fm.set("status", "stable")
         if c.type == "Capability":
-            c.set_acs(c.acs())
+            c.set_acs([a.without_baseline() for a in c.acs()])
         log = [f"{'DEPRECATED' if d.deprecate else 'ADDED' if d.kind == 'new' else 'MODIFIED'} {d.cid}"]
         if c.type == "Capability":
             log[0] += f" ({', '.join(a.id for a in c.acs())})"
@@ -984,6 +1002,7 @@ def apply_delta(d: Delta, living: dict[str, Concept]) -> tuple[Concept, list[str
             acs[a.id] = AC(a.id, acs[a.id].title, [f"### {a.id}: {acs[a.id].title}", "", f"- **Retired**: {reason}"])
             log.append(f"RETIRED  {d.cid}#{a.id}")
         for a in d.added:
+            a = a.without_baseline()
             acs[a.id] = AC(a.id, a.title, strip_comments("\n".join(a.lines), keep_base=False).split("\n"))
             log.append(f"ADDED    {d.cid}#{a.id}")
         c.set_acs(list(acs.values()))
@@ -1110,7 +1129,71 @@ def cmd_new(args):
     print(f"created {d.relative_to(ROOT)}/ (index.md intent.md plan.md tasks.md specs/)")
 
 
+# What an existing repo may already have, listed by `init` so the lead can point the config at it.
+ADR_HINTS = ["adrs", "adr", "docs/adr", "docs/adrs", "docs/decisions", "doc/adr", "doc/adrs",
+             "docs/architecture/decisions", "architecture/decisions"]
+TEST_HINTS = ["tests", "test", "spec", "__tests__", "e2e", "features"]
+MANIFESTS = ["pyproject.toml", "setup.cfg", "tox.ini", "package.json", "Gemfile", "go.mod", "Cargo.toml",
+             "pom.xml", "build.gradle", "build.gradle.kts", "mix.exs", "composer.json", "Makefile"]
+
+
+def foreign_md(bundle: Path) -> list[Path]:
+    """Markdown in a bundle dir that sdd did not create: no OKF index.md yet, but files."""
+    if not bundle.is_dir() or (bundle / "index.md").exists():
+        return []
+    return [f for f in bundle.rglob("*.md") if not is_hidden(f.relative_to(bundle))]
+
+
+def survey() -> list[str]:
+    found = []
+    for h in ADR_HINTS:
+        d = ROOT / h
+        if d.is_dir() and not (d / "index.md").exists():
+            n = len([f for f in d.rglob("*.md") if not is_hidden(f.relative_to(d))])
+            if n:
+                found.append(f"{h}/ ({n} .md, ADR-like)")
+    for h in TEST_HINTS:
+        d = ROOT / h
+        if d.is_dir() and d != ACCEPT:
+            found.append(f"{h}/ (tests)")
+    found += [m for m in MANIFESTS if (ROOT / m).is_file()]
+    return found
+
+
 def cmd_init(args):
+    survey_only = "--survey" in args
+    sets = [a for a in args if a != "--survey"]
+    if sets and survey_only:
+        die("init: --survey takes no key=value (it writes nothing)")
+    if sets:
+        if _cfg_file.exists():
+            die(f"{_cfg_file.relative_to(ROOT)} exists; edit it instead of passing key=value")
+        cfg = dict(DEFAULT_CFG)
+        for a in sets:
+            k, eq, v = a.partition("=")
+            if not eq or k not in DEFAULT_CFG:
+                die(f"init: '{a}' is not key=value with a key of {', '.join(DEFAULT_CFG)}")
+            cfg[k] = v
+        atomic_write(_cfg_file, json.dumps(cfg, indent=2) + "\n")
+        # every path above derives from the config: run init again with it in place
+        sys.exit(subprocess.run([sys.executable, __file__, "init"]).returncode)
+    found = survey()
+    print(f"root {ROOT}")
+    if found:
+        print("found: " + ", ".join(found))
+    foreign = {b: foreign_md(b) for b in (SPECS, ADRS)}
+    for b, files in foreign.items():
+        if files:
+            key = "specs_dir" if b == SPECS else "adr_dir"
+            how = f"`init {key}=<dir>`" if not _cfg_file.exists() else f"edit {key} in {_cfg_file.relative_to(ROOT)}"
+            print(f"WARN  {b.relative_to(ROOT)}/ has {len(files)} .md file(s) sdd did not create: left alone; "
+                  f"point {key} at another directory ({how})")
+    if any(foreign.values()) and not _cfg_file.exists() and not survey_only:
+        die("nothing written: choose the directories first", 1)
+    if survey_only:
+        print("survey only, nothing written; then: init [key=value ...] "
+              f"({', '.join(k for k in DEFAULT_CFG if k.endswith(('_dir', '_cmd')))})")
+        return
     made = []
     for d in (SPECS, ADRS, CHANGES, ACCEPT):
         if not d.exists():
@@ -1120,6 +1203,8 @@ def cmd_init(args):
         atomic_write(_cfg_file, json.dumps(DEFAULT_CFG, indent=2) + "\n")
         made.append(str(_cfg_file.relative_to(ROOT)) + " (edit acceptance_cmd / unit_cmd)")
     for bundle in (SPECS, ADRS):
+        if foreign[bundle]:
+            continue
         for name, text in (("index.md", None), ("log.md", log_head())):
             p = bundle / name
             if not p.exists():
@@ -1127,7 +1212,7 @@ def cmd_init(args):
                 made.append(str(p.relative_to(ROOT)))
     for kind, (bundle, name) in CONCEPT_TEMPLATES.items():
         p = bundle / ".templates" / name
-        if not p.exists():
+        if not p.exists() and not foreign[bundle]:
             atomic_write(p, (TEMPLATES / name).read_text())
             made.append(str(p.relative_to(ROOT)))
     ignore = ROOT / ".gitignore"
@@ -1136,8 +1221,9 @@ def cmd_init(args):
     if line not in old.splitlines():
         atomic_write(ignore, old + ("" if not old or old.endswith("\n") else "\n") + line + "\n")
         made.append(f".gitignore ({line})")
-    print(f"root {ROOT}")
     print("created: " + (", ".join(made) if made else "nothing, already initialised"))
+    if any(foreign.values()):
+        sys.exit(1)
 
 
 def cmd_config(args):
@@ -1714,6 +1800,14 @@ def check_delta(d: Delta, living: dict[str, Concept], change: Path, errs: list, 
         for level, msg in found:
             (errs if level == "ERROR" else warns).append(msg)
 
+    def baseline(ref: str, a: AC, kind: str = "ADDED"):
+        if a.baseline is None:
+            return
+        if kind != "ADDED":
+            errs.append(f"{where} {ref}: {kind} criteria cannot be Baseline (only a new criterion records existing behavior)")
+        elif not a.baseline or PLACEHOLDER_RE.search(a.baseline):
+            errs.append(f"{where} {ref}: Baseline needs '- **Baseline**: <where the code does it now>'")
+
     if d.kind == "modify":
         if cur is None:
             errs.append(f"{where}: CapabilityDelta but {rel(d.target)} does not exist (write the full Capability)")
@@ -1735,6 +1829,7 @@ def check_delta(d: Delta, living: dict[str, Concept], change: Path, errs: list, 
             missing = [w for w in ("Given", "When", "Then") if not a.has(w)]
             if missing:
                 errs.append(f"{where} {d.cid}#{a.id}: no {'/'.join(f'**{w}**' for w in missing)} line")
+            baseline(f"{d.cid}#{a.id}", a)
             touch(f"{d.cid}#{a.id}", "ADDED", Unit(f"{d.cid}#{a.id}", cur, a))
         for kind, blocks in (("MODIFIED", d.modified), ("RETIRED", d.retired)):
             for a in blocks:
@@ -1755,6 +1850,7 @@ def check_delta(d: Delta, living: dict[str, Concept], change: Path, errs: list, 
                         errs.append(f"{where} {ref}: no {'/'.join(f'**{w}**' for w in missing)} line")
                 elif not a.retired or PLACEHOLDER_RE.search(a.retired):
                     errs.append(f"{where} {ref}: RETIRED needs '- **Retired**: <reason>'")
+                baseline(ref, a, kind)
                 touch(ref, kind, Unit(ref, cur, a))
         seen_sections: set[str] = set()
         for name, base, lines in d.sections:
@@ -1794,6 +1890,7 @@ def check_delta(d: Delta, living: dict[str, Concept], change: Path, errs: list, 
             for a in c.acs():
                 if a.retired is not None:
                     errs.append(f"{where} {d.cid}#{a.id}: a new capability has no retired criteria")
+                baseline(f"{d.cid}#{a.id}", a)
                 touch(f"{d.cid}#{a.id}", "ADDED", Unit(f"{d.cid}#{a.id}", c, a))
         else:
             touch(d.cid, "ADDED", Unit(d.cid, c))
@@ -1816,6 +1913,9 @@ def collect(change: Path):
     fm = intent_fm(change)
     if fm.str("status") not in STATUSES:
         errs.append(f"intent.md: status '{fm.str('status')}' invalid")
+    size = fm.str("size") or "change"
+    if size not in SIZES:
+        errs.append(f"intent.md: size '{size}' invalid ({'|'.join(SIZES)})")
     living = living_concepts()
     units = all_units(living)
     deltas = load_deltas(change, living)
@@ -1833,8 +1933,17 @@ def collect(change: Path):
         new = next((lines for n, _, lines in d.sections if n == "Invariants"), None) if d else None
         for inv in sorted(linked_invariants(c, new) & gone_invs):
             warns.append(f"{cid} still lists {inv}, deprecated by this change: replace its Invariants section")
-    if not touched and not any(d.kind == "modify" and d.sections for d in deltas) and fm.str("size") != "fix":
+    if not touched and not any(d.kind == "modify" and d.sections for d in deltas) and size != "fix":
         warns.append("no spec delta in this change")
+    # ADDED criteria that record behavior the code already has: tested, never implemented
+    baselined = {r for r, k in touched.items() if k == "ADDED" and r in texts
+                 and texts[r].ac is not None and texts[r].ac.baseline is not None}
+    if size == "baseline":
+        for r, k in sorted(touched.items()):
+            if k != "ADDED":
+                errs.append(f"{r}: {k} in a size: baseline change (it only records existing behavior)")
+            elif kind_of(r) == "Capability" and r not in baselined:
+                errs.append(f"{r}: not Baseline in a size: baseline change (new behavior needs a full change)")
     rep = bundle_check(change.name)
     errs += [f"bundle: {e}" for e in rep.errs]
     warns += [f"bundle: {w}" for w in rep.warns]
@@ -1908,7 +2017,7 @@ def collect(change: Path):
         kinds = {t["kind"] for t in tasks if r in t["refs"]}
         if tasks and "test" not in kinds:
             errs.append(f"{r}: no (test) task")
-        if tasks and "impl" not in kinds and kind_of(r) == "Capability":
+        if tasks and "impl" not in kinds and kind_of(r) == "Capability" and r not in baselined:
             errs.append(f"{r}: no (impl) task")
     if not tasks and fm.str("status") not in ("draft",):
         errs.append("tasks.md has no tasks")
@@ -1918,12 +2027,17 @@ def collect(change: Path):
     test_refs = {r for r, k in touched.items() if k in ("ADDED", "MODIFIED")}
     test_refs |= {r for t in tasks if t["kind"] == "test" for r in t["refs"] if r in touched or r in units}
     for t in tasks:
+        if t["kind"] == "impl" and size == "baseline":
+            errs.append(f"tasks.md:{t['line']} {t['id']}: a size: baseline change has no (impl) tasks")
+        elif t["kind"] == "impl" and t["refs"] and set(t["refs"]) <= baselined:
+            warns.append(f"{t['id']}: cites only Baseline criteria (existing behavior is kept, not built)")
         if t["kind"] == "impl":
             needed = {x["id"] for x in tasks if x["kind"] == "test" and set(x["refs"]) & set(t["refs"])}
             if needed and not needed & set(t["blocked_by"]):
                 warns.append(f"{t['id']}: impl not blocked-by its test task(s) {','.join(sorted(needed))}")
     return errs, warns, {"touched": touched, "tasks": tasks, "deltas": deltas, "living": living,
-                         "units": units, "texts": texts, "test_ids": test_ids, "test_refs": test_refs}
+                         "units": units, "texts": texts, "test_ids": test_ids, "test_refs": test_refs,
+                         "baselined": baselined}
 
 
 def cmd_check(args):
@@ -1992,6 +2106,8 @@ def cmd_context(args):
         for r in refs:
             u = texts.get(r) or units[r]
             print(f"<!-- {touched[r] + ' in this change' if r in touched else 'unchanged, ' + rel(u.concept.path)} -->")
+            if r in info["baselined"]:
+                print("baseline: existing behavior, the test must pass on the current code")
             print(u.ac.text.replace("### ", "#### ", 1) + "\n")
     if invs:
         print("## Invariants\n")

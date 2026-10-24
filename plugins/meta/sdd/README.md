@@ -47,6 +47,22 @@ creates `specs/ adrs/ changes/ tests/acceptance/` (`specs/` and `adrs/` as OKF b
 `index.md`, `log.md` and their concept templates in `.templates/`) and `.claude/sdd.json`:
 set `acceptance_cmd` and `unit_cmd` there.
 
+## Existing repositories
+sdd imports nothing. It writes current behavior down as it goes:
+- First run: `sdd init --survey` lists the ADR dirs, test dirs and manifests the repo already
+  has and writes nothing. The lead asks where things go, then runs
+  `sdd init adr_dir=... acceptance_cmd=... unit_cmd=...`. An existing `adrs/` or `specs/` that sdd did not
+  create stops init (WARN, nothing written, exit 1); old ADRs stay where they are, as plain references.
+- **Baseline criteria.** A change that touches code no capability covers writes the behavior it
+  keeps as criteria ending in `- **Baseline**: <path>`: a `(test)` task, no `(impl)` task, and
+  the test must pass on the current code (else `MISMATCH`, and you decide whether the code or
+  the criterion is wrong). Sync drops the line. A bug no criterion covers is a full change
+  whose criterion states the correct behavior.
+- **`/sdd:change adopt <area>`** writes an area down up front: a `size: baseline` change with
+  only Baseline criteria and test tasks, no Implement step, no code change.
+
+See `docs/how-to/adopt-an-existing-repo.md`.
+
 ## Capabilities, invariants and OKF bundles
 `specs/`, `adrs/` and every `changes/<id>/` are [OKF](https://docs.rs/okf) v0.2 bundles
 (`okf_version: "0.2"` in the root `index.md`, a dated `log.md`, `type` front matter on every
@@ -64,7 +80,7 @@ changes/<id>/specs/capabilities/<id>.md   a new Capability, or a CapabilityDelta
 changes/<id>/specs/invariants/<id>.md     a new Invariant, or the full replacement of one
 ```
 Tasks and acceptance tests cite `capabilities/<id>#AC-NN` and `invariants/<id>`. A criterion
-needs a test task and an impl task; an invariant a test task only. A CapabilityDelta is
+needs a test task and an impl task (a Baseline criterion a test task only); an invariant a test task only. A CapabilityDelta is
 merged one unit at a time: ADDED, MODIFIED and RETIRED criteria (ids are never reused: a
 retired one keeps its heading and reason), and SECTIONS that replace Title, Description,
 Intent, Scope, Invariants, Decisions or Verification. `sdd sync` sets the concepts `stable`,

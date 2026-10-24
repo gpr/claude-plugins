@@ -26,7 +26,7 @@ Agents and the lead call `sdd.py` through the `mcp__sdd__sdd` tool, with the sub
 
 | Subcommand | Role | Effect |
 |---|---|---|
-| `init` | lead | Creates `specs/` and `adrs/` (each with its `index.md`, `log.md` and `.templates/` concept templates), `changes/`, `tests/acceptance/` (configured names), writes `.claude/sdd.json` with the defaults if missing, adds `/<worktree_dir>/` to `.gitignore`. Idempotent: prints `created: nothing, already initialised`. |
+| `init [--survey] [key=value ...]` | lead | Creates `specs/` and `adrs/` (each with its `index.md`, `log.md` and `.templates/` concept templates), `changes/`, `tests/acceptance/` (configured names), writes `.claude/sdd.json` with the defaults if missing, adds `/<worktree_dir>/` to `.gitignore`. Idempotent: prints `created: nothing, already initialised`. First prints `found:` with what the repo already has: ADR-like dirs without an OKF `index.md` (with their `.md` count), test dirs, build manifests. A `specs_dir` or `adr_dir` that holds `.md` files but no `index.md` gets `WARN ... sdd did not create` and exit 1: without `.claude/sdd.json` nothing is written, with one that folder is left alone and the rest is created. `key=value` (any key of [the config](configuration.md)) writes a new `.claude/sdd.json` with those values, then initialises with it; it refuses once the file exists. `--survey` prints `found:` and the WARNs and writes nothing (it takes no `key=value`). See [Adopt sdd in an existing repository](../how-to/adopt-an-existing-repo.md). |
 | `config` | any | Prints the effective configuration as JSON, with `root`. |
 | `status [<change>] [--json]` | any | One line per open change: `status`, `tasks=done/total`, `size`, and `phase`, `pr`, `requires` when stored. With a change id, also one line per task. `--json` is what the band and panes read. Also counts archived changes. |
 
@@ -62,7 +62,7 @@ Agents and the lead call `sdd.py` through the `mcp__sdd__sdd` tool, with the sub
 ### check rules
 
 Errors (exit 1):
-- `intent.md` status not one of the five statuses.
+- `intent.md` status not one of the five statuses, or `size` not one of `change fix baseline`.
 - A unit (criterion or invariant) appears twice in the change.
 - A new concept's structure: see [File formats](file-formats.md#capability) (type, title, status, required sections, Given/When/Then, Statement, `- Check:`, Holds and Violation).
 - A full Capability over a living one; a CapabilityDelta for a capability that does not exist or is deprecated; a base on a new concept.
@@ -71,7 +71,9 @@ Errors (exit 1):
 - Task problems: duplicate id, `blocked-by` an unknown task; a citation of an unknown unit, of a bare capability, of a criterion on an invariant, of a retired criterion or deprecated invariant; a `(test)` task on a unit this change retires or deprecates; a `(test)`/`(impl)` task citing nothing.
 - A referenced ADR (in `intent.md` `adrs:` or a task) has no file, or is `deprecated`.
 - `plan.md` cites an unknown unit or ADR (HTML comments ignored).
-- Once `tasks.md` has tasks: an added or modified criterion with no `(test)` task or no `(impl)` task; an added or modified invariant with no `(test)` task.
+- Once `tasks.md` has tasks: an added or modified criterion with no `(test)` task or no `(impl)` task (a Baseline criterion needs no `(impl)` task); an added or modified invariant with no `(test)` task.
+- A `- **Baseline**` line on a MODIFIED or RETIRED criterion, or one without a location.
+- `size: baseline`: a criterion that is not Baseline, any MODIFIED, RETIRED or deprecated unit, any `(impl)` task.
 - Any bundle ERROR of the change (see [OKF bundles](bundles.md#change)), printed with a `bundle:` prefix.
 - No tasks while status is not `draft`.
 
@@ -83,6 +85,7 @@ Warnings:
 - Any bundle WARN of the change, prefixed `bundle:` (a stale `index.md`, a missing `type:`).
 - The stored phase does not fit the status (see [Phases and states](phases-and-states.md#phase-and-status)).
 - An `(impl)` task not `blocked-by` the `(test)` task(s) covering its criteria.
+- An `(impl)` task that cites only Baseline criteria.
 
 With `--tests`, also:
 - Error: a unit to be tested (added or modified, plus existing units that a `(test)` task targets, the fix path) is cited by no file under the acceptance dir.
@@ -93,7 +96,7 @@ With `--tests`, also:
 
 | Subcommand | Role | Effect |
 |---|---|---|
-| `sync <change> [--dry-run] [--force]` | lead | Requires status `verified` (`--force` skips that, not the checks), a clean `check`, and no error in `bundle specs`. Writes each new concept to `specs/` and replaces each invariant replacement, with template comments and `base:` dropped and `status: stable` (or `deprecated`). Merges each CapabilityDelta unit by unit: MODIFIED replaces the criterion, RETIRED leaves its heading and the reason, ADDED inserts, criteria are sorted, SECTIONS replace whole sections, `sources` are merged. Sets `generated.at` to now on every concept it writes. Prints one line per unit (`ADDED`, `MODIFIED`, `RETIRED`, `SECTION`, `DEPRECATED`), regenerates the indexes, appends `* **Update**: <change>: <units>` to `specs/log.md`, accepts the listed ADRs, sets `status: archived` and `archived: <date>`, and moves the change to `changes/archive/<YYYY-MM-DD>-<change>/`. `--dry-run` prints the plan and writes nothing. Nothing is written if any check fails. |
+| `sync <change> [--dry-run] [--force]` | lead | Requires status `verified` (`--force` skips that, not the checks), a clean `check`, and no error in `bundle specs`. Writes each new concept to `specs/` and replaces each invariant replacement, with template comments, `base:` and `- **Baseline**` lines dropped and `status: stable` (or `deprecated`). Merges each CapabilityDelta unit by unit: MODIFIED replaces the criterion, RETIRED leaves its heading and the reason, ADDED inserts, criteria are sorted, SECTIONS replace whole sections, `sources` are merged. Sets `generated.at` to now on every concept it writes. Prints one line per unit (`ADDED`, `MODIFIED`, `RETIRED`, `SECTION`, `DEPRECATED`), regenerates the indexes, appends `* **Update**: <change>: <units>` to `specs/log.md`, accepts the listed ADRs, sets `status: archived` and `archived: <date>`, and moves the change to `changes/archive/<YYYY-MM-DD>-<change>/`. `--dry-run` prints the plan and writes nothing. Nothing is written if any check fails. |
 
 ## Branch, PR and resume
 

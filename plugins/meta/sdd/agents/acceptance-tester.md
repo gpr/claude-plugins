@@ -38,8 +38,11 @@ Steps
    on your files only. They must fail, and for the right reason: a missing behavior or
    missing contract (e.g. 404, ImportError on the planned symbol, assertion on the
    value), never a syntax error, a broken fixture or a typo. For criteria whose behavior
-   already exists (MODIFIED parts that did not change, or a `fix`), a pass is acceptable:
-   say which.
+   already exists (MODIFIED parts that did not change), a pass is acceptable: say which.
+   A `fix` test must fail: it shows the bug.
+   A Baseline criterion (the bundle says `baseline:`) is the opposite: its test must pass
+   on the current code. If it fails, change neither the test toward the code nor anything
+   else: report `MISMATCH: <id> <observed behavior>` and do not tick or freeze for it.
 3. Tick your task in `changes/<id>/tasks.md` (`- [x]`), then run
    `sdd freeze <id>`.
 
@@ -52,6 +55,6 @@ Memory
   that lives in `changes/<id>/`.
 
 Return (max ~8 lines): test file paths, criterion -> test mapping count, the failure reason
-per test group, and any criterion you could not test as written (with its id and why).
+per test group (Baseline: passed), any MISMATCH, and any criterion you could not test as written (with its id and why).
 An untestable or ambiguous criterion is a spec bug: report it, do not invent the missing
 detail.

@@ -29,6 +29,8 @@ const CASES: [string, SddChange, string[], string | undefined][] = [
   ['implementing, tests done', change('implementing', [task('T1', 'test', true), task('T2', 'impl', false)]), [], 'implement'],
   ['implementing, all done', change('implementing', [task('T1', 'test', true), task('T2', 'impl', true)]), [], 'verify'],
   ['implementing, all done, verifier running', change('implementing', [task('T1', 'test', true)]), ['verifier'], 'verify'],
+  ['baseline, tests done: nothing to implement', change('implementing', [task('T1', 'test', true)], 'baseline'), [], 'verify'],
+  ['baseline, test open', change('implementing', [task('T1', 'test', false)], 'baseline'), [], 'acceptance'],
   ['verified', change('verified'), [], 'sync'],
   ['unknown status', change('?'), [], undefined],
 ]
@@ -40,6 +42,7 @@ const STORED: [string, SddChange, string[], string | undefined][] = [
   ['stored phase beats running agents', stored('implement', change('implementing')), ['verifier'], 'implement'],
   ['unknown stored phase falls back', stored('bogus', change('verified')), [], 'sync'],
   ['stored spec on a fix is not a fix phase: derived', { ...stored('spec', change('draft', [], 'fix')) }, [], 'plan'],
+  ['stored implement on a baseline is not a baseline phase: derived', stored('implement', change('implementing', [task('T1', 'test', true)], 'baseline')), [], 'verify'],
   ['stored done has no phase', stored('done', change('archived')), [], undefined],
 ]
 
@@ -52,6 +55,10 @@ for (const [name, c, running, want] of [...CASES, ...STORED]) {
 test('a fix lists no spec or Gate 1 step, and its tests come before Gate 2', () => {
   expect(phasesOf(change('draft', [], 'fix')).map(p => p.id)).toEqual(['plan', 'acceptance', 'gate2', 'implement', 'verify', 'sync'])
   expect(phasesOf(change('draft')).length).toBe(8)
+})
+
+test('a baseline lists no Implement step', () => {
+  expect(phasesOf(change('draft', [], 'baseline')).map(p => p.id)).toEqual(['spec', 'gate1', 'plan', 'gate2', 'acceptance', 'verify', 'sync'])
 })
 
 const named = (id: string, c: SddChange): SddChange => ({ ...c, id })

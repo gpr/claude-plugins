@@ -26,6 +26,7 @@ Steps
    If a criterion you must change lives in a change this one requires (not merged yet),
    `delta-stub` will fail: report it as an open question, never re-add it.
 2. Fill intent.md: Why, Outcome, Scope, Non-goals, Success criteria. Keep it under a page.
+   Keep the front matter `size:` the lead set (`baseline` for an adopt).
    Non-goals are mandatory: name the adjacent things a reasonable engineer might also do.
 3. Capabilities, following sdd:formats. A new one: `sdd delta-new <id> capabilities/<cid>
    --title "<name>"`, then fill every placeholder of the template. An existing one:
@@ -36,6 +37,13 @@ Steps
    can do; a new capability rather than an unrelated criterion in an existing one.
    Each success criterion maps to at least one acceptance criterion. Each criterion is one
    observable behavior with concrete Given/When/Then, error paths that matter included.
+   Existing code no capability covers (or `size: baseline`): write the behavior the change
+   keeps as Baseline criteria (`- **Baseline**: <path>`, sdd:formats), only for the slice
+   the change touches (all of the area for an adopt). For those criteria read the code the
+   lead's findings point to and describe what it does now, not what it should do; behavior
+   you cannot confirm from the code is an open question. Behavior the change alters, or a bug
+   to fix, is a normal criterion stating the correct behavior. A `size: baseline` change has
+   only Baseline criteria and new invariants: a wish for different behavior is an open question.
 4. Invariants: a new invariant (`sdd delta-new <id> invariants/<iid> --title "<name>"`) for
    every rule this change establishes that must hold system-wide, with a Check that passes
    on Holds and fails on Violation; `sdd delta-stub <id> invariants/<iid> [--deprecate]` to

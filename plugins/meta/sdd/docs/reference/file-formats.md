@@ -79,6 +79,7 @@ sources:
 
 - Sections are lines `## <name>` outside HTML comments. Intent, Scope and Acceptance criteria are required; Intent and Scope must not be empty.
 - A criterion starts at `### AC-NN: <name>` (two or more digits) and runs to the next `###` or `##` heading. Any other `###` heading under Acceptance criteria is an error: sync would not keep what it holds. A live criterion needs lines starting `- **Given**`, `- **When**` and `- **Then**`. A retired one holds `- **Retired**: <reason>` instead and stays forever, so its id is never reused.
+- A new criterion (in a new capability, or under ADDED) may end with `- **Baseline**: <where it lives, e.g. src/reports/export.py>`: it writes down behavior the code already has and the change keeps. It needs a `(test)` task and no `(impl)` task, and its acceptance test must pass on the current code. `sync` drops the line, so a living criterion never has one. See [Adopt sdd in an existing repository](../how-to/adopt-an-existing-repo.md).
 - Criteria are kept sorted by number; sync and `bundle --fix` reorder them.
 - Links in Invariants, Decisions and (for an invariant) Rationale are resolved relative to the living file; one that resolves to nothing, or to a deprecated concept, is a warning. A link there to `adrs/NNNN_<slug>.md` counts as citing `ADR-NNNN`.
 - A deprecated capability needs no live criterion.
@@ -158,12 +159,14 @@ type: intent
 id: add-login
 title: Add login
 status: draft          # draft | approved | implementing | verified | archived
-size: change           # change | fix
+size: change           # change | fix | baseline
 adrs: [ADR-0007]
 created: 2026-10-17
 archived: 2026-10-20   # added by sync
 ---
 ```
+
+`size`: `change` (the default), `fix` (a test on an existing criterion, no delta), `baseline` (an adopt: only Baseline criteria and new invariants, only `(test)` tasks, no code change).
 
 Body sections from the template: Why, Outcome, Scope, Non-goals, Success criteria, Open questions. Open questions must be empty before Gate 1 approval.
 

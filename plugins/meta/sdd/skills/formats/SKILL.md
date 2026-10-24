@@ -88,6 +88,13 @@ Rules:
   input", no "works correctly". Cover the unhappy paths that matter (errors, limits,
   permissions).
 - Every live criterion has **Given**, **When** and **Then** lines (`- **And** ...` may follow).
+- **Baseline** (existing code): a new criterion that writes down behavior the code already
+  has, and this change keeps, ends with `- **Baseline**: <where it lives, e.g. src/reports/export.py>`.
+  It needs a `(test)` task and no `(impl)` task; its acceptance test must pass on the
+  current code. Only in a new capability or under ADDED, never on MODIFIED or RETIRED.
+  Behavior the change alters is never Baseline. `sync` drops the line.
+- `intent.md` `size`: `change` (default), `fix` (a test on an existing criterion, no delta) or
+  `baseline` (an adopt: only Baseline criteria and new invariants, only `(test)` tasks).
 - IDs `AC-NN` are stable: never renumber, never reuse. A removed criterion is retired, not
   deleted: it stays as `### AC-NN: <name>` with `- **Retired**: <reason>`.
 - Links in Invariants and Decisions are relative to the living path (`specs/capabilities/...`).
@@ -181,6 +188,7 @@ decision by superseding it. List the change's ADRs in `intent.md` front matter
 - [ ] T2 (impl) Reject expired tokens in middleware — capabilities/auth/tokens#AC-04 ADR-0007 | blocked-by: T1 | files: src/auth/mw.py
 ```
 Kinds: `test`, `impl`, `chore`. Cite ids, never restate criterion text.
+A Baseline criterion gets a `(test)` task only.
 
 ## Acceptance test tagging
 Every acceptance test cites the ids it covers, exactly, in its name, a docstring or a

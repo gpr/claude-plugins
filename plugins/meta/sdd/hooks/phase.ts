@@ -18,9 +18,14 @@ export type PhaseId = (typeof PHASES)[number]['id']
 // written alongside the plan, before Gate 2.
 const FIX_ORDER: readonly PhaseId[] = ['plan', 'acceptance', 'gate2', 'implement', 'verify', 'sync']
 
+// A baseline (adopt) only writes down behavior the code already has: its tests must pass on
+// the current code, so nothing is implemented.
+const BASELINE_ORDER: readonly PhaseId[] = ['spec', 'gate1', 'plan', 'gate2', 'acceptance', 'verify', 'sync']
+
 export function phasesOf(change: SddChange) {
-  if (change.size !== 'fix') return [...PHASES]
-  return FIX_ORDER.map(id => PHASES.find(p => p.id === id)!)
+  const order = change.size === 'fix' ? FIX_ORDER : change.size === 'baseline' ? BASELINE_ORDER : undefined
+  if (!order) return [...PHASES]
+  return order.map(id => PHASES.find(p => p.id === id)!)
 }
 
 // The phase `sdd checkpoint` stored in the change's state.json wins: it survives a restart

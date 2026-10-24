@@ -14,6 +14,7 @@ Documentation for the `sdd` Claude Code plugin, a spec-driven multi-agent workfl
 ## How-to guides
 
 * [Install and configure sdd](how-to/install-and-configure.md) - project-scope install, `sdd init`, test commands, publish the config.
+* [Adopt sdd in an existing repository](how-to/adopt-an-existing-repo.md) - survey, point the config at existing tests and ADRs, Baseline criteria, `adopt <area>`.
 * [Write a spec delta and an ADR](how-to/write-a-delta-and-adr.md) - add a capability or invariant; add, modify or retire criteria; record or supersede a decision.
 * [Migrate to Capability and Invariant concepts](how-to/migrate-to-okf-layout.md) - rewrite REQ/INV specs and ADR-NNNN files as concepts, by hand, once.
 * [Resume a change](how-to/resume-a-change.md) - continue by id or PR number; blocked, diverged and conflicting resumes.

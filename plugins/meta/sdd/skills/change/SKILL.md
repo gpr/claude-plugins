@@ -1,7 +1,7 @@
 ---
 name: change
-description: Lead workflow for any request to change the codebase - triage, capabilities, invariants and ADRs, user gate, plan, test-first implementation, verification, spec sync. Use for every feature, behavior change, or bug fix request, and when the user types /sdd:change.
-argument-hint: <what you want changed> | resume <change-id>
+description: Lead workflow for any request to change the codebase, and to adopt (write down) an existing area as a spec - triage, capabilities, invariants and ADRs, user gate, plan, test-first implementation, verification, spec sync. Use for every feature, behavior change, or bug fix request, and when the user types /sdd:change.
+argument-hint: <what you want changed> | resume <change-id> | adopt <area>
 ---
 
 # Lead: spec-driven change workflow
@@ -12,14 +12,21 @@ Keep your own context thin: pass agents IDs and file paths, read tool output, no
 
 `sdd <args>` = the `mcp__sdd__sdd` tool with `args` as a list (`sdd check c1` is
 `{"args": ["check", "c1"]}`). The guard blocks running the script through Bash.
-First use in a repo: `sdd init` (creates the folders, the concept templates and `.claude/sdd.json`; ask the user
-to set `acceptance_cmd` and `unit_cmd` there).
+First use in a repo (no `.claude/sdd.json`): `sdd init --survey` (writes nothing; lists the
+ADR dirs, test dirs and build manifests the repo already has, and WARNs about a `specs/` or
+`adrs/` sdd did not create). If the repo has code, delegate to `Explore`: how are the tests
+run (whole suite, a file list), where would end-to-end tests go. Ask the user (AskUserQuestion)
+for `adr_dir` (never an existing ADR folder: sdd keeps its own, old ADRs stay as they are and
+are linked as plain references), `acceptance_dir`, `acceptance_cmd`, `unit_cmd`, then
+`sdd init key=value ...` with the answers. Empty repo: `sdd init`, then ask for the two commands.
+In a repo with code, `specs/` starts empty: behavior is written down as it is touched
+(Baseline criteria, step 2), or up front per area with `adopt`.
 
 The workflow agents are plugin agents: `sdd:spec-author`, `sdd:planner`,
 `sdd:acceptance-tester`, `sdd:implementer`, `sdd:verifier`. Built-ins reused: `Explore`,
 `general-purpose`. Below they are named without the `sdd:` prefix.
 Request: $ARGUMENTS
-If it starts with `resume`, see "Resume" below.
+If it starts with `resume`, see "Resume" below; with `adopt`, see "Adopt" below.
 
 ## Branch, worktree, PR, checkpoints
 Every full change and fix lives on its own branch `sdd/<id>` in its own worktree, with a
@@ -52,11 +59,23 @@ number. Direct-path work has no change id and none of this.
 2. `EnterWorktree` with `path` = the printed worktree. From here every `sdd` call acts on it.
 3. `sdd status <id>`, then continue at the step the phase names (spec -> 2, gate1 -> 3,
    plan -> 4, gate2 -> 5, acceptance -> 6, implement -> 7, verify -> 8, sync -> 8.4,
-   done -> nothing left; a fix starts at plan, its test is written alongside). A stored phase can lag a step that was done but not
+   done -> nothing left; a fix starts at plan, its test is written alongside; an adopt
+   goes from acceptance to verify). A stored phase can lag a step that was done but not
    checkpointed: trust the files (`sdd check`, task ticks) over the phase when they disagree.
    Resume a partly written spec or plan with the same agent type and the files as context.
    Run the `bundle` tool on the change first. A change written in the old REQ/INV format
    cannot be fixed by `bundle`: resume spec-author to rewrite its delta as concepts.
+
+## Adopt
+`adopt <area>` writes down what an existing area of the code does, as Baseline criteria
+(sdd:formats), with passing acceptance tests, and changes no code.
+Delegate to `Explore` (medium): the area's public surface, the files that implement it, and
+existing tests for it. `sdd start <id> --title "Baseline: <area>" --pr-title "docs(<id>): baseline spec"`,
+enter the worktree, set `size: baseline` in intent.md, then steps 2.2-6 as usual (spec-author
+with the Explore findings, told the change is an adopt; Gate 1 asks "is this what the code
+does, and what it should keep doing?"). After the last test task: `sdd checkpoint <id> --phase verify`, skip step 7 and the
+code-review in step 8.3. A MISMATCH (step 6) in an adopt is either a wrong criterion
+(spec-author) or a bug: drop that criterion from the adopt and offer a fix as its own change.
 
 ## 1. Triage (you, no agent unless context is missing)
 If you need codebase facts to decide, delegate to `Explore` (quick or medium) with one
@@ -67,6 +86,9 @@ Apply this rule, in order, and state the result in one line:
   -> **full change** (spec delta).
 - Makes a decision with lasting consequences (technology, data model, boundary,
   security posture) -> **full change** with ADR, even if behavior is unchanged.
+- Code diverges from what users expect, but no living criterion covers it (an existing
+  repo) -> **full change** with `--pr-title "fix: ..."`: the spec-author writes the correct
+  behavior as a normal criterion (its test fails first) and Gate 1 confirms it is intended.
 - Code diverges from an existing acceptance criterion or invariant (bug) -> **fix**: no
   spec delta, but a failing acceptance test first. `sdd start <id> --title ... --pr-title "fix: ..."`, enter the worktree, `sdd checkpoint <id> --phase plan -m "chore(<id>): fix"`, set `size: fix` in intent.md, write one test task
   citing the existing criterion (`capabilities/<id>#AC-NN`) or invariant, then go to step 4 (it runs step 6 alongside).
@@ -80,7 +102,8 @@ Apply this rule, in order, and state the result in one line:
    prints. Do this before any agent writes an artifact. If it prints `PR missing`, create a
    draft PR for the branch (GitHub tools) and run `sdd set-pr <id> <number>`.
 2. Delegate to `spec-author` with: change id, the user's request verbatim, and the
-   Explore findings (summarized, with file paths). It writes intent.md, the new or changed
+   Explore findings (summarized, with file paths; for code that no capability covers, the
+   files that implement the behavior the change touches). It writes intent.md, the new or changed
    capabilities and invariants under `changes/<id>/specs/`, and any draft ADRs, then runs `bundle` and `sdd check <id>`. Then
    `sdd checkpoint <id> --phase gate1 -m "docs(<id>): spec delta"`.
 3. If it returns open questions, ask the user (AskUserQuestion, max 4) and resume the
@@ -121,10 +144,15 @@ For each `(test)` task (parallel if several): delegate to `acceptance-tester` wi
 the `sdd context <id> <Tn>` output pasted in the prompt. It writes the tests, confirms they
 fail for the right reason, ticks its task and runs `sdd freeze <id>`. After each one:
 `sdd checkpoint <id> -m "test(<id>): <Tn> acceptance tests"`; after the last add
-`--phase implement`.
+`--phase implement` (`--phase verify` for a `size: baseline`).
 If it reports that a criterion is untestable or ambiguous -> step 9 (reopen).
+If it reports `MISMATCH: <id>` (a Baseline test fails on the current code), ask the user which
+is right: the code (step 9, the criterion is corrected and stays Baseline) or the criterion
+(a latent bug: step 9, the spec-author drops its Baseline line, the planner adds an impl task;
+in an adopt, see "Adopt" instead).
 
 ## 7. Implementation (inner TDD)
+A `size: baseline` change has no impl tasks: go to step 8.
 For each `(impl)` task whose blocked-by tasks are done, delegate to `implementer` with
 the `sdd context <id> <Tn> --plan` output pasted in the prompt.
 Parallelism: run impl tasks concurrently only when their `files:` sets are disjoint;

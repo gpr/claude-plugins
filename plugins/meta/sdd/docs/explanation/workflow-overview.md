@@ -67,6 +67,8 @@ Not every request deserves the full workflow. The lead sorts each one into one o
 - **Fix**: the code diverges from an existing criterion. No new spec is needed, since the criterion already says what is right. The lead writes a failing acceptance test against it first.
 - **Direct**: refactors, renames, dependency bumps, docs, config. One agent does it and runs the unit tests.
 
+In an existing repository `specs/` starts empty, so "existing criterion" is rare at first. A change that touches code no capability covers writes down the behavior it keeps as **Baseline** criteria (tested, already implemented), next to the criteria for what it changes. A bug without a criterion is a full change whose criterion states the correct behavior. `adopt <area>` does the writing-down up front, for one area, without touching code. See [Adopt sdd in an existing repository](../how-to/adopt-an-existing-repo.md).
+
 Without triage, either trivial work drowns in ceremony or real behavior changes slip through without a spec.
 
 ## Two gates of different weight

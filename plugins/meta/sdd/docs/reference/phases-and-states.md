@@ -77,6 +77,15 @@ flowchart LR
     end
 ```
 
+### Order for a baseline
+
+A change with `size: baseline` (an adopt) writes down what the code does, so it has no Implement step: acceptance goes straight to verify.
+
+```mermaid
+flowchart LR
+    c1[spec] --> c2[gate1] --> c3[plan] --> c4[gate2] --> c5[acceptance] --> c7[verify] --> c8[sync] --> c9[done]
+```
+
 ### Derived phase
 
 The band and panes show the stored phase. For a change without one (made before `state.json` existed), or whose stored phase is not part of its workflow, the phase is derived from the status, the open tasks and the running workflow agents:

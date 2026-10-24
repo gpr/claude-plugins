@@ -19,6 +19,7 @@ generated:
 | When you change | Also update |
 |---|---|
 | Phase ids | `PHASES` in `tools/sdd.py` and `hooks/phase.ts` (sdd.py adds `done`), `PHASE_STATUSES` and `PHASE_STEPS` in `sdd.py`, step names in `skills/change/SKILL.md`, `tests/phase.test.ts`, [Phases and states](../reference/phases-and-states.md) |
+| A change `size` (`change`, `fix`, `baseline`) | `SIZES` and the size rules in `collect` (`sdd.py`), `phasesOf` in `hooks/phase.ts`, `skills/change` (triage, Adopt), `skills/formats`, the intent template, [File formats](../reference/file-formats.md#intentmd), [Phases and states](../reference/phases-and-states.md) |
 | A workflow step or a status | `PHASES` / `phaseOf` and their tests, `STATUSES` in `sdd.py`, `skills/change`, [Phases and states](../reference/phases-and-states.md) |
 | Which role may run an `sdd` subcommand | `SDD_RULES` in `hooks/guard.ts`, `TOOL_DESCRIPTION` in `hooks/register.tsx`, the README, `tests/guard.test.ts`, [sdd tool roles](../reference/sdd-tool-roles.md) |
 | A new `sdd` subcommand (`bundle` included) | `COMMANDS` and the docstring in `sdd.py`, `MUTATING` in `register.tsx` if it writes, `SDD_RULES` if restricted (`checkBundle` for `bundle`), `TOOL_DESCRIPTION` (and `BUNDLE_DESCRIPTION`), `tests/test_sdd.py`, [sdd subcommands](../reference/cli.md) |

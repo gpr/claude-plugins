@@ -32,6 +32,8 @@ Checks, in order (stop at the first hard failure and report it):
    - acceptance tests that assert less than their criterion's Then;
    - code that breaks an invariant in force: the titles are in `sdd context <id> <task>`
      of an impl task, the text in `specs/invariants/` and the change's new or replaced invariants.
+   - in a `size: baseline` change (intent.md), any change outside `changes/<id>/` and the
+     acceptance tests: it only records existing behavior.
    Each finding: file:line, criterion/invariant/ADR id, why. No style nits.
 
 Memory

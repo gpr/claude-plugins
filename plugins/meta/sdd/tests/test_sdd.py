@@ -279,6 +279,75 @@ class TestInitConfigNew(SddCase):
         self.assert_fails(self.sdd("check", "ghost"), "no change 'ghost'", code=2)
 
 
+class TestInitBrownfield(unittest.TestCase):
+    """init in a repo that already has code, ADRs and tests."""
+    def setUp(self):
+        self.root = Path(tempfile.mkdtemp(prefix="sdd-test-"))
+        (self.root / ".git").mkdir()
+        put(self.root / "docs/adr/0001-use-postgres.md", "# Use Postgres\n")
+        put(self.root / "tests/test_app.py", "def test_x():\n    pass\n")
+        put(self.root / "pyproject.toml", "[project]\nname='x'\n")
+
+    def tearDown(self):
+        shutil.rmtree(self.root, ignore_errors=True)
+
+    def sdd(self, *args: str) -> tuple[int, str]:
+        p = subprocess.run([sys.executable, str(SDD), *args], cwd=self.root,
+                           capture_output=True, text=True, timeout=30)
+        return p.returncode, p.stdout + p.stderr
+
+    def test_survey_lists_existing_and_writes_nothing(self):
+        code, out = self.sdd("init", "--survey")
+        self.assertEqual(code, 0, out)
+        self.assertIn("found: docs/adr/ (1 .md, ADR-like), tests/ (tests), pyproject.toml", out)
+        self.assertIn("survey only", out)
+        self.assertFalse((self.root / ".claude/sdd.json").exists())
+        self.assertFalse((self.root / "specs").exists())
+
+    def test_key_value_sets_first_config(self):
+        code, out = self.sdd("init", "adr_dir=docs/sdd-adrs", "unit_cmd=make test")
+        self.assertEqual(code, 0, out)
+        cfg = json.loads((self.root / ".claude/sdd.json").read_text())
+        self.assertEqual((cfg["adr_dir"], cfg["unit_cmd"], cfg["specs_dir"]), ("docs/sdd-adrs", "make test", "specs"))
+        self.assertTrue((self.root / "docs/sdd-adrs/index.md").exists())
+        self.assertTrue((self.root / "docs/sdd-adrs/.templates/adr.md.tmpl").exists())
+        self.assertFalse((self.root / "adrs").exists())
+        self.assertEqual((self.root / "docs/adr/0001-use-postgres.md").read_text(), "# Use Postgres\n")
+
+    def test_key_value_refused_once_configured_or_unknown(self):
+        self.assertEqual(self.sdd("init", "nope=1")[0], 2)
+        self.assertFalse((self.root / ".claude/sdd.json").exists())
+        self.assertEqual(self.sdd("init")[0], 0)
+        code, out = self.sdd("init", "adr_dir=x")
+        self.assertEqual(code, 2, out)
+        self.assertIn("exists; edit it", out)
+
+    def test_foreign_bundle_dir_stops_a_first_init(self):
+        put(self.root / "adrs/0001-old.md", "# Old\n")
+        code, out = self.sdd("init")
+        self.assertEqual(code, 1, out)
+        self.assertIn("WARN  adrs/ has 1 .md file(s) sdd did not create", out)
+        self.assertIn("`init adr_dir=<dir>`", out)
+        self.assertFalse((self.root / ".claude/sdd.json").exists())
+        self.assertFalse((self.root / "specs").exists())
+        code, out = self.sdd("init", "adr_dir=docs/sdd-adrs")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(sorted(x.name for x in (self.root / "adrs").iterdir()), ["0001-old.md"])
+
+    def test_foreign_bundle_dir_with_config_is_left_alone(self):
+        put(self.root / ".claude/sdd.json", "{}")
+        put(self.root / "adrs/0001-old.md", "# Old\n")
+        code, out = self.sdd("init")
+        self.assertEqual(code, 1, out)
+        self.assertIn("edit adr_dir in .claude/sdd.json", out)
+        self.assertFalse((self.root / "adrs/index.md").exists())
+        self.assertFalse((self.root / "adrs/.templates").exists())
+        self.assertTrue((self.root / "specs/index.md").exists())
+
+    def test_survey_takes_no_key_value(self):
+        self.assertEqual(self.sdd("init", "--survey", "adr_dir=x")[0], 2)
+
+
 class TestStatus(SddCase):
     def test_set_status_valid_and_invalid(self):
         self.new_change()
@@ -590,6 +659,92 @@ class TestCheck(SddCase):
 
 
 # ----------------------------------------------------------------- freeze ---
+class TestBaseline(SddCase):
+    """Criteria that record behavior the code already has (existing repos)."""
+    def setUp(self):
+        super().setUp()
+        self.living()
+
+    def baseline_cap(self, size: str = "change"):
+        self.new_change()
+        if size != "change":
+            self.edit("changes/c1/intent.md", "size: change", f"size: {size}")
+        self.write("changes/c1/specs/capabilities/tokens.md", NEW_CAP.replace(
+            "- **Then** the response is 401\n", "- **Then** the response is 401\n- **Baseline**: src/auth/tokens.py\n"))
+
+    def test_baseline_criterion_needs_no_impl_task(self):
+        self.baseline_cap()
+        self.set_tasks("c1", "- [ ] T1 (test) Expired token — capabilities/tokens#AC-01")
+        code, out = self.sdd("check", "c1")
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("no (impl) task", out)
+
+    def test_baseline_criterion_still_needs_a_test_task(self):
+        self.baseline_cap()
+        self.set_tasks("c1", "- [ ] T1 (chore) x")
+        self.assert_fails(self.sdd("check", "c1"), "capabilities/tokens#AC-01: no (test) task")
+
+    def test_impl_task_on_baseline_only_warns(self):
+        self.baseline_cap()
+        self.set_tasks("c1", "- [ ] T1 (test) t — capabilities/tokens#AC-01",
+                       "- [ ] T2 (impl) i — capabilities/tokens#AC-01 | blocked-by: T1")
+        code, out = self.sdd("check", "c1")
+        self.assertEqual(code, 0, out)
+        self.assertIn("WARN  T2: cites only Baseline criteria", out)
+
+    def test_baseline_needs_a_location(self):
+        self.baseline_cap()
+        self.edit("changes/c1/specs/capabilities/tokens.md", "- **Baseline**: src/auth/tokens.py",
+                  "- **Baseline**: <where>")
+        self.set_tasks("c1", "- [ ] T1 (test) t — capabilities/tokens#AC-01")
+        self.assert_fails(self.sdd("check", "c1"), "Baseline needs")
+
+    def test_baseline_on_added_delta_ok_on_modified_refused(self):
+        self.new_change()
+        self.assert_ok(self.sdd("delta-stub", "c1", f"{LOGIN_REF}#AC-01"))
+        self.edit(self.delta(), "## ADDED\n", "## ADDED\n\n" + AC_03 + "- **Baseline**: src/session.py\n")
+        self.set_tasks("c1", f"- [ ] T1 (test) x — {LOGIN_REF}#AC-01 {LOGIN_REF}#AC-03",
+                       f"- [ ] T2 (impl) y — {LOGIN_REF}#AC-01 | blocked-by: T1")
+        self.assert_ok(self.sdd("check", "c1"))
+        self.edit(self.delta(), "the response is 200", "the response is 200\n- **Baseline**: src/login.py")
+        self.assert_fails(self.sdd("check", "c1"), f"{LOGIN_REF}#AC-01: MODIFIED criteria cannot be Baseline")
+
+    def test_size_baseline_rules(self):
+        self.baseline_cap("baseline")
+        self.set_tasks("c1", "- [ ] T1 (test) t — capabilities/tokens#AC-01")
+        self.assert_ok(self.sdd("check", "c1"))
+        self.set_tasks("c1", "- [ ] T1 (test) t — capabilities/tokens#AC-01",
+                       "- [ ] T2 (impl) i — capabilities/tokens#AC-01 | blocked-by: T1")
+        self.assert_fails(self.sdd("check", "c1"), "T2: a size: baseline change has no (impl) tasks")
+
+    def test_size_baseline_refuses_new_behavior(self):
+        self.added_change()
+        self.edit("changes/c1/intent.md", "size: change", "size: baseline")
+        self.assert_fails(self.sdd("check", "c1"), "capabilities/tokens#AC-01: not Baseline in a size: baseline change")
+
+    def test_unknown_size(self):
+        self.added_change()
+        self.edit("changes/c1/intent.md", "size: change", "size: huge")
+        self.assert_fails(self.sdd("check", "c1"), "size 'huge' invalid")
+
+    def test_context_marks_baseline(self):
+        self.baseline_cap()
+        self.set_tasks("c1", "- [ ] T1 (test) t — capabilities/tokens#AC-01")
+        code, out = self.sdd("context", "c1", "T1")
+        self.assertEqual(code, 0, out)
+        self.assertIn("baseline: existing behavior, the test must pass on the current code", out)
+
+    def test_sync_drops_the_marker(self):
+        self.baseline_cap()
+        self.set_tasks("c1", "- [x] T1 (test) t — capabilities/tokens#AC-01")
+        self.sdd("set-status", "c1", "verified")
+        self.assert_ok(self.sdd("sync", "c1"))
+        spec = self.read("specs/capabilities/tokens.md")
+        self.assertIn("- **Then** the response is 401\n", spec)
+        self.assertNotIn("Baseline", spec)
+        self.assert_ok(self.sdd("bundle", "specs"))
+
+
 class TestFreeze(SddCase):
     def setUp(self):
         super().setUp()
