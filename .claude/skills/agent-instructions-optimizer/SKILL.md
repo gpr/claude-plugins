@@ -63,6 +63,7 @@ Applied in order. Cut first, then reword.
 - Lists of prohibitions a single positive rule covers.
 - Section headers with one item underneath — merge into parent.
 - Self-evident software hygiene ("write clean code", "follow best practices").
+- Thinking prompts ("think step by step", "think carefully before answering"): effort controls thinking. Also instructions to write out reasoning in the response, which can trigger `reasoning_extraction` refusals; a short rationale per finding is fine.
 
 ### Compress
 
