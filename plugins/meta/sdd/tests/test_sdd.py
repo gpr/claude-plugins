@@ -344,6 +344,41 @@ class TestInitBrownfield(unittest.TestCase):
         self.assertFalse((self.root / "adrs/.templates").exists())
         self.assertTrue((self.root / "specs/index.md").exists())
 
+    def test_key_value_with_foreign_dir_writes_nothing_and_can_be_retried(self):
+        put(self.root / "adrs/0001-old.md", "# Old\n")
+        code, out = self.sdd("init", "unit_cmd=make test")
+        self.assertEqual(code, 1, out)
+        self.assertIn("nothing written", out)
+        self.assertFalse((self.root / ".claude/sdd.json").exists())
+        self.assertFalse((self.root / "specs").exists())
+        code, out = self.sdd("init", "unit_cmd=make test", "adr_dir=docs/sdd-adrs")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(json.loads((self.root / ".claude/sdd.json").read_text())["unit_cmd"], "make test")
+
+    def test_key_value_dirs_must_stay_inside_the_repo(self):
+        for bad in ("specs_dir=", "specs_dir=.", "adr_dir=/abs", "adr_dir=../outside", "unit_cmd="):
+            code, out = self.sdd("init", bad)
+            self.assertEqual(code, 2, f"{bad}: {out}")
+        self.assertFalse((self.root / ".claude/sdd.json").exists())
+        self.assertFalse((self.root.parent / "outside").exists())
+
+    def test_lost_index_of_an_sdd_bundle_is_repaired(self):
+        self.assertEqual(self.sdd("init")[0], 0)
+        put(self.root / "specs/capabilities/login.md", LOGIN)
+        (self.root / "specs/index.md").unlink()
+        code, out = self.sdd("init")
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("WARN", out)
+        self.assertTrue((self.root / "specs/index.md").exists())
+
+    def test_survey_once_configured(self):
+        shutil.rmtree(self.root / "tests")
+        self.assertEqual(self.sdd("init")[0], 0)
+        code, out = self.sdd("init", "--survey")
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("tests/ (tests)", out)
+        self.assertIn("then: edit .claude/sdd.json", out)
+
     def test_survey_takes_no_key_value(self):
         self.assertEqual(self.sdd("init", "--survey", "adr_dir=x")[0], 2)
 
@@ -721,6 +756,22 @@ class TestBaseline(SddCase):
         self.added_change()
         self.edit("changes/c1/intent.md", "size: change", "size: baseline")
         self.assert_fails(self.sdd("check", "c1"), "capabilities/tokens#AC-01: not Baseline in a size: baseline change")
+
+    def test_size_baseline_refuses_sections(self):
+        self.new_change()
+        self.edit("changes/c1/intent.md", "size: change", "size: baseline")
+        self.assert_ok(self.sdd("delta-stub", "c1", LOGIN_REF, "--section", "Scope"))
+        self.edit(self.delta(), "- Out: SSO", "- Out: SSO, tokens")
+        self.edit(self.delta(), "## ADDED\n", "## ADDED\n\n" + AC_03 + "- **Baseline**: src/session.py\n")
+        self.set_tasks("c1", f"- [ ] T1 (test) x — {LOGIN_REF}#AC-03")
+        self.assert_fails(self.sdd("check", "c1"), f"{LOGIN_REF} Scope: SECTIONS in a size: baseline change")
+
+    def test_baseline_in_a_comment_does_not_count(self):
+        self.new_change()
+        self.write("changes/c1/specs/capabilities/tokens.md", NEW_CAP.replace(
+            "- **Then** the response is 401\n", "- **Then** the response is 401\n<!--\n- **Baseline**: src/x.py\n-->\n"))
+        self.set_tasks("c1", "- [ ] T1 (test) t — capabilities/tokens#AC-01")
+        self.assert_fails(self.sdd("check", "c1"), "capabilities/tokens#AC-01: no (impl) task")
 
     def test_unknown_size(self):
         self.added_change()

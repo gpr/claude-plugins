@@ -146,10 +146,20 @@ _cfg_file = ROOT / ".claude" / "sdd.json"
 if _cfg_file.exists():
     CFG.update(json.loads(_cfg_file.read_text()))
 
-SPECS = ROOT / CFG["specs_dir"]
-CHANGES = ROOT / CFG["changes_dir"]
-ADRS = ROOT / CFG["adr_dir"]
-ACCEPT = ROOT / CFG["acceptance_dir"]
+
+
+def use_config(cfg: dict):
+    """Set the effective config and every path derived from it (`init key=value` changes it)."""
+    global SPECS, CHANGES, ADRS, ACCEPT, CONCEPT_TEMPLATES
+    CFG.update(cfg)
+    SPECS, CHANGES = ROOT / CFG["specs_dir"], ROOT / CFG["changes_dir"]
+    ADRS, ACCEPT = ROOT / CFG["adr_dir"], ROOT / CFG["acceptance_dir"]
+    # Concept templates, overridable per repo in <bundle>/.templates/ (the lintel layout).
+    CONCEPT_TEMPLATES = {"Capability": (SPECS, "capability.md.tmpl"), "Invariant": (SPECS, "invariant.md.tmpl"),
+                         "ADR": (ADRS, "adr.md.tmpl")}
+
+
+use_config({})
 RESERVED = {"index.md", "log.md"}    # generated OKF files, never concepts
 OKF_VERSION = "0.2"
 LOG_TITLE = "# Update Log\n"
@@ -159,9 +169,6 @@ def log_head() -> str:
     """A new OKF log: okf rejects a log without a date group, so it opens with its creation."""
     return f"{LOG_TITLE}\n## {_dt.date.today().isoformat()}\n* **Creation**: Initialized OKF bundle.\n"
 TEMPLATES = Path(__file__).resolve().parent.parent / "skills" / "change" / "templates"
-# Concept templates, overridable per repo in <bundle>/.templates/ (the lintel layout).
-CONCEPT_TEMPLATES = {"Capability": (SPECS, "capability.md.tmpl"), "Invariant": (SPECS, "invariant.md.tmpl"),
-                     "ADR": (ADRS, "adr.md.tmpl")}
 
 COMMENT_RE = re.compile(r"<!--(?!\s*base:).*?-->", re.S)
 ANY_COMMENT_RE = re.compile(r"<!--.*?-->", re.S)
@@ -545,8 +552,9 @@ class AC:
 
     @property
     def baseline(self) -> str | None:
-        """Where existing code already does this ('' when unnamed), or None for new behavior."""
-        for l in self.lines[1:]:
+        """Where existing code already does this ('' when unnamed), or None for new behavior.
+        A marker inside an HTML comment (template guidance) does not count."""
+        for l in masked(self.lines)[1:]:
             m = BASELINE_RE.match(l.strip())
             if m:
                 return m.group(1).strip()
@@ -554,7 +562,8 @@ class AC:
 
     def without_baseline(self) -> "AC":
         """The criterion as it is merged into the living spec: the marker only matters in a change."""
-        return AC(self.id, self.title, [l for l in self.lines if not BASELINE_RE.match(l.strip())], self.base)
+        keep = [l for l, m in zip(self.lines, masked(self.lines)) if not BASELINE_RE.match(m.strip())]
+        return AC(self.id, self.title, keep, self.base)
 
     def has(self, word: str) -> bool:
         return any(l.strip().startswith(f"- **{word}**") for l in self.lines)
@@ -1138,8 +1147,9 @@ MANIFESTS = ["pyproject.toml", "setup.cfg", "tox.ini", "package.json", "Gemfile"
 
 
 def foreign_md(bundle: Path) -> list[Path]:
-    """Markdown in a bundle dir that sdd did not create: no OKF index.md yet, but files."""
-    if not bundle.is_dir() or (bundle / "index.md").exists():
+    """Markdown in a bundle dir that sdd did not create. sdd's own bundles have an index.md,
+    a log.md or a .templates/ (any one of them: a lost index.md is repaired, not blamed)."""
+    if not bundle.is_dir() or any((bundle / x).exists() for x in ("index.md", "log.md", ".templates")):
         return []
     return [f for f in bundle.rglob("*.md") if not is_hidden(f.relative_to(bundle))]
 
@@ -1147,17 +1157,33 @@ def foreign_md(bundle: Path) -> list[Path]:
 def survey() -> list[str]:
     found = []
     for h in ADR_HINTS:
-        d = ROOT / h
-        if d.is_dir() and not (d / "index.md").exists():
-            n = len([f for f in d.rglob("*.md") if not is_hidden(f.relative_to(d))])
-            if n:
-                found.append(f"{h}/ ({n} .md, ADR-like)")
+        n = len(foreign_md(ROOT / h))
+        if n:
+            found.append(f"{h}/ ({n} .md, ADR-like)")
     for h in TEST_HINTS:
         d = ROOT / h
-        if d.is_dir() and d != ACCEPT:
+        # sdd's own acceptance dir (or a dir holding only it) is not an existing suite
+        if d.is_dir() and any(not (ACCEPT == x or ACCEPT.is_relative_to(x)) for x in d.iterdir()):
             found.append(f"{h}/ (tests)")
     found += [m for m in MANIFESTS if (ROOT / m).is_file()]
     return found
+
+
+def init_values(sets: list[str]) -> dict:
+    """`key=value` arguments of init, validated: dirs relative and inside the repo, commands set."""
+    cfg = {}
+    for a in sets:
+        k, eq, v = a.partition("=")
+        if not eq or k not in DEFAULT_CFG:
+            die(f"init: '{a}' is not key=value with a key of {', '.join(DEFAULT_CFG)}")
+        if k.endswith("_dir"):
+            v = v.strip().removeprefix("./").rstrip("/")
+            if not v or v == "." or Path(v).is_absolute() or ".." in Path(v).parts:
+                die(f"init: {k} must be a directory inside the repo, relative to its root (got '{a.partition('=')[2]}')")
+        elif k.endswith("_cmd") and not v.strip():
+            die(f"init: {k} is empty")
+        cfg[k] = v
+    return cfg
 
 
 def cmd_init(args):
@@ -1165,18 +1191,11 @@ def cmd_init(args):
     sets = [a for a in args if a != "--survey"]
     if sets and survey_only:
         die("init: --survey takes no key=value (it writes nothing)")
+    configured = _cfg_file.exists()
     if sets:
-        if _cfg_file.exists():
+        if configured:
             die(f"{_cfg_file.relative_to(ROOT)} exists; edit it instead of passing key=value")
-        cfg = dict(DEFAULT_CFG)
-        for a in sets:
-            k, eq, v = a.partition("=")
-            if not eq or k not in DEFAULT_CFG:
-                die(f"init: '{a}' is not key=value with a key of {', '.join(DEFAULT_CFG)}")
-            cfg[k] = v
-        atomic_write(_cfg_file, json.dumps(cfg, indent=2) + "\n")
-        # every path above derives from the config: run init again with it in place
-        sys.exit(subprocess.run([sys.executable, __file__, "init"]).returncode)
+        use_config(init_values(sets))
     found = survey()
     print(f"root {ROOT}")
     if found:
@@ -1185,23 +1204,24 @@ def cmd_init(args):
     for b, files in foreign.items():
         if files:
             key = "specs_dir" if b == SPECS else "adr_dir"
-            how = f"`init {key}=<dir>`" if not _cfg_file.exists() else f"edit {key} in {_cfg_file.relative_to(ROOT)}"
+            how = f"edit {key} in {_cfg_file.relative_to(ROOT)}" if configured else f"`init {key}=<dir>`"
             print(f"WARN  {b.relative_to(ROOT)}/ has {len(files)} .md file(s) sdd did not create: left alone; "
                   f"point {key} at another directory ({how})")
-    if any(foreign.values()) and not _cfg_file.exists() and not survey_only:
+    if any(foreign.values()) and not configured and not survey_only:
         die("nothing written: choose the directories first", 1)
     if survey_only:
-        print("survey only, nothing written; then: init [key=value ...] "
-              f"({', '.join(k for k in DEFAULT_CFG if k.endswith(('_dir', '_cmd')))})")
+        keys = ", ".join(k for k in DEFAULT_CFG if k.endswith(("_dir", "_cmd")))
+        print("survey only, nothing written; then: " +
+              (f"edit {_cfg_file.relative_to(ROOT)} ({keys})" if configured else f"init [key=value ...] ({keys})"))
         return
     made = []
     for d in (SPECS, ADRS, CHANGES, ACCEPT):
         if not d.exists():
             d.mkdir(parents=True)
             made.append(str(d.relative_to(ROOT)) + "/")
-    if not _cfg_file.exists():
-        atomic_write(_cfg_file, json.dumps(DEFAULT_CFG, indent=2) + "\n")
-        made.append(str(_cfg_file.relative_to(ROOT)) + " (edit acceptance_cmd / unit_cmd)")
+    if not configured:
+        atomic_write(_cfg_file, json.dumps({k: CFG[k] for k in DEFAULT_CFG}, indent=2) + "\n")
+        made.append(str(_cfg_file.relative_to(ROOT)) + ("" if sets else " (edit acceptance_cmd / unit_cmd)"))
     for bundle in (SPECS, ADRS):
         if foreign[bundle]:
             continue
@@ -1939,6 +1959,9 @@ def collect(change: Path):
     baselined = {r for r, k in touched.items() if k == "ADDED" and r in texts
                  and texts[r].ac is not None and texts[r].ac.baseline is not None}
     if size == "baseline":
+        for d in deltas:
+            for name, _, _ in (d.sections if d.kind == "modify" else []):
+                errs.append(f"{d.cid} {name}: SECTIONS in a size: baseline change (it only adds Baseline criteria)")
         for r, k in sorted(touched.items()):
             if k != "ADDED":
                 errs.append(f"{r}: {k} in a size: baseline change (it only records existing behavior)")

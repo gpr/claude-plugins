@@ -95,6 +95,7 @@ The band and panes show the stored phase. For a change without one (made before 
 | `draft`, full change | `spec` while spec-author runs, else `gate1` |
 | `draft`, fix | `plan` while planner runs or no `(impl)` task yet; then `acceptance` while acceptance-tester runs or a `(test)` task is open; else `gate2` |
 | `approved` | `plan` while planner runs or no tasks; else `gate2` |
+| `implementing`, baseline | `acceptance` while acceptance-tester runs or a `(test)` task is open; else `verify` |
 | `implementing` | `acceptance` while acceptance-tester runs or a `(test)` task is open; `implement` while implementer runs or an `(impl)`/`(chore)` task is open; else `verify` |
 | `verified` | `sync` |
 

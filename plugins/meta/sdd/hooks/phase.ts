@@ -50,6 +50,8 @@ export function phaseOf(change: SddChange, running: readonly string[]): PhaseId 
       return isRunning('planner') || change.tasks.length === 0 ? 'plan' : 'gate2'
     case 'implementing':
       if (isRunning('acceptance-tester') || open('test')) return 'acceptance'
+      // a baseline has nothing to implement: its chores belong to verify
+      if (change.size === 'baseline') return 'verify'
       if (isRunning('implementer') || open('impl') || open('chore')) return 'implement'
       return 'verify'
     case 'verified':

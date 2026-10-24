@@ -31,6 +31,7 @@ const CASES: [string, SddChange, string[], string | undefined][] = [
   ['implementing, all done, verifier running', change('implementing', [task('T1', 'test', true)]), ['verifier'], 'verify'],
   ['baseline, tests done: nothing to implement', change('implementing', [task('T1', 'test', true)], 'baseline'), [], 'verify'],
   ['baseline, test open', change('implementing', [task('T1', 'test', false)], 'baseline'), [], 'acceptance'],
+  ['baseline, chore open: still no Implement step', change('implementing', [task('T1', 'test', true), task('T2', 'chore', false)], 'baseline'), [], 'verify'],
   ['verified', change('verified'), [], 'sync'],
   ['unknown status', change('?'), [], undefined],
 ]
