@@ -2,6 +2,15 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## sdd-0.10.0 - 2026-10-24
+#### Features
+- (**sdd**) support existing repos with baseline criteria, adopt and brownfield init - (9ba7e86) - Claude, *Claude Opus 5.5*
+#### Refactoring
+- (**sdd**) prove baseline tests, fixes may add criteria, survey by content - (9ef1812) - Claude, *Claude Opus 5.5*
+- (**sdd**) harden brownfield init and baseline rules after review - (8e6e69f) - Claude, *Claude Opus 5.5*
+
+- - -
+
 ## sdd-0.9.1 - 2026-10-24
 #### Bug Fixes
 - align plugin instructions with Opus 5.5 prompting guide (#27) - (fe5dee0) - Grégory R.
