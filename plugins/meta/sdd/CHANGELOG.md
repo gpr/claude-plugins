@@ -2,6 +2,18 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## sdd-0.10.1 - 2026-10-24
+#### Bug Fixes
+- (**sdd**) tasks template matches sequential implementers and Baseline - (cd534ac) - Claude, *Claude Opus 5.5*
+- (**sdd**) verify-frozen accepts base changes only with both refs - (3150487) - Claude, *Claude Opus 5.5*
+- (**sdd**) sequential implementers, lead freezes once, fix-path order - (9babff2) - Claude, *Claude Opus 5.5*
+- (**sdd**) close guard bypasses - (eb50a39) - Claude, *Claude Opus 5.5*
+- (**sdd**) sync against the current base, freeze the whole acceptance dir - (687d11e) - Claude, *Claude Opus 5.5*
+#### Documentation
+- (**sdd**) align docs with the audit fixes - (c281794) - Claude, *Claude Opus 5.5*
+
+- - -
+
 ## sdd-0.10.0 - 2026-10-24
 #### Features
 - (**sdd**) support existing repos with baseline criteria, adopt and brownfield init - (9ba7e86) - Claude, *Claude Opus 5.5*
