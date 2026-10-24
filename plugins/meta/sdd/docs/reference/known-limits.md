@@ -23,5 +23,7 @@ generated:
 | Parallel implementers in worktrees need the lead to merge their branches into `sdd/<id>`. | The lead does this; never commit by hand otherwise. |
 | The Bash guard is a heuristic on the command text. | `sdd verify-frozen` (verifier, and ideally CI) is the real enforcement. See [Run verify-frozen in CI](../how-to/run-verify-frozen-in-ci.md). |
 | The band and panes refresh on workflow events and every 30 s. Edits made outside Claude Code show late. | `/sdd refresh`. |
+| The Baseline re-run on the base commit (`baseline-tree`) links only `node_modules`, `.venv`, `venv` and the `--link` paths; anything else the tests need (a build step, a database) is missing there. | Pass `--link <path>`, or the verifier reports `baseline: not run (<why>)` and you run the tests on the base yourself. |
+| The `init` survey is a heuristic: names, file patterns and Status/Decision headings, 4 levels deep. | The lead still asks Explore how the tests run; set the `*_dir` keys yourself if nothing is found. |
 | Front matter is parsed line by line, not as YAML. | Keep `key: value` lines and inline `[a, b]` lists. |
 | Acceptance coverage is a text search for the exact citation (`capabilities/<id>#AC-NN`, `invariants/<id>`). | Cite it in a comment or docstring; a test name cannot hold `/` or `#`. |

@@ -59,7 +59,7 @@ number. Direct-path work has no change id and none of this.
 2. `EnterWorktree` with `path` = the printed worktree. From here every `sdd` call acts on it.
 3. `sdd status <id>`, then continue at the step the phase names (spec -> 2, gate1 -> 3,
    plan -> 4, gate2 -> 5, acceptance -> 6, implement -> 7, verify -> 8, sync -> 8.4,
-   done -> nothing left; a fix starts at plan, its test is written alongside; an adopt
+   done -> nothing left; a fix starts at plan (at spec when it adds a criterion), its test is written alongside; an adopt
    goes from acceptance to verify). A stored phase can lag a step that was done but not
    checkpointed: trust the files (`sdd check`, task ticks) over the phase when they disagree.
    Resume a partly written spec or plan with the same agent type and the files as context.
@@ -87,8 +87,15 @@ Apply this rule, in order, and state the result in one line:
 - Makes a decision with lasting consequences (technology, data model, boundary,
   security posture) -> **full change** with ADR, even if behavior is unchanged.
 - Code diverges from what users expect, but no living criterion covers it (an existing
-  repo) -> **full change** with `--pr-title "fix: ..."`: the spec-author writes the correct
-  behavior as a normal criterion (its test fails first) and Gate 1 confirms it is intended.
+  repo) -> **fix with a criterion**. `sdd start <id> --title ... --pr-title "fix: ..."`, enter the
+  worktree, set `size: fix` in intent.md, delegate to `spec-author` (request, Explore
+  findings, "a fix: only ADDED criteria"): it writes the correct behavior as a criterion,
+  plus Baseline ones for kept behavior nearby. `sdd checkpoint <id> --phase gate1 -m "docs(<id>): fix criterion"`.
+  Short Gate 1: show only those criteria (id, name, Given/When/Then in one line each); approve /
+  change / stop. The status stays `draft`. On approve, `sdd checkpoint <id> --phase plan -m "chore(<id>): approve fix criterion"`,
+  write one test task citing the new criterion, then go to step 4 like any fix. If the spec-author
+  needs more than ADDED criteria (a changed criterion, a section, an invariant, an ADR),
+  `sdd check` refuses it: re-triage as a full change (step 9).
 - Code diverges from an existing acceptance criterion or invariant (bug) -> **fix**: no
   spec delta, but a failing acceptance test first. `sdd start <id> --title ... --pr-title "fix: ..."`, enter the worktree, `sdd checkpoint <id> --phase plan -m "chore(<id>): fix"`, set `size: fix` in intent.md, write one test task
   citing the existing criterion (`capabilities/<id>#AC-NN`) or invariant, then go to step 4 (it runs step 6 alongside).
@@ -200,9 +207,11 @@ A wrong or untestable criterion or invariant goes back to the spec, never into t
 `sdd set-status <id> draft`, `sdd checkpoint <id> --phase spec -m "chore(<id>): reopen spec"`,
 resume spec-author with the BLOCKED report, then Gate 1 for
 the affected units only, then re-plan the affected tasks, re-run their test tasks
-(re-freeze), then implementation.
-A `size: fix` change has no spec-author to resume: when it needs behavior no
-criterion describes, re-triage it as a full change. Set `size: change` in intent.md,
+(re-freeze), then implementation. A Baseline test rewritten after code has changed is
+refused by `freeze`: you then run `sdd freeze <id> --after-code` yourself (the verifier's
+run on the base commit is then its only proof).
+A `size: fix` change adds at most new criteria: when it needs more (a changed criterion,
+a section, an invariant, an ADR), re-triage it as a full change. Set `size: change` in intent.md,
 `sdd set-status <id> draft`, `sdd checkpoint <id> --phase spec -m "chore(<id>): re-triage as change"`,
 start spec-author with the finding, then step 3.
 

@@ -69,7 +69,7 @@ Acceptance tests stay where they are in `tests/acceptance/` and become part of t
 | task ticks in `tasks.md` | acceptance-tester and implementer, each its own task |
 | `tests/acceptance/**` | acceptance-tester |
 | `frozen.json` | `sdd freeze` |
-| `state.json` | `sdd start`, `checkpoint`, `set-pr`, `requires`, `finish` |
+| `state.json` | `sdd start`, `checkpoint`, `set-pr`, `requires`, `finish`; `freeze` (the `baseline` record) |
 | `changes/archive/**` | `sdd sync` (move), `sdd finish` (`state.json` phase) |
 | source code, unit tests | implementer (or `general-purpose` on the direct path) |
 | `.claude/sdd.json` | `sdd init`, then you |

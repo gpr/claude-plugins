@@ -29,7 +29,11 @@ Commands
   adr-accept <ADR-NNNN>              draft -> stable (+ deprecates the superseded one)
   check <change> [--tests]           traceability + conflicts (+ acceptance coverage)
   context <change> <task> [--plan]   minimal context bundle for one task
-  freeze <change>                    record hashes of the change's acceptance tests
+  freeze <change> [--after-code]     record hashes of the change's acceptance tests (and the base
+                                     commit their Baseline tests pass on)
+  baseline-tree <change> [--remove] [--link PATH ...]
+                                     worktree at that commit with the acceptance tests (and links to
+                                     installed dependencies), to re-run the Baseline tests there
   verify-frozen <change>             fail if frozen acceptance tests were modified
   sync <change> [--dry-run] [--force]
                                      merge the delta into living specs, accept ADRs, archive
@@ -1141,7 +1145,18 @@ def cmd_new(args):
 # What an existing repo may already have, listed by `init` so the lead can point the config at it.
 ADR_HINTS = ["adrs", "adr", "docs/adr", "docs/adrs", "docs/decisions", "doc/adr", "doc/adrs",
              "docs/architecture/decisions", "architecture/decisions"]
-TEST_HINTS = ["tests", "test", "spec", "__tests__", "e2e", "features"]
+# Found by content in a bounded walk of the repo (layouts differ too much for fixed names).
+TEST_FILE_RES = [(re.compile(rx), label) for rx, label in [
+    (r"^test_.+\.py$", "test_*.py"), (r"^.+_test\.py$", "*_test.py"), (r"^.+_test\.go$", "*_test.go"),
+    (r"^.+\.test\.[cm]?[jt]sx?$", "*.test.js|ts"), (r"^.+\.spec\.[cm]?[jt]sx?$", "*.spec.js|ts"),
+    (r"^.+_spec\.rb$", "*_spec.rb"), (r"^.+Tests?\.(java|kt)$", "*Test.java|kt"), (r"^.+Tests?\.cs$", "*Tests.cs")]]
+SKIP_DIRS = {"node_modules", "vendor", "dist", "build", "target", "venv", "__pycache__", "coverage",
+             "site-packages", "bower_components", "out"}
+NUMBERED_RE = re.compile(r"^\d{3,4}[-_]")
+ADR_HEAD_RE = re.compile(r"^(?:#+\s*|\*\*)?status\b", re.I | re.M)
+DECISION_RE = re.compile(r"^(?:#+\s*|\*\*)?decision\b", re.I | re.M)
+TEST_DIR_NAMES = {"tests", "test", "spec", "specs", "__tests__", "e2e", "integration", "features"}
+SURVEY_DEPTH, SURVEY_MAX = 4, 10
 MANIFESTS = ["pyproject.toml", "setup.cfg", "tox.ini", "package.json", "Gemfile", "go.mod", "Cargo.toml",
              "pom.xml", "build.gradle", "build.gradle.kts", "mix.exs", "composer.json", "Makefile"]
 
@@ -1154,19 +1169,79 @@ def foreign_md(bundle: Path) -> list[Path]:
     return [f for f in bundle.rglob("*.md") if not is_hidden(f.relative_to(bundle))]
 
 
+def survey_dirs() -> list[Path]:
+    """Dirs of the repo to look at, sorted, at most SURVEY_DEPTH deep, without hidden, vendored
+    or build dirs and without sdd's own bundles."""
+    own = {SPECS, ADRS, CHANGES, ACCEPT}
+    out: list[Path] = []
+
+    def walk(d: Path, depth: int):
+        try:
+            subs = sorted(x for x in d.iterdir() if x.is_dir())
+        except OSError:
+            return
+        for x in subs:
+            if x.name.startswith(".") or x.name in SKIP_DIRS or x in own:
+                continue
+            out.append(x)
+            if depth < SURVEY_DEPTH:
+                walk(x, depth + 1)
+    walk(ROOT, 1)
+    return out
+
+
+def adr_like(d: Path) -> str | None:
+    """Why `d` looks like an existing ADR folder, or None."""
+    mds = [f for f in d.glob("*.md") if f.is_file()]
+    if len(mds) < 2 or not foreign_md(d):
+        return None
+    if sum(bool(NUMBERED_RE.match(f.name)) for f in mds) * 2 > len(mds):
+        return "numbered"
+    heads = 0
+    for f in mds:
+        try:
+            head = f.read_text(errors="ignore")[:4096]
+        except OSError:
+            continue
+        heads += bool(ADR_HEAD_RE.search(head) and DECISION_RE.search(head))
+    return "headings" if heads * 2 > len(mds) else None
+
+
+def capped(items: list[str]) -> list[str]:
+    return items[:SURVEY_MAX] + ([f"+{len(items) - SURVEY_MAX} more"] if len(items) > SURVEY_MAX else [])
+
+
 def survey() -> list[str]:
-    found = []
+    dirs = survey_dirs()
+    adrs: dict[str, str] = {}
     for h in ADR_HINTS:
         n = len(foreign_md(ROOT / h))
         if n:
-            found.append(f"{h}/ ({n} .md, ADR-like)")
-    for h in TEST_HINTS:
-        d = ROOT / h
-        # sdd's own acceptance dir (or a dir holding only it) is not an existing suite
-        if d.is_dir() and any(not (ACCEPT == x or ACCEPT.is_relative_to(x)) for x in d.iterdir()):
-            found.append(f"{h}/ (tests)")
-    found += [m for m in MANIFESTS if (ROOT / m).is_file()]
-    return found
+            adrs[h] = f"{h}/ ({n} .md, ADR-like)"
+    for d in dirs:
+        r = rel(d)
+        why = None if r in adrs else adr_like(d)
+        if why:
+            adrs[r] = f"{r}/ ({len(list(d.glob('*.md')))} .md, ADR: {why})"
+    tests: list[str] = []
+    reported: list[Path] = []
+    for d in dirs:
+        if any(d.is_relative_to(x) for x in reported):
+            continue
+        # a dir that holds test files itself, or a test-named dir with test files below it
+        files = (f for f in (d.rglob("*") if d.name in TEST_DIR_NAMES else d.glob("*")) if f.is_file()
+                 and ACCEPT not in f.parents
+                 and not any(x.startswith(".") or x in SKIP_DIRS for x in f.relative_to(d).parts))
+        kinds: dict[str, int] = {}
+        for f in files:
+            label = next((lb for rx, lb in TEST_FILE_RES if rx.match(f.name)), None)
+            if label:
+                kinds[label] = kinds.get(label, 0) + 1
+        if kinds:
+            reported.append(d)
+            n = sum(kinds.values())
+            tests.append(f"{rel(d)}/ ({n} test file{'s' if n > 1 else ''}: {', '.join(sorted(kinds))})")
+    return capped(list(adrs.values())) + capped(tests) + [m for m in MANIFESTS if (ROOT / m).is_file()]
 
 
 def init_values(sets: list[str]) -> dict:
@@ -1270,6 +1345,7 @@ def cmd_status(args):
                 "phase": st.get("phase"), "pr": st.get("pr"), "branch": st.get("branch"),
                 "requires": st.get("requires", []),
                 "adrs": [a for a in fm.list("adrs") if isinstance(a, str)],
+                "delta": bool(delta_files(d)), "baseline": bool(st.get("baseline")),
                 "tasks": [{"id": t["id"], "kind": t["kind"], "done": t["done"],
                            "refs": t["refs"]} for t in parse_tasks(d)],
             })
@@ -1282,7 +1358,8 @@ def cmd_status(args):
         done = sum(t["done"] for t in tasks)
         st = load_state(d)
         extra = (f"  phase={st['phase']}" if st.get("phase") else "") + (f"  pr=#{st['pr']}" if st.get("pr") else "") \
-            + (f"  requires={','.join(st['requires'])}" if st.get("requires") else "")
+            + (f"  requires={','.join(st['requires'])}" if st.get("requires") else "") \
+            + (f"  baseline={st['baseline']['commit'][:8]}" if (st.get("baseline") or {}).get("commit") else "")
         print(f"{d.name}  status={fm.str('status') or '?'}  tasks={done}/{len(tasks)}  "
               f"size={fm.str('size') or '?'}{extra}")
         if args:
@@ -1958,6 +2035,16 @@ def collect(change: Path):
     # ADDED criteria that record behavior the code already has: tested, never implemented
     baselined = {r for r, k in touched.items() if k == "ADDED" and r in texts
                  and texts[r].ac is not None and texts[r].ac.baseline is not None}
+    if size == "fix":
+        for d in deltas:
+            for name, _, _ in (d.sections if d.kind == "modify" else []):
+                errs.append(f"{d.cid} {name}: SECTIONS in a size: fix change (re-triage as a change)")
+        for r, k in sorted(touched.items()):
+            if k != "ADDED" or kind_of(r) != "Capability":
+                errs.append(f"{r}: {k} {kind_of(r).lower()} in a size: fix change "
+                            "(a fix only adds criteria; re-triage as a change)")
+        if [a for a in fm.list("adrs") if isinstance(a, str)]:
+            errs.append("intent.md adrs: a fix records no decision; re-triage as a change")
     if size == "baseline":
         for d in deltas:
             for name, _, _ in (d.sections if d.kind == "modify" else []):
@@ -2187,15 +2274,111 @@ def frozen_set(d: Path) -> dict[str, str]:
     return {str(f.relative_to(ROOT)): hashlib.sha256(f.read_bytes()).hexdigest() for f in sorted(files)}
 
 
+def base_commit(d: Path) -> str | None:
+    """The commit the change branched from (merge-base with origin/<base>), None without git."""
+    code, out = git("merge-base", "HEAD", f"origin/{base_of(load_state(d))}")
+    return out.split()[0] if code == 0 and out else None
+
+
+def code_changes(commit: str) -> list[str]:
+    """Files changed since `commit`, committed or not, outside the workflow's own folders."""
+    # the working tree against the commit (tracked files), plus untracked ones
+    _, diff = git("-c", "core.quotePath=false", "diff", "--name-only", commit)
+    _, new = git("-c", "core.quotePath=false", "ls-files", "--others", "--exclude-standard")
+    own = [CFG[k].strip("/") + "/" for k in ("changes_dir", "acceptance_dir", "specs_dir", "adr_dir")] + [".claude/"]
+    return sorted({x for x in diff.splitlines() + new.splitlines()
+                   if x and x != ".gitignore" and not any(x.startswith(o) for o in own)})
+
+
+def freeze_baseline(d: Path, after_code: bool):
+    """Record the commit Baseline tests pass on; refuse new ones once production code changed."""
+    _, _, info = collect(d)
+    files = {str(f.relative_to(ROOT)): hashlib.sha256(f.read_bytes()).hexdigest()
+             for f in sorted({f for fs in acceptance_hits(info["baselined"]).values() for f in fs})}
+    others = info["test_refs"] - info["baselined"]
+    for f in files:
+        mixed = sorted(set(refs_in((ROOT / f).read_text(errors="ignore"))) & others)
+        if mixed:
+            print(f"WARN  {f} also tests {', '.join(mixed)}: the base run runs whole files, "
+                  "keep Baseline tests in files of their own")
+    st = load_state(d)
+    old = st.get("baseline") or {}
+    if not files or all(old.get("files", {}).get(k) == v for k, v in files.items()):
+        return
+    commit = base_commit(d)
+    if commit is None:
+        print("WARN  no git base: Baseline commit not recorded (the verifier cannot re-run them on the base)")
+        return
+    changed = code_changes(commit)
+    if changed and not after_code:
+        die(f"Baseline tests must be frozen before production code changes: {', '.join(changed[:5])}"
+            + (f" (+{len(changed) - 5})" if len(changed) > 5 else "")
+            + " (the lead may pass --after-code when reopening; the verifier's base run is then the proof)", 1)
+    if changed:
+        print(f"WARN  production code already changed: Baseline tests are proven only by the run on {commit[:8]}")
+    st["baseline"] = {"commit": commit, "files": files}
+    save_state(d, st)
+    print(f"baseline: {len(files)} test file(s) recorded at {commit[:8]}")
+
+
 def cmd_freeze(args):
     if not args:
-        die("usage: freeze <change>")
+        die("usage: freeze <change> [--after-code]")
     d = change_dir(args[0])
     snap = frozen_set(d)
     if not snap:
         die("no acceptance test references this change's criteria or invariants; nothing to freeze", 1)
+    freeze_baseline(d, "--after-code" in args)
     atomic_write(d / "frozen.json", json.dumps(snap, indent=2) + "\n")
     print(f"froze {len(snap)} file(s) -> {(d / 'frozen.json').relative_to(ROOT)}")
+
+
+DEP_DIRS = ["node_modules", ".venv", "venv"]
+
+
+def cmd_baseline_tree(args):
+    """A detached worktree at the recorded base commit with the change's acceptance tests in it,
+    where the verifier runs the Baseline tests. sdd.py never runs them itself."""
+    if not args:
+        die("usage: baseline-tree <change> [--remove] [--link PATH ...]")
+    d = change_dir(args[0])
+    wt = ROOT / CFG["worktree_dir"] / f"sdd-{d.name}-baseline"
+    if "--remove" in args:
+        code, out = git("worktree", "remove", "--force", str(wt))
+        if code and wt.exists():
+            die(f"cannot remove {wt}: {out}", 1)
+        print(f"removed {wt}")
+        return
+    extra = [args[i + 1] for i, a in enumerate(args[:-1]) if a == "--link"]
+    for name in extra:
+        if Path(name).is_absolute() or ".." in Path(name).parts or not (ROOT / name).exists():
+            die(f"--link {name}: give an existing path inside the repo")
+    rec = load_state(d).get("baseline") or {}
+    if not rec.get("commit"):
+        die("no Baseline record in state.json: freeze the change's Baseline tests first", 1)
+    if wt.exists():
+        git("worktree", "remove", "--force", str(wt))
+    code, out = git("worktree", "add", "--detach", str(wt), rec["commit"])
+    if code:
+        die(f"git worktree add failed: {out}", 1)
+    if ACCEPT.is_dir():
+        shutil.copytree(ACCEPT, wt / CFG["acceptance_dir"], dirs_exist_ok=True)
+    # installed dependencies are untracked: link them from the change's tree (the verifier
+    # writes nothing itself)
+    linked = []
+    for name in DEP_DIRS + extra:
+        src, dst = ROOT / name, wt / name
+        if src.exists() and not dst.exists():
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            dst.symlink_to(src.resolve(), target_is_directory=src.is_dir())
+            linked.append(name)
+    files = sorted(rec.get("files", {}))
+    print(f"worktree {wt}\ncommit {rec['commit']}\nfiles {' '.join(files)}")
+    if linked:
+        print(f"linked {' '.join(linked)}")
+    print("run: " + CFG["acceptance_cmd"].replace("{files}", " ".join(files)) + f"   (cwd {wt})")
+    print("note: other untracked dependencies are not there: rerun with --link <path>. "
+          f"Then: baseline-tree {d.name} --remove")
 
 
 def cmd_verify_frozen(args):
@@ -2676,7 +2859,7 @@ COMMANDS = {
     "init": cmd_init, "config": cmd_config, "new": cmd_new, "status": cmd_status, "set-status": cmd_set_status,
     "delta-new": cmd_delta_new, "delta-stub": cmd_delta_stub, "adr-new": cmd_adr_new, "adr-accept": cmd_adr_accept,
     "check": cmd_check, "context": cmd_context, "freeze": cmd_freeze,
-    "verify-frozen": cmd_verify_frozen, "sync": cmd_sync, "bundle": cmd_bundle,
+    "verify-frozen": cmd_verify_frozen, "baseline-tree": cmd_baseline_tree, "sync": cmd_sync, "bundle": cmd_bundle,
     "start": cmd_start, "requires": cmd_requires, "deps": cmd_deps, "checkpoint": cmd_checkpoint, "set-pr": cmd_set_pr, "resume": cmd_resume,
     "finish": cmd_finish,
 }

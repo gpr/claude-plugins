@@ -299,7 +299,7 @@ class TestInitBrownfield(unittest.TestCase):
     def test_survey_lists_existing_and_writes_nothing(self):
         code, out = self.sdd("init", "--survey")
         self.assertEqual(code, 0, out)
-        self.assertIn("found: docs/adr/ (1 .md, ADR-like), tests/ (tests), pyproject.toml", out)
+        self.assertIn("found: docs/adr/ (1 .md, ADR-like), tests/ (1 test file: test_*.py), pyproject.toml", out)
         self.assertIn("survey only", out)
         self.assertFalse((self.root / ".claude/sdd.json").exists())
         self.assertFalse((self.root / "specs").exists())
@@ -378,6 +378,24 @@ class TestInitBrownfield(unittest.TestCase):
         self.assertEqual(code, 0, out)
         self.assertNotIn("tests/ (tests)", out)
         self.assertIn("then: edit .claude/sdd.json", out)
+
+    def test_survey_finds_unusual_layouts_by_content(self):
+        for f in ("architecture/records/0001-x.md", "architecture/records/0002-y.md"):
+            put(self.root / f, "# x\n")
+        for f in ("docs/decisions-log/a.md", "docs/decisions-log/b.md"):
+            put(self.root / f, "# A\n\n## Status\n\nAccepted\n\n## Decision\n\nX\n")
+        put(self.root / "notes/a.md", "# a\n")
+        put(self.root / "notes/b.md", "# b\n")
+        put(self.root / "web/src/__tests__/deep/x.test.ts", "")
+        put(self.root / "node_modules/pkg/test_a.py", "")
+        put(self.root / "pkg/a/a_test.go", "")
+        code, out = self.sdd("init", "--survey")
+        self.assertEqual(code, 0, out)
+        for want in ("architecture/records/ (2 .md, ADR: numbered)", "docs/decisions-log/ (2 .md, ADR: headings)",
+                     "web/src/__tests__/ (1 test file: *.test.js|ts)", "pkg/a/ (1 test file: *_test.go)"):
+            self.assertIn(want, out)
+        for absent in ("notes/", "node_modules", "__tests__/deep", "web/src/ "):
+            self.assertNotIn(absent, out)
 
     def test_survey_takes_no_key_value(self):
         self.assertEqual(self.sdd("init", "--survey", "adr_dir=x")[0], 2)
@@ -772,6 +790,42 @@ class TestBaseline(SddCase):
             "- **Then** the response is 401\n", "- **Then** the response is 401\n<!--\n- **Baseline**: src/x.py\n-->\n"))
         self.set_tasks("c1", "- [ ] T1 (test) t — capabilities/tokens#AC-01")
         self.assert_fails(self.sdd("check", "c1"), "capabilities/tokens#AC-01: no (impl) task")
+
+    def test_freeze_without_git_warns_and_freezes(self):
+        self.baseline_cap()
+        self.set_tasks("c1", "- [x] T1 (test) t — capabilities/tokens#AC-01")
+        self.accept_test()
+        code, out = self.sdd("freeze", "c1")
+        self.assertEqual(code, 0, out)
+        self.assertIn("WARN  no git base: Baseline commit not recorded", out)
+        self.assertTrue((self.root / "changes/c1/frozen.json").exists())
+
+    def test_fix_may_add_criteria(self):
+        self.added_change()
+        self.edit("changes/c1/intent.md", "size: change", "size: fix")
+        self.assert_ok(self.sdd("check", "c1"))
+        code, out = self.sdd("status", "--json")
+        self.assertEqual(json.loads(out)["changes"][0]["delta"], True)
+
+    def test_fix_with_baseline_criterion_needs_no_impl(self):
+        self.baseline_cap("fix")
+        self.set_tasks("c1", "- [ ] T1 (test) t — capabilities/tokens#AC-01")
+        self.assert_ok(self.sdd("check", "c1"))
+
+    def test_fix_refuses_more_than_added_criteria(self):
+        self.new_change()
+        self.edit("changes/c1/intent.md", "size: change", "size: fix")
+        self.assert_ok(self.sdd("delta-stub", "c1", f"{LOGIN_REF}#AC-01"))
+        self.assert_ok(self.sdd("delta-stub", "c1", LOGIN_REF, "--section", "Scope"))
+        self.edit(self.delta(), "- Out: SSO", "- Out: SSO, tokens")
+        self.write("changes/c1/specs/invariants/no_secret_in_logs.md", NO_SECRETS.replace("status: stable", "status: draft"))
+        self.edit("changes/c1/intent.md", "adrs: []", "adrs: [ADR-0001]")
+        self.set_tasks("c1", f"- [ ] T1 (test) x — {LOGIN_REF}#AC-01 invariants/no_secret_in_logs",
+                       f"- [ ] T2 (impl) y — {LOGIN_REF}#AC-01 | blocked-by: T1")
+        self.assert_fails(self.sdd("check", "c1"), f"{LOGIN_REF}#AC-01: MODIFIED capability in a size: fix change",
+                          "invariants/no_secret_in_logs: ADDED invariant in a size: fix change",
+                          f"{LOGIN_REF} Scope: SECTIONS in a size: fix change",
+                          "a fix records no decision")
 
     def test_unknown_size(self):
         self.added_change()
@@ -1484,6 +1538,90 @@ class TestDeps(GitCase):
         self.assertEqual(code, 1, out)
         self.assertIn("clash.txt", out)
         self.assertEqual(self.git("status", "--porcelain", cwd=wt), "")
+
+
+class TestBaselineProof(GitCase):
+    """Baseline tests are frozen on unchanged code and re-run on the base commit."""
+    def setUp(self):
+        super().setUp()
+        self.write("src/tokens.py", "TTL = 1\n")
+        self.git("add", "-A")
+        self.git("commit", "-qm", "code")
+        self.git("push", "-q")
+        self.wt = self.start()
+        put(self.wt / "changes/c1/specs/capabilities/tokens.md", NEW_CAP.replace(
+            "- **Then** the response is 401\n", "- **Then** the response is 401\n- **Baseline**: src/tokens.py\n"))
+        put(self.wt / "changes/c1/tasks.md", "---\ntype: tasks\n---\n\n# Tasks\n\n"
+            "- [x] T1 (test) t — capabilities/tokens#AC-01\n")
+        self.test_file = self.wt / "tests/acceptance/test_tokens.py"
+        put(self.test_file, "# capabilities/tokens#AC-01\ndef test_expired():\n    assert True\n")
+
+    def write(self, rel: str, text: str):
+        put(self.root / rel, text)
+
+    def state(self) -> dict:
+        return json.loads((self.wt / "changes/c1/state.json").read_text())
+
+    def test_freeze_records_the_base_commit(self):
+        code, out = self.sdd("freeze", "c1", cwd=self.wt)
+        self.assertEqual(code, 0, out)
+        base = self.git("merge-base", "HEAD", "origin/main", cwd=self.wt)
+        self.assertEqual(self.state()["baseline"]["commit"], base)
+        self.assertEqual(list(self.state()["baseline"]["files"]), ["tests/acceptance/test_tokens.py"])
+        self.assertIn(f"baseline={base[:8]}", self.sdd("status", cwd=self.wt)[1])
+
+    def test_new_baseline_test_after_code_changed_is_refused(self):
+        put(self.wt / "src/tokens.py", "TTL = 2\n")
+        code, out = self.sdd("freeze", "c1", cwd=self.wt)
+        self.assertEqual(code, 1, out)
+        self.assertIn("Baseline tests must be frozen before production code changes: src/tokens.py", out)
+        self.assertFalse((self.wt / "changes/c1/frozen.json").exists())
+        code, out = self.sdd("freeze", "c1", "--after-code", cwd=self.wt)
+        self.assertEqual(code, 0, out)
+        self.assertIn("WARN  production code already changed", out)
+
+    def test_mixed_baseline_file_warns(self):
+        put(self.wt / "changes/c1/specs/capabilities/tokens.md", NEW_CAP.replace(
+            "- **Then** the response is 401\n", "- **Then** the response is 401\n- **Baseline**: src/tokens.py\n")
+            + "\n### AC-02: Revoked token\n\n- **Given** a revoked token\n- **When** it calls GET /v1/me\n"
+            "- **Then** the response is 401\n")
+        put(self.wt / "changes/c1/tasks.md", "---\ntype: tasks\n---\n\n# Tasks\n\n"
+            "- [x] T1 (test) t — capabilities/tokens#AC-01 capabilities/tokens#AC-02\n"
+            "- [ ] T2 (impl) i — capabilities/tokens#AC-02 | blocked-by: T1\n")
+        put(self.test_file, "# capabilities/tokens#AC-01\n# capabilities/tokens#AC-02\ndef test_x():\n    pass\n")
+        code, out = self.sdd("freeze", "c1", cwd=self.wt)
+        self.assertEqual(code, 0, out)
+        self.assertIn("also tests capabilities/tokens#AC-02", out)
+
+    def test_unchanged_baseline_test_refreezes_after_code(self):
+        self.assertEqual(self.sdd("freeze", "c1", cwd=self.wt)[0], 0)
+        put(self.wt / "src/tokens.py", "TTL = 2\n")
+        self.assert_ok_(self.sdd("freeze", "c1", cwd=self.wt))
+
+    def assert_ok_(self, res):
+        self.assertEqual(res[0], 0, res[1])
+
+    def test_baseline_tree_has_base_code_and_current_tests(self):
+        self.assertEqual(self.sdd("baseline-tree", "c1", cwd=self.wt)[0], 1)
+        self.assertEqual(self.sdd("freeze", "c1", cwd=self.wt)[0], 0)
+        put(self.wt / "src/tokens.py", "TTL = 2\n")
+        code, out = self.sdd("baseline-tree", "c1", cwd=self.wt)
+        self.assertEqual(code, 0, out)
+        tree = self.wt / ".claude/worktrees/sdd-c1-baseline"
+        self.assertEqual((tree / "src/tokens.py").read_text(), "TTL = 1\n")
+        self.assertTrue((tree / "tests/acceptance/test_tokens.py").exists())
+        self.assertIn("run: pytest -q tests/acceptance/test_tokens.py", out)
+        self.assertEqual(self.sdd("baseline-tree", "c1", "--link", "../x", cwd=self.wt)[0], 2)
+        put(self.wt / "node_modules/dep/index.js", "")
+        put(self.wt / "deps/lib.py", "")
+        code, out = self.sdd("baseline-tree", "c1", "--link", "deps", cwd=self.wt)
+        self.assertEqual(code, 0, out)
+        self.assertIn("linked node_modules deps", out)
+        self.assertTrue((tree / "node_modules/dep/index.js").exists())
+        self.assertTrue((tree / "deps").is_symlink())
+        code, out = self.sdd("baseline-tree", "c1", "--remove", cwd=self.wt)
+        self.assertEqual(code, 0, out)
+        self.assertFalse(tree.exists())
 
 
 class TestFinishAndStatus(GitCase):

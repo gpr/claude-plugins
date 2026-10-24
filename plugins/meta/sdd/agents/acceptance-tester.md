@@ -41,10 +41,13 @@ Steps
    already exists (MODIFIED parts that did not change), a pass is acceptable: say which.
    A `fix` test must fail: it shows the bug.
    A Baseline criterion (the bundle says `baseline:`) is the opposite: its test must pass
-   on the current code. If it fails, change neither the test toward the code nor anything
+   on the current code, and goes in a test file of its own (the verifier re-runs whole files
+   on the base commit, where new behavior fails). If it fails, change neither the test toward the code nor anything
    else: report `MISMATCH: <id> <observed behavior>` and do not tick or freeze for it.
 3. Tick your task in `changes/<id>/tasks.md` (`- [x]`), then run
-   `sdd freeze <id>`.
+   `sdd freeze <id>`. With Baseline tests it records the base commit they pass on, and it
+   refuses once production code has changed: report the refusal, never pass `--after-code`
+   (that is the lead's, on a reopen).
 
 Memory
 - Before step 1, read your memory. After step 3, save what a later test task needs:

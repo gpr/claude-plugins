@@ -166,7 +166,7 @@ archived: 2026-10-20   # added by sync
 ---
 ```
 
-`size`: `change` (the default), `fix` (a test on an existing criterion, no delta), `baseline` (an adopt: only Baseline criteria and new invariants, only `(test)` tasks, no code change).
+`size`: `change` (the default), `fix` (a test on an existing criterion, or on criteria it ADDs; nothing else in its delta, no ADR), `baseline` (an adopt: only Baseline criteria and new invariants, only `(test)` tasks, no code change).
 
 Body sections from the template: Why, Outcome, Scope, Non-goals, Success criteria, Open questions. Open questions must be empty before Gate 1 approval.
 

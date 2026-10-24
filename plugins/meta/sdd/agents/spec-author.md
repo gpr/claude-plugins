@@ -44,6 +44,9 @@ Steps
    you cannot confirm from the code is an open question. Behavior the change alters, or a bug
    to fix, is a normal criterion stating the correct behavior. A `size: baseline` change has
    only Baseline criteria and new invariants: a wish for different behavior is an open question.
+   A `size: fix` has only ADDED criteria (the correct behavior, plus Baseline ones nearby):
+   no MODIFIED, RETIRED, SECTIONS, invariants or ADRs. If the fix needs one, say so as an
+   open question: the lead re-triages it as a full change.
 4. Invariants: a new invariant (`sdd delta-new <id> invariants/<iid> --title "<name>"`) for
    every rule this change establishes that must hold system-wide, with a Check that passes
    on Holds and fails on Violation; `sdd delta-stub <id> invariants/<iid> [--deprecate]` to

@@ -27,7 +27,7 @@ python3 <plugin>/tools/sdd.py init --survey
 ```
 
 ```
-found: docs/adr/ (1 .md, ADR-like), tests/ (tests), pyproject.toml
+found: docs/adr/ (1 .md, ADR-like), tests/ (1 test file: test_*.py), pyproject.toml
 survey only, nothing written; then: init [key=value ...] (specs_dir, changes_dir, adr_dir, acceptance_dir, acceptance_cmd, unit_cmd, worktree_dir)
 ```
 
@@ -66,7 +66,9 @@ You don't need to do anything special. When a change touches code that no capabi
 
 A Baseline criterion gets a `(test)` task and no `(impl)` task. Its acceptance test must **pass** on the current code: it pins down the behavior so the change can't break it. At Gate 1 you confirm both "this is what the code does" and "this is what it should do". `sync` drops the Baseline line, so the living spec reads like any other.
 
-A **bug** in code that no criterion covers is not a `fix` (a `fix` needs an existing criterion). The lead runs it as a full change titled `fix: ...`. Its criterion states the correct behavior, so its test fails first.
+Nobody has to take a Baseline pass on trust. `freeze` records the commit the change started from and refuses a new Baseline test once production code has changed, and the verifier re-runs the Baseline tests on that commit in a temporary worktree (`sdd baseline-tree <id>`, which links `node_modules`, `.venv` and `venv`; `--link <path>` for others). That run executes whole files, so Baseline tests live in files of their own.
+
+A **bug** in code that no criterion covers is a `fix` that adds its criterion first. The spec-author writes the correct behavior as an ADDED criterion (plus Baseline ones nearby), you approve just that in a short Gate 1, then the usual fix path follows: the test fails first, then the code is fixed. If the fix needs more (a changed criterion, an invariant, an ADR), `sdd check` refuses it and the lead turns it into a full change.
 
 ## 3. Or adopt an area up front
 

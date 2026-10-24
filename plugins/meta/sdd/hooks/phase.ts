@@ -17,13 +17,17 @@ export type PhaseId = (typeof PHASES)[number]['id']
 // A fix has no spec delta and its contract is the existing code: its acceptance tests are
 // written alongside the plan, before Gate 2.
 const FIX_ORDER: readonly PhaseId[] = ['plan', 'acceptance', 'gate2', 'implement', 'verify', 'sync']
+// A fix where no criterion covered the behavior first adds one, reviewed in a short Gate 1.
+const FIX_SPEC_ORDER: readonly PhaseId[] = ['spec', 'gate1', ...FIX_ORDER]
 
 // A baseline (adopt) only writes down behavior the code already has: its tests must pass on
 // the current code, so nothing is implemented.
 const BASELINE_ORDER: readonly PhaseId[] = ['spec', 'gate1', 'plan', 'gate2', 'acceptance', 'verify', 'sync']
 
 export function phasesOf(change: SddChange) {
-  const order = change.size === 'fix' ? FIX_ORDER : change.size === 'baseline' ? BASELINE_ORDER : undefined
+  const specFix = change.delta === true || change.phase === 'spec' || change.phase === 'gate1'
+  const order =
+    change.size === 'fix' ? (specFix ? FIX_SPEC_ORDER : FIX_ORDER) : change.size === 'baseline' ? BASELINE_ORDER : undefined
   if (!order) return [...PHASES]
   return order.map(id => PHASES.find(p => p.id === id)!)
 }
@@ -33,7 +37,7 @@ export function phasesOf(change: SddChange) {
 // change's status, its tasks and the workflow agents running (types without the `sdd:`
 // prefix). Agents are session-wide, so they only refine within a status.
 export function phaseOf(change: SddChange, running: readonly string[]): PhaseId | undefined {
-  // only a phase this kind of change has (a fix lists no spec or Gate 1)
+  // only a phase this kind of change has (a fix on an existing criterion lists no spec or Gate 1)
   if (phasesOf(change).some(p => p.id === change.phase)) return change.phase as PhaseId
   const isRunning = (type: string) => running.includes(type)
   const open = (kind: string) => change.tasks.some(t => t.kind === kind && !t.done)
@@ -42,6 +46,8 @@ export function phaseOf(change: SddChange, running: readonly string[]): PhaseId 
       // A fix starts with the lead's test task; planner and acceptance-tester run together,
       // and it goes from draft to implementing at Gate 2 once both are done.
       if (change.size === 'fix') {
+        // a fix that adds a criterion writes it first, then waits on its short Gate 1
+        if (change.delta && change.tasks.length === 0) return isRunning('spec-author') ? 'spec' : 'gate1'
         if (isRunning('planner') || !change.tasks.some(t => t.kind === 'impl')) return 'plan'
         return isRunning('acceptance-tester') || open('test') ? 'acceptance' : 'gate2'
       }

@@ -93,7 +93,8 @@ Rules:
   It needs a `(test)` task and no `(impl)` task; its acceptance test must pass on the
   current code. Only in a new capability or under ADDED, never on MODIFIED or RETIRED.
   Behavior the change alters is never Baseline. `sync` drops the line.
-- `intent.md` `size`: `change` (default), `fix` (a test on an existing criterion, no delta) or
+- `intent.md` `size`: `change` (default), `fix` (a test on an existing criterion, or on new
+  ADDED criteria only, no other delta and no ADR) or
   `baseline` (an adopt: only Baseline criteria and new invariants, only `(test)` tasks).
 - IDs `AC-NN` are stable: never renumber, never reuse. A removed criterion is retired, not
   deleted: it stays as `### AC-NN: <name>` with `- **Retired**: <reason>`.

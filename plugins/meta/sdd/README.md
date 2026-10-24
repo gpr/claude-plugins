@@ -49,15 +49,19 @@ set `acceptance_cmd` and `unit_cmd` there.
 
 ## Existing repositories
 sdd imports nothing. It writes current behavior down as it goes:
-- First run: `sdd init --survey` lists the ADR dirs, test dirs and manifests the repo already
-  has and writes nothing. The lead asks where things go, then runs
+- First run: `sdd init --survey` lists the ADR dirs and test dirs the repo already has (found
+  by content: numbered or Status/Decision markdown, `test_*.py`, `*.test.ts`, `*_test.go`, ...)
+  and its manifests, and writes nothing. The lead asks where things go, then runs
   `sdd init adr_dir=... acceptance_cmd=... unit_cmd=...`. An existing `adrs/` or `specs/` that sdd did not
   create stops init (WARN, nothing written, exit 1); old ADRs stay where they are, as plain references.
 - **Baseline criteria.** A change that touches code no capability covers writes the behavior it
   keeps as criteria ending in `- **Baseline**: <path>`: a `(test)` task, no `(impl)` task, and
   the test must pass on the current code (else `MISMATCH`, and you decide whether the code or
-  the criterion is wrong). Sync drops the line. A bug no criterion covers is a full change
-  whose criterion states the correct behavior.
+  the criterion is wrong). Sync drops the line. `freeze` records the base commit and refuses
+  a new Baseline test once production code changed; the verifier re-runs them on that commit
+  (`sdd baseline-tree`).
+- **A bug no criterion covers** is a `size: fix` that first adds the correct behavior as a
+  criterion (ADDED only), reviewed in a short Gate 1, then the usual fix path.
 - **`/sdd:change adopt <area>`** writes an area down up front: a `size: baseline` change with
   only Baseline criteria and test tasks, no Implement step, no code change.
 
@@ -157,6 +161,7 @@ remote's default branch), `branch_prefix` (`sdd/`), `worktree_dir` (`.claude/wor
   - lead only: `sync`, `set-status`, `new`, `init`, `adr-accept`, `start`, `checkpoint`, `set-pr`, `requires`, `resume`, `finish`
   - read-only, any role: `deps`
   - lead and acceptance-tester: `freeze`
+  - lead and verifier: `baseline-tree`
   - lead and spec-author: `delta-new`, `delta-stub`, `adr-new`
 - **`bundle` tool.** `mcp__sdd__bundle` takes `target` (`specs`, `adrs` or a change id) and
   `fix`. Checking is open to every role; `fix` on `specs` or `adrs` is lead-only, `fix` on a

@@ -21,9 +21,15 @@ Checks, in order (stop at the first hard failure and report it):
    hard FAIL, whatever else passes.
 2. Acceptance suite for the frozen files and the full unit suite (`acceptance_cmd` and
    `unit_cmd` from `sdd config`). Report failures with test name and one-line cause.
-3. `sdd check <id> --tests`: every criterion and invariant has a test and every
+3. Baseline proof, when `sdd status <id>` shows `baseline=<commit>`: `sdd baseline-tree <id>`,
+   run the command it prints in that worktree (it links `node_modules`, `.venv`, `venv`; for
+   another untracked dependency rerun it with `--link <path>`), then
+   `sdd baseline-tree <id> --remove`. A Baseline test that fails on
+   the base commit is a FAIL (`test` or `spec`): it does not describe the existing behavior.
+   If the run cannot be set up, report it as `baseline: not run (<why>)`, not as a pass.
+4. `sdd check <id> --tests`: every criterion and invariant has a test and every
    task is ticked.
-4. Diff review (`git diff` against the base branch, or `git status` + the files the tasks
+5. Diff review (`git diff` against the base branch, or `git status` + the files the tasks
    list). Check only:
    - code that contradicts an ADR decision listed for the change;
    - behavior added that no criterion asks for, or that a Non-goal excludes;
@@ -47,7 +53,7 @@ Memory
 Return:
 ```
 VERDICT: PASS | FAIL
-frozen: ok|tampered   acceptance: n/n   unit: n/n   trace: ok|errors
+frozen: ok|tampered   acceptance: n/n   unit: n/n   baseline: n/n|not run|-   trace: ok|errors
 findings:
 - [code|spec|test] file:line <id> reason
 ```
