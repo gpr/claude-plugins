@@ -192,6 +192,6 @@ Kinds: `test`, `impl`, `chore`. Cite ids, never restate criterion text.
 A Baseline criterion gets a `(test)` task only.
 
 ## Acceptance test tagging
-Every acceptance test cites the ids it covers, exactly, in its name, a docstring or a
-comment: `# capabilities/auth/tokens#AC-04` or `# invariants/no_secret_in_logs`. A test
-name cannot hold `/` or `#`, so use a docstring or comment.
+Every acceptance test cites the ids it covers, exactly, in a docstring or a comment directly
+above it: `# capabilities/auth/tokens#AC-04` or `# invariants/no_secret_in_logs` (a test name
+cannot hold `/` or `#`).

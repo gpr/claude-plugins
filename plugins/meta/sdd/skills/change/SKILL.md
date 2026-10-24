@@ -28,6 +28,14 @@ The workflow agents are plugin agents: `sdd:spec-author`, `sdd:planner`,
 Request: $ARGUMENTS
 If it starts with `resume`, see "Resume" below; with `adopt`, see "Adopt" below.
 
+## Paths at a glance
+| Path (triage) | Steps | `checkpoint --phase` after `start` |
+|---|---|---|
+| full change | 2, 3, 4, 5, 6, 7, 8 | gate1, plan, gate2, acceptance, implement, verify, sync (finish: done) |
+| fix (existing criterion) | 1, 4 with T1, 5, 7, 8 | plan, gate2, implement, verify, sync |
+| fix with a criterion | 1, short 3, 4 with T1, 5, 7, 8 | gate1, plan, gate2, implement, verify, sync |
+| adopt | Adopt, 2.2-6, 8 without code-review | gate1, plan, gate2, acceptance, verify, sync |
+
 ## Branch, worktree, PR, checkpoints
 Every full change and fix lives on its own branch `sdd/<id>` in its own worktree, with a
 draft PR. `sdd start` creates all three; `state.json` stores `phase`, branch, base and PR
@@ -42,8 +50,7 @@ number. Direct-path work has no change id and none of this.
   when its PR is merged into the base. `sdd checkpoint --phase plan` (or later) and
   `sdd resume` refuse until then; `sdd deps <id>` shows where each one stands. Spec work
   (steps 2-3) may go ahead meanwhile.
-- Never `git commit` or `git push` yourself for a change (merging isolated implementer
-  branches is the one exception); never write `state.json`.
+- Never `git commit` or `git push` yourself for a change; never write `state.json`.
 
 ## Resume
 `resume <id>` continues a change from this or another machine:
@@ -59,8 +66,7 @@ number. Direct-path work has no change id and none of this.
 2. `EnterWorktree` with `path` = the printed worktree. From here every `sdd` call acts on it.
 3. `sdd status <id>`, then continue at the step the phase names (spec -> 2, gate1 -> 3,
    plan -> 4, gate2 -> 5, acceptance -> 6, implement -> 7, verify -> 8, sync -> 8.4,
-   done -> nothing left; a fix starts at plan (at spec when it adds a criterion), its test is written alongside; an adopt
-   goes from acceptance to verify). A stored phase can lag a step that was done but not
+   done -> nothing left; "Paths at a glance" gives each path's order). A stored phase can lag a step that was done but not
    checkpointed: trust the files (`sdd check`, task ticks) over the phase when they disagree.
    Resume a partly written spec or plan with the same agent type and the files as context.
    Run the `bundle` tool on the change first. A change written in the old REQ/INV format
@@ -73,7 +79,7 @@ Delegate to `Explore` (medium): the area's public surface, the files that implem
 existing tests for it. `sdd start <id> --title "Baseline: <area>" --pr-title "docs(<id>): baseline spec"`,
 enter the worktree, set `size: baseline` in intent.md, then steps 2.2-6 as usual (spec-author
 with the Explore findings, told the change is an adopt; Gate 1 asks "is this what the code
-does, and what it should keep doing?"). After the last test task: `sdd checkpoint <id> --phase verify`, skip step 7 and the
+does, and what it should keep doing?"). Step 6 ends with `--phase verify`; skip step 7 and the
 code-review in step 8.3. A MISMATCH (step 6) in an adopt is either a wrong criterion
 (spec-author) or a bug: drop that criterion from the adopt and offer a fix as its own change.
 
@@ -97,8 +103,10 @@ Apply this rule, in order, and state the result in one line:
   needs more than ADDED criteria (a changed criterion, a section, an invariant, an ADR),
   `sdd check` refuses it: re-triage as a full change (step 9).
 - Code diverges from an existing acceptance criterion or invariant (bug) -> **fix**: no
-  spec delta, but a failing acceptance test first. `sdd start <id> --title ... --pr-title "fix: ..."`, enter the worktree, `sdd checkpoint <id> --phase plan -m "chore(<id>): fix"`, set `size: fix` in intent.md, write one test task
-  citing the existing criterion (`capabilities/<id>#AC-NN`) or invariant, then go to step 4 (it runs step 6 alongside).
+  spec delta, but a failing acceptance test first. `sdd start <id> --title ... --pr-title "fix: ..."`, enter the worktree,
+  set `size: fix` in intent.md, then `sdd checkpoint <id> --phase plan -m "chore(<id>): fix"` (so the size is committed
+  with the phase), write one test task citing the existing criterion (`capabilities/<id>#AC-NN`) or invariant, then go
+  to step 4 (it runs step 6 alongside).
 - Anything else (refactor, rename, dependency bump, docs, config) -> **direct**: delegate
   to `general-purpose` (or do it yourself if trivial), run the unit tests, done.
 
@@ -130,9 +138,10 @@ Ask: approve / change something / stop.
 Delegate to `planner` with the change id. It writes plan.md and tasks.md.
 For a `size: fix`, the contract is the existing code, so the test does not wait for the
 plan: in the same message, also delegate T1 to `acceptance-tester` (step 6). Tell the
-planner to leave T1's line as is and make its impl tasks `blocked-by: T1`.
+planner to leave T1's line as is and make its impl tasks `blocked-by: T1`. When T1's
+tester returns, run `sdd freeze <id>` yourself (as in step 6).
 When the planner returns: `sdd checkpoint <id> --phase gate2 -m "docs(<id>): plan and tasks"`
-(a fix also waits for T1, then `--phase gate2` once both are in).
+(a fix also waits for T1 and its freeze, then `--phase gate2` once both are in).
 
 ## 5. Gate 2 - automated coherence (light)
 Run `sdd check <id>`. If it fails, resume the planner (or spec-author for spec errors)
@@ -150,10 +159,13 @@ A fix already did this step alongside step 4; skip to step 7.
 For each `(test)` task (several: one Agent call each, all in one message, so they run in
 parallel): delegate to `acceptance-tester` with
 the `sdd context <id> <Tn>` output pasted in the prompt. It writes the tests, confirms they
-fail for the right reason, ticks its task and runs `sdd freeze <id>`. After each one:
-`sdd checkpoint <id> -m "test(<id>): <Tn> acceptance tests"`; after the last add
-`--phase implement` (`--phase verify` for a `size: baseline`).
-If it reports that a criterion is untestable or ambiguous -> step 9 (reopen).
+fail for the right reason (a Baseline test: that it passes) and ticks its task; testers never
+freeze. Settle any untestable criterion or MISMATCH below first. Then, once every test task
+of the batch is back, run `sdd freeze <id>` once (one snapshot of the whole acceptance dir,
+no half-written test in it) and `sdd checkpoint <id> --phase implement -m "test(<id>): acceptance tests"`
+(`--phase verify` for a `size: baseline`). If `freeze` refuses because production code
+already changed (Baseline tests), see step 9.
+If a tester reports that a criterion is untestable or ambiguous -> step 9 (reopen).
 If it reports `MISMATCH: <id>` (a Baseline test fails on the current code), ask the user which
 is right: the code (step 9, the criterion is corrected and stays Baseline) or the criterion
 (a latent bug: step 9, the spec-author drops its Baseline line, the planner adds an impl task;
@@ -161,15 +173,12 @@ in an adopt, see "Adopt" instead).
 
 ## 7. Implementation (inner TDD)
 A `size: baseline` change has no impl tasks: go to step 8.
-For each `(impl)` task whose blocked-by tasks are done, delegate to `implementer` with
-the `sdd context <id> <Tn> --plan` output pasted in the prompt.
-Parallelism: run impl tasks concurrently (all Agent calls in one message) only when their
-`files:` sets are disjoint;
-pass `isolation: "worktree"` on each Agent call when you do, and merge the branches
-yourself into `sdd/<id>` after each returns (they never touch the same files by
-construction), then checkpoint.
+For each `(impl)` task whose blocked-by tasks are done, one at a time, delegate to
+`implementer` with the `sdd context <id> <Tn> --plan` output pasted in the prompt. Never run
+implementers in parallel or with `isolation: "worktree"`: an isolated worktree starts from
+the default branch, without this change's tasks, plan or frozen tests.
 If an implementer returns `BLOCKED: <criterion or invariant id> <reason>` -> step 9. Never relax a test.
-After each implementer returns (and its branch is merged, if isolated):
+After each implementer returns:
 `sdd checkpoint <id> -m "feat(<id>): <Tn> <task title>"`; after the last impl task add
 `--phase verify`.
 
@@ -193,15 +202,22 @@ After each implementer returns (and its branch is merged, if isolated):
    findings to the user and let them decide.
 4. Then `sdd set-status <id> verified`, `sdd checkpoint <id> --phase sync -m "chore(<id>): verified"`,
    then `sdd sync <id> --dry-run`, then
-   `sdd sync <id>`. Sync writes the new concepts and merges each CapabilityDelta unit by
+   `sdd sync <id>`. Sync first merges `origin/<base>` into the branch when the base moved (a
+   dry run only warns), so its checks see the living spec as it is now; if that merge
+   conflicts, resolve it in the worktree, checkpoint, and sync again. It then writes the new
+   concepts and merges each CapabilityDelta unit by
    unit into the specs/ OKF bundle (status `stable`, regenerated indexes, `log.md`), accepts
    the ADRs (status `stable`) and archives the change. If sync refuses with a `specs bundle:`
    error, run the `bundle` tool on `specs` (with `fix: true` for what it marks fixable) and
    commit that first; old REQ/INV concepts must be rewritten by hand. If sync reports
    CONFLICT, another change modified the same criterion, section or invariant first: resume
    spec-author to rebase that unit (`delta-stub` again), back to Gate 1 for it only.
-5. `sdd finish <id>`: marks the phase done, commits the synced specs/ADRs/archive, pushes
-   and marks the PR ready for review (merging stays with the user). Report to the user in
+5. `sdd finish <id>`: marks the phase done, commits the synced specs/ADRs/archive, merges
+   `origin/<base>` again if it moved since the sync, pushes and marks the PR ready for review
+   (merging stays with the user). If that merge conflicts, another change edited the same
+   unit after this sync: tell the user which files, then follow "Conflict after sync" in the
+   plugin's how-to/resolve-sync-conflict (keep the base's text, re-apply this change's unit
+   from its archived delta, show that unit at Gate 1, commit, `finish` again). Report to the user in
    3 lines: what changed, criterion and invariant ids, anything deferred, plus the PR link.
 
 ## 9. Reopen (failure path)
@@ -209,7 +225,7 @@ A wrong or untestable criterion or invariant goes back to the spec, never into t
 `sdd set-status <id> draft`, `sdd checkpoint <id> --phase spec -m "chore(<id>): reopen spec"`,
 resume spec-author with the BLOCKED report, then Gate 1 for
 the affected units only, then re-plan the affected tasks, re-run their test tasks
-(re-freeze), then implementation. A Baseline test rewritten after code has changed is
+(then `sdd freeze <id>` again), then implementation. A Baseline test rewritten after code has changed is
 refused by `freeze`: you then run `sdd freeze <id> --after-code` yourself (the verifier's
 run on the base commit is then its only proof).
 A `size: fix` change adds at most new criteria: when it needs more (a changed criterion,

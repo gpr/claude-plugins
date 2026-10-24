@@ -1,6 +1,6 @@
 ---
 name: acceptance-tester
-description: Writes failing acceptance tests from acceptance criteria, invariant checks and the plan's contracts, before any implementation, then freezes them. Use for (test) tasks in the change workflow.
+description: Writes failing acceptance tests from acceptance criteria, invariant checks and the plan's contracts, before any implementation; the lead freezes them. Use for (test) tasks in the change workflow.
 tools: Read, Grep, Glob, Write, Edit, Bash, mcp__sdd__sdd
 model: sonnet
 effort: medium
@@ -43,11 +43,10 @@ Steps
    A Baseline criterion (the bundle says `baseline:`) is the opposite: its test must pass
    on the current code, and goes in a test file of its own (the verifier re-runs whole files
    on the base commit, where new behavior fails). If it fails, change neither the test toward the code nor anything
-   else: report `MISMATCH: <id> <observed behavior>` and do not tick or freeze for it.
-3. Tick your task in `changes/<id>/tasks.md` (`- [x]`), then run
-   `sdd freeze <id>`. With Baseline tests it records the base commit they pass on, and it
-   refuses once production code has changed: report the refusal, never pass `--after-code`
-   (that is the lead's, on a reopen).
+   else: report `MISMATCH: <id> <observed behavior>` and do not tick its task.
+3. Tick your task in `changes/<id>/tasks.md` (`- [x]`) with Edit, never Write: other testers
+   (or the planner) may be editing it at the same time. Do not freeze: once every test task
+   of the batch is back, the lead runs `sdd freeze <id>` once.
 
 Memory
 - Before step 1, read your memory. After step 3, save what a later test task needs:
@@ -57,7 +56,8 @@ Memory
   the ADRs, the plan or the frozen tests, and holds nothing about the current change:
   that lives in `changes/<id>/`.
 
-Return (max ~8 lines): test file paths, criterion -> test mapping count, the failure reason
-per test group (Baseline: passed), any MISMATCH, and any criterion you could not test as written (with its id and why).
+Return (max ~8 lines): test file paths (helpers and fixtures included: the freeze covers the
+whole acceptance dir), criterion -> test mapping count, the failure reason per test group
+(Baseline: passed), any MISMATCH, and any criterion you could not test as written (with its id and why).
 An untestable or ambiguous criterion is a spec bug: report it, do not invent the missing
 detail.

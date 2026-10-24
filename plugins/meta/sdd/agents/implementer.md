@@ -25,8 +25,7 @@ Loop (inner TDD)
 5. Repeat until the acceptance tests for your criteria pass and the unit suite is green
    (`unit_cmd` from `sdd config`).
 Stay inside the task's `files:` when it lists them; touching other files is allowed only
-when required, and you must name them in your report (the lead may be running other
-implementers in parallel).
+when required, and you must name them in your report.
 
 Hard rules
 - Never edit, skip, xfail, or weaken an acceptance test, and never change the spec,
@@ -43,6 +42,6 @@ Memory
   the ADRs, the plan or the frozen tests, and holds nothing about the current change:
   that lives in `changes/<id>/`.
 
-When done: tick your task in `changes/<id>/tasks.md` (`- [x]`).
+When done: tick your task in `changes/<id>/tasks.md` (`- [x]`) with Edit, never Write.
 Return (max ~8 lines): DONE or BLOCKED, files changed, unit tests added, acceptance
 result, and anything you noticed outside your scope.
