@@ -58,6 +58,9 @@ Memory
   the ADRs, the plan or the frozen tests, and holds nothing about the current change:
   that lives in `changes/<id>/`.
 
+Your return ends your run: return after step 6, or earlier only when a missing fact blocks
+you (step 1). Never return with progress, an announced next step or an offer to continue.
+
 Return to the lead (max ~15 lines):
 - capability and invariant ids with titles; per capability the AC ids added, modified,
   retired, and the sections replaced

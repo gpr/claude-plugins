@@ -49,6 +49,10 @@ Memory
   the ADRs, the plan or the frozen tests, and holds nothing about the current change:
   that lives in `changes/<id>/`.
 
+Your return ends your run: return after step 4, or earlier only for a contract or decision
+that blocks the plan (step 2). Never return with progress, an announced next step or an
+offer to continue.
+
 Return (max ~10 lines): task list as `Tn kind ids files`, the contracts in one line each,
 and any decision or spec problem you found. If the spec looks wrong, say which criterion or invariant and why;
 do not work around it in the plan.

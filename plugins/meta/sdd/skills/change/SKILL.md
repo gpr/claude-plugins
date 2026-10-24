@@ -117,7 +117,8 @@ its tests are already frozen).
 
 ## 6. Acceptance tests first (ATDD)
 A fix already did this step alongside step 4; skip to step 7.
-For each `(test)` task (parallel if several): delegate to `acceptance-tester` with
+For each `(test)` task (several: one Agent call each, all in one message, so they run in
+parallel): delegate to `acceptance-tester` with
 the `sdd context <id> <Tn>` output pasted in the prompt. It writes the tests, confirms they
 fail for the right reason, ticks its task and runs `sdd freeze <id>`. After each one:
 `sdd checkpoint <id> -m "test(<id>): <Tn> acceptance tests"`; after the last add
@@ -127,7 +128,8 @@ If it reports that a criterion is untestable or ambiguous -> step 9 (reopen).
 ## 7. Implementation (inner TDD)
 For each `(impl)` task whose blocked-by tasks are done, delegate to `implementer` with
 the `sdd context <id> <Tn> --plan` output pasted in the prompt.
-Parallelism: run impl tasks concurrently only when their `files:` sets are disjoint;
+Parallelism: run impl tasks concurrently (all Agent calls in one message) only when their
+`files:` sets are disjoint;
 pass `isolation: "worktree"` on each Agent call when you do, and merge the branches
 yourself into `sdd/<id>` after each returns (they never touch the same files by
 construction), then checkpoint.
