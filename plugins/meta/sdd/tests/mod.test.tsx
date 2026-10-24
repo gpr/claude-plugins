@@ -342,3 +342,42 @@ test('with no open change the pane still shows the last guard refusal', async ($
     await ui.unmount()
   }
 })
+
+test('an Edit splicing a new status into intent.md mid-line is refused for the spec-author, not the lead', async ($, on) => {
+  const intent = '---\ntype: intent\nstatus: draft\nsize: change\n---\n# Add login\n'
+  on('session.root', () => ({ value: '/repo' }))
+  on('session.cwd', () => ({ value: '/repo' }))
+  on('fs.read', (_$, e) => {
+    if (String(e.path) === '/repo/changes/c1/intent.md') return { value: intent }
+    throw new Error('ENOENT')
+  })
+  on('agent.list', () => ({ value: [{ id: 'a1', type: 'sdd:spec-author', description: '', status: 'running' }] }))
+  let edits = 0
+  on('tool.call', { tool: 'Edit' }, () => {
+    edits++
+    return { result: 'edited' }
+  })
+  const call = { tool: 'Edit', file_path: '/repo/changes/c1/intent.md', old_string: 'draft', new_string: 'approved' }
+  const ran = await $.tool.call({ ...call, agentId: 'a1' })
+  expect(JSON.stringify(ran)).toContain('sdd set-status')
+  expect(edits).toBe(0)
+  await $.tool.call(call)
+  expect(edits).toBe(1)
+})
+
+test('a subagent the session does not list is refused', async ($, on) => {
+  on('session.root', () => ({ value: '/repo' }))
+  on('session.cwd', () => ({ value: '/repo' }))
+  on('fs.read', () => {
+    throw new Error('ENOENT')
+  })
+  on('agent.list', () => ({ value: [] }))
+  let reachedTool = false
+  on('tool.call', { tool: 'Write' }, () => {
+    reachedTool = true
+    return { result: 'written' }
+  })
+  const ran = await $.tool.call({ tool: 'Write', file_path: '/repo/tests/acceptance/test_a.py', content: 'x', agentId: 'ghost' })
+  expect(JSON.stringify(ran)).toContain('refusing for safety')
+  expect(reachedTool).toBe(false)
+})
