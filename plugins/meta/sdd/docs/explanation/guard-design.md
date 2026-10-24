@@ -38,11 +38,11 @@ The rules live in `hooks/guard.ts` as pure functions (`checkPath`, `checkBash`, 
 
 ## Fail closed for subagents, open for the lead
 
-If the guard throws (an unreadable file, an engine hiccup), it refuses the subagent's call and lets the lead's call through. A subagent that's wrongly refused just reports back. A lead that's wrongly blocked would freeze the whole session, including your ability to fix the guard.
+If the guard throws (an unreadable file, an engine hiccup, an agent id the session does not list), it refuses the subagent's call and lets the lead's call through. A subagent that's wrongly refused just reports back. A lead that's wrongly blocked would freeze the whole session, including your ability to fix the guard.
 
 ## Bash is a heuristic, hashes are the proof
 
-File-writing tools carry an explicit path, so the guard decides exactly. Bash doesn't: a command can write anywhere in endless ways. The guard looks for write-like commands and checks the paths they mention, which catches mistakes and casual workarounds but can't catch everything. That's why `verify-frozen` exists, and why the verifier treats a hash mismatch as a hard failure whatever the tests say.
+File-writing tools carry an explicit path, so the guard decides exactly. For a status it even applies the edit to the file and compares the front matter before and after, so splicing `draft` into `approved` mid-line is caught. Bash doesn't carry a path: a command can write anywhere in endless ways. The guard splits the command into segments, follows `cd`, and checks the redirect targets and the paths write-like commands mention, which catches mistakes and casual workarounds but can't catch everything (a path built at run time). That's why `verify-frozen` exists: it hashes the whole acceptance dir, helpers and fixtures included, and the verifier treats a mismatch or an added file as a hard failure whatever the tests say.
 
 ## In-process, not a shell hook
 

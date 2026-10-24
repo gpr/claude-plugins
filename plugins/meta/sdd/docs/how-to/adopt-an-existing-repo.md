@@ -80,7 +80,7 @@ The lead starts a `size: baseline` change titled `Baseline: <area>`, with the PR
 
 ## When a Baseline test fails
 
-The acceptance-tester reports `MISMATCH: <id> <observed behavior>` and does not freeze that test. The lead asks you which side is right:
+The acceptance-tester reports `MISMATCH: <id> <observed behavior>` and leaves its task unticked; the lead settles it before freezing. The lead asks you which side is right:
 
 - **The code is right:** the criterion is reopened and corrected, and stays Baseline.
 - **The criterion is right (a latent bug):** the criterion loses its Baseline line and the planner adds an `(impl)` task. In an adopt, the criterion leaves the adopt instead, and the fix becomes its own change.

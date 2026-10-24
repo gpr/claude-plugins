@@ -215,9 +215,10 @@ After each implementer returns:
 5. `sdd finish <id>`: marks the phase done, commits the synced specs/ADRs/archive, merges
    `origin/<base>` again if it moved since the sync, pushes and marks the PR ready for review
    (merging stays with the user). If that merge conflicts, another change edited the same
-   unit after this sync: tell the user which files, then follow "Conflict after sync" in the
-   plugin's how-to/resolve-sync-conflict (keep the base's text, re-apply this change's unit
-   from its archived delta, show that unit at Gate 1, commit, `finish` again). Report to the user in
+   unit after this sync: tell the user which files and that they resolve it by hand (the
+   guard keeps you out of `specs/`), as "Conflict after sync" in the plugin's
+   how-to/resolve-sync-conflict says; show the merged unit as a Gate 1 for it only, then
+   `finish` again. Report to the user in
    3 lines: what changed, criterion and invariant ids, anything deferred, plus the PR link.
 
 ## 9. Reopen (failure path)

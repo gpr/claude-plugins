@@ -30,7 +30,9 @@ After the spec, the plan, each test task, each impl task and each fix, the lead 
 - **Phase can't lie.** The phase is recorded in the same commit as the work, so it never runs ahead of what is pushed. If a step finished but wasn't checkpointed, the files win over the stored phase.
 - **History is readable.** One conventional commit per artifact (`docs(<id>): spec delta`, `test(<id>): T1 acceptance tests`, `feat(<id>): T2 ...`).
 
-The lead never runs `git commit` or `git push` itself. The one exception is merging isolated parallel implementer branches.
+The lead never runs `git commit` or `git push` itself. Implementers run one at a time in the change's worktree, so there are no side branches to merge.
+
+`sync` and `finish` take the base in too: `sync` merges `origin/<base>` before it checks the delta, so a unit another change edited and merged first is a CONFLICT, not an overwrite; `finish` merges it again if it moved while the change was being synced. See [Why sdd.py exists](determinism.md#base-hashes-turn-races-into-conflicts).
 
 The life of a change branch, from `start` to your merge. Here a required change (`add-login`) merges into `main` while `add-sso` is still at Gate 1:
 

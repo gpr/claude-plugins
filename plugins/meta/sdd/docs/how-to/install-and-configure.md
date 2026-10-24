@@ -31,8 +31,10 @@ generated:
    ```
 
    ```
-   created: specs/, adrs/, changes/, tests/acceptance/, .claude/sdd.json (edit acceptance_cmd / unit_cmd), specs/index.md, specs/log.md, adrs/index.md, adrs/log.md, specs/.templates/capability.md.tmpl, specs/.templates/invariant.md.tmpl, adrs/.templates/adr.md.tmpl, .gitignore (/.claude/worktrees/)
+   created: specs/, adrs/, changes/, tests/acceptance/, .claude/sdd.json (edit acceptance_cmd / unit_cmd), specs/index.md, specs/log.md, adrs/index.md, adrs/log.md, specs/.templates/capability.md.tmpl, specs/.templates/invariant.md.tmpl, adrs/.templates/adr.md.tmpl, .gitignore (/.claude/worktrees/), .gitattributes (merge=union for the logs)
    ```
+
+   The two `.gitattributes` lines (`/specs/log.md merge=union`, `/adrs/log.md merge=union`) let two changes each add a log entry without a git conflict. In a repository initialised by an older sdd, run `sdd init` again to add them; `sdd start` warns while the base lacks them.
 
 3. Edit `.claude/sdd.json` for your stack. The two keys you almost always change:
 
@@ -45,10 +47,10 @@ generated:
 
    `{files}` is replaced with the acceptance test files to run. Change the directory names, `base_branch`, `branch_prefix` or `worktree_dir` only if you need to. All keys: [Configuration](../reference/configuration.md).
 
-4. Commit and push the config and `.gitignore` to the base branch. `sdd start` refuses until `origin/<base>` has `.claude/sdd.json`, because each change's worktree starts from there.
+4. Commit and push the config, `.gitignore` and `.gitattributes` to the base branch. `sdd start` refuses until `origin/<base>` has `.claude/sdd.json`, because each change's worktree starts from there.
 
    ```
-   git add .claude/sdd.json .gitignore specs adr changes tests/acceptance
+   git add .claude/sdd.json .gitignore .gitattributes specs adrs changes tests/acceptance
    git commit -m "chore: set up sdd"
    git push
    ```

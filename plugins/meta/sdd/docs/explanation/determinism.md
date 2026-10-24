@@ -37,14 +37,18 @@ sequenceDiagram
     S-->>A: copy + base f1452e6a
     B->>S: delta-stub greeting#AC-01
     S-->>B: copy + base f1452e6a
-    A->>S: sync (base matches)
-    Note over S: AC-01 now hashes 59e67d47
-    B->>S: check / sync
+    A->>S: sync (base matches), PR merged into main
+    Note over S: AC-01 now hashes 59e67d47 on main
+    B->>S: sync: merges origin/main in first, then checks
     S-->>B: CONFLICT base f1452e6a != current 59e67d47
     Note over B: re-stub, re-edit, Gate 1 for that criterion
 ```
 
 Without this, the second sync would silently overwrite the first change's work. The hash ignores trailing whitespace, so reformatting alone is not a conflict. Agents are told never to edit a hash: a conflict is real information, and the fix is to re-stub and re-review that unit. Units are small on purpose: two changes that touch different criteria of one capability do not conflict.
+
+Each change lives on its own branch, so "syncs first" has to mean "merged into the base first": a branch cut before the other change merged still holds the old living spec. That's why `sync` begins by merging `origin/<base>` into the change's branch when the base has moved, and only then compares the hashes. Two things keep independent changes from colliding in git afterwards: merging a CapabilityDelta leaves the capability's `generated.at` alone, and `sdd init` marks `specs/log.md` and `adrs/log.md` `merge=union` in `.gitattributes`.
+
+One window remains: both changes sync before either is merged, while both PRs are in review. If they edited the same unit, git sees it when the second branch takes the base in, at `finish` (or on the PR). That is a real conflict, and it is resolved by hand: see [Conflict after sync](../how-to/resolve-sync-conflict.md#conflict-after-sync).
 
 ## Traceability is checked, not hoped for
 
@@ -52,7 +56,7 @@ Without this, the second sync would silently overwrite the first change's work. 
 
 ## Freezing makes "don't touch the tests" verifiable
 
-`sdd freeze` records sha256 hashes of the acceptance test files that cover the change. `sdd verify-frozen` compares them again. The guard already refuses implementer writes to the tests, but it inspects tool calls heuristically. The hash check doesn't care how a file was changed, so a tampered test is a hard FAIL for the verifier, and CI can run the same check.
+`sdd freeze`, run by the lead once the batch of test tasks is back, records sha256 hashes of every file in the acceptance dir: the tests, and the helpers and fixtures they rely on (a changed `conftest.py` can neuter a test as well as an edit to the test itself). It also records the base commit. `sdd verify-frozen` compares them again and reports a file modified, deleted or added since. A difference counts as tampering unless a merge of the base brought it in: the file must be exactly as `origin/<base>` has it, and the base must have changed it since the recorded commit. The guard already refuses implementer writes to the tests, but it inspects tool calls heuristically. The hash check doesn't care how a file was changed, so a tampered test is a hard FAIL for the verifier, and CI can run the same check.
 
 ## Context bundles are computed, not chosen
 

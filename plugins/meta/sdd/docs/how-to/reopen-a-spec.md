@@ -27,7 +27,7 @@ The lead does this. You see it as a new Gate 1 for the affected criteria and inv
 2. The spec-author is resumed with the report and fixes the affected criteria or invariants.
 3. **Gate 1** for the affected units only. You approve, then `set-status approved`.
 4. The planner re-plans the affected tasks, `sdd check` passes (Gate 2).
-5. The acceptance-tester rewrites the affected tests and runs `sdd freeze` again.
+5. The acceptance-tester rewrites the affected tests, then the lead runs `sdd freeze` again.
 6. Implementation resumes.
 
 Never relax a test or patch the code around the spec instead. The guard blocks the first, and the verifier catches the second.

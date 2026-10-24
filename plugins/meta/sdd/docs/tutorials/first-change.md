@@ -140,7 +140,7 @@ followed by the task count and contracts. There's nothing to do unless you objec
 
 Run `/sdd phase` and keep the pane open while you watch:
 
-1. The **acceptance-tester** writes `tests/acceptance/test_greet_name.py`, citing `capabilities/greeting#AC-01` or `#AC-02` in a comment above each test. It runs the tests, confirms they fail because `--name` doesn't exist yet, ticks T1 and runs `sdd freeze`:
+1. The **acceptance-tester** writes `tests/acceptance/test_greet_name.py`, citing `capabilities/greeting#AC-01` or `#AC-02` in a comment above each test. It runs the tests, confirms they fail because `--name` doesn't exist yet, and ticks T1. Once the test tasks are back, the lead runs `sdd freeze`, which hashes the whole acceptance dir:
    ```
    froze 1 file(s) -> changes/greet-by-name/frozen.json
    ```

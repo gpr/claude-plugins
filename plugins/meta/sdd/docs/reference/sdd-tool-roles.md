@@ -39,7 +39,7 @@ The caller's role comes from the tool call's `agentId` (see [Guard rules](guard-
 |---|---|---|---|---|---|---|---|
 | `init`, `new`, `set-status`, `sync`, `adr-accept` | ✓ | | | | | | |
 | `start`, `checkpoint`, `set-pr`, `requires`, `resume`, `finish` | ✓ | | | | | | |
-| `freeze` | ✓ | | | ✓ | | | |
+| `freeze` (once per batch of test tasks, so no half-written test is snapshotted) | ✓ | | | | | | |
 | `baseline-tree` | ✓ | | | | | ✓ | |
 | `delta-new`, `delta-stub`, `adr-new` | ✓ | ✓ | | | | | |
 | `config`, `status`, `check`, `context`, `verify-frozen`, `deps` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |

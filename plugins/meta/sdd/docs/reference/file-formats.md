@@ -213,7 +213,7 @@ Parsed with `^- \[( |x|X)\] (T\d+) \((test|impl|chore)\) (.*)$`:
 | `(chore)` | migrations, config, docs; no citation needed |
 | citations, ADR ids | anywhere in the rest of the line |
 | `blocked-by: T1, T3` | dependencies |
-| `files: a, b` | files the task touches; the lead runs impl tasks in parallel when these sets are disjoint |
+| `files: a, b` | files the task may change; the implementer stays inside them (impl tasks run one at a time) |
 
 Front matter of `tasks.md` is `type: tasks`, `change: <id>`. Lines inside HTML comments are ignored, so the template's example is never parsed.
 
@@ -230,4 +230,8 @@ A test name cannot hold `/` or `#`, so the name alone never matches.
 
 ## frozen.json
 
-`{"<path relative to root>": "<sha256 hex>", ...}` for every acceptance file that cites one of the change's test units. Written by `freeze`, checked by `verify-frozen`.
+```json
+{"version": 2, "base": "<merge-base commit with origin/<base>, or null>", "files": {"<path relative to root>": "<sha256 hex>", ...}}
+```
+
+`files` holds every file under `acceptance_dir` at freeze time (tests, helpers, fixtures; ignored files and caches left out). `base` lets `verify-frozen` accept a file a later base merge changed. Written by `freeze` (the lead), checked by `verify-frozen`. A flat `{"<path>": "<sha256>"}` map is the format before v2: still verified, file by file.
