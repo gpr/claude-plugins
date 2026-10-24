@@ -29,6 +29,8 @@ On an existing change:
 sdd requires add-sso add-login add-audit
 ```
 
+For a change planned on the base (its `changes/<id>/intent.md` committed ahead of time), put `requires: [add-login]` in the intent's front matter instead; `sdd start add-sso` reads it, and refuses a `--requires` that differs.
+
 Ids can be comma- or space-separated. A change can't require itself, and cycles (including transitive ones) are refused.
 
 ## Check where they stand
@@ -43,7 +45,7 @@ open add-audit phase implement pr #43
 next: merge the PR of add-login (#42)
 ```
 
-States: `ok`, `missing`, `ready`, `open`, `unknown`; see [dependency states](../reference/phases-and-states.md#dependency-states). Exit code 1 means not all are in.
+States: `ok`, `missing`, `ready`, `open`, `planned`, `unknown`; see [dependency states](../reference/phases-and-states.md#dependency-states). Exit code 1 means not all are in.
 
 ## What waits
 

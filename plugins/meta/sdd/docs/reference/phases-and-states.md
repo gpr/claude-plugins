@@ -130,14 +130,16 @@ flowchart TD
     W -- yes --> OK[ok]
     W -- no --> MI["missing<br/>(base gets merged in)"]
     Q -- no --> B{"branch &lt;prefix&gt;dep<br/>on origin?"}
-    B -- no --> UN[unknown]
+    B -- no --> P{"its intent.md<br/>on origin/&lt;base&gt;?"}
+    P -- yes --> PL[planned]
+    P -- no --> UN[unknown]
     B -- yes --> F{"archived on its branch<br/>and phase done?"}
     F -- yes --> RE[ready]
     F -- no --> OP[open]
     classDef pass fill:#bbf7d0,stroke:#15803d,color:#000
     classDef block fill:#fecaca,stroke:#b91c1c,color:#000
     class OK,MI pass
-    class RE,OP,UN block
+    class RE,OP,PL,UN block
 ```
 
 | State | Meaning | Blocks? |
@@ -146,6 +148,7 @@ flowchart TD
 | `missing` | merged into the base, not in this branch yet | no: `checkpoint`/`resume` merge `origin/<base>` in |
 | `ready` | `finish` ran (phase `done`), PR not merged | yes: `next: merge the PR of <dep>` |
 | `open` | still being worked on (even if synced but not finished) | yes: `next: resume <dep>` |
-| `unknown` | no branch `<branch_prefix><dep>` on origin | yes: check `requires` |
+| `planned` | no branch, but its `intent.md` is on `origin/<base>` (planned, not started); its own `requires` are walked too | yes: `next: start <dep>` |
+| `unknown` | no branch `<branch_prefix><dep>` on origin, and not planned there | yes: check `requires` |
 
 "Merged" means the dependency's `changes/archive/<date>-<dep>/` directory exists on `origin/<base>`, so squash merges count. A cycle is refused.
