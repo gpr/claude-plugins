@@ -163,8 +163,11 @@ size: change           # change | fix | baseline
 adrs: [ADR-0007]
 created: 2026-10-17
 archived: 2026-10-20   # added by sync
+requires: [add-users]  # optional: a change planned on the base, read by `start`
 ---
 ```
+
+`requires` is optional and only meaningful before `start`: a change planned on the base branch (its folder committed there ahead of time) declares the changes it needs, and `start` copies them into `state.json`, which is the record from then on. `sdd requires` keeps the two in step.
 
 `size`: `change` (the default), `fix` (a test on an existing criterion, or on criteria it ADDs; nothing else in its delta, no ADR), `baseline` (an adopt: only Baseline criteria and new invariants, only `(test)` tasks, no code change).
 

@@ -38,7 +38,7 @@ number. Direct-path work has no change id and none of this.
   verify sync done`. If it refuses because a required change is not merged, handle it as in Resume. Pass `--phase` when the step you just finished moves the change to
   the next phase; omit it for further commits within a phase.
 - **Requires**: a change may depend on others (`requires` in `state.json`, set with
-  `sdd start --requires a,b` or `sdd requires <id> a b`). A dependency counts as done only
+  `sdd start --requires a,b`, from a planned change's intent.md, or `sdd requires <id> a b`). A dependency counts as done only
   when its PR is merged into the base. `sdd checkpoint --phase plan` (or later) and
   `sdd resume` refuse until then; `sdd deps <id>` shows where each one stands. Spec work
   (steps 2-3) may go ahead meanwhile.
@@ -53,7 +53,8 @@ number. Direct-path work has no change id and none of this.
    If it ends with `blocked` / `next: ...`, a required change is not merged yet: do not
    enter the worktree or continue this change. Follow `next:`. For `resume <dep>`, run this
    whole Resume procedure for the dep (its own worktree, its own `requires` first), carry it
-   through to `sdd finish`, then come back. For `merge the PR of <dep>`, tell the user which
+   through to `sdd finish`, then come back. For `start <dep>`, the dep is planned on the
+   base but not started: start it (step 2) and carry it through the same way. For `merge the PR of <dep>`, tell the user which
    PR to merge and stop; once they say it is merged, `sdd resume <id>` again (it merges the
    base into the branch, so the dependency's specs and code arrive).
 2. `EnterWorktree` with `path` = the printed worktree. From here every `sdd` call acts on it.
@@ -103,7 +104,10 @@ Apply this rule, in order, and state the result in one line:
   to `general-purpose` (or do it yourself if trivial), run the unit tests, done.
 
 ## 2. Capture intent and spec delta
-1. Pick a kebab-case id. If the request builds on an open change (its PR not merged yet),
+1. If the request names a change already planned on the base (`changes/<id>/intent.md`
+   there, no `state.json`), run `sdd start <id>` with no `--title` or `--requires`: it adopts
+   the folder and takes both from its intent.md. Tell spec-author the intent is planned, to
+   refine rather than rewrite. Otherwise pick a kebab-case id. If the request builds on an open change (its PR not merged yet),
    add `--requires <id>[,<id>]`. `sdd start <id> --title "<title>" --pr-title "<feat|fix>: <title>"`
    (conventional type from triage). Then `EnterWorktree` with `path` = the worktree it
    prints. Do this before any agent writes an artifact. If it prints `PR missing`, create a

@@ -2,6 +2,8 @@
 
 ## 2026-10-24
 
+**Update** Planned changes: a backlog committed to the base with `sdd new` (intent.md with `requires: [...]`) is adopted by `start` instead of scaffolded, title and requires read from the intent; a planned dependency shows as `planned` with `next: start <dep>`; `requires` keeps the intent in step. Updated: cli, file-formats, phases-and-states, manage-dependencies how-to, README, change skill.
+
 **Update** Baseline proof: `freeze` records the base commit and refuses new Baseline tests once production code changed (`--after-code` for the lead), and the verifier re-runs them there with `baseline-tree`. A `size: fix` may add criteria (ADDED only), with Spec and a short Gate 1. The `init` survey finds ADR and test dirs by content. Updated: cli, sdd-tool-roles, phases-and-states, file-formats, known-limits, keep-in-sync, workflow overview, adopt how-to.
 
 **Update** Existing repositories: Baseline criteria (`- **Baseline**: <path>`, a test task and no impl task, the test passes on the current code, dropped by sync), `size: baseline` changes (`/sdd:change adopt <area>`, no Implement step), `sdd init --survey` and `init key=value`, existing ADR dirs left alone. New page: how-to/adopt-an-existing-repo. Updated: cli, file-formats, phases-and-states, configuration, workflow overview, install, keep-in-sync. Command outputs are from real `sdd.py` runs in a scratch repository.

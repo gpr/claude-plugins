@@ -1133,7 +1133,8 @@ def cmd_new(args):
     title = args[args.index("--title") + 1] if "--title" in args else name
     d = CHANGES / name
     if d.exists():
-        die(f"{d.relative_to(ROOT)} already exists")
+        hint = ": a planned change, `start` adopts it" if (d / "intent.md").exists() and not (d / "state.json").exists() else ""
+        die(f"{d.relative_to(ROOT)} already exists{hint}")
     (d / "specs").mkdir(parents=True)
     today = _dt.date.today().isoformat()
     for t in ["intent.md", "plan.md", "tasks.md"]:
@@ -2533,6 +2534,17 @@ def base_of(st: dict) -> str:
     return st.get("base") or base_branch()
 
 
+def planned_at(ref: str, name: str) -> FM | None:
+    """Front matter of `name`'s intent.md committed on `ref` (a change planned there before
+    `start`), else None."""
+    code, out = git("show", f"{ref}:{CFG['changes_dir']}/{name}/intent.md")
+    return split_doc(out).fm if code == 0 else None
+
+
+# Dependency states that keep a change blocked.
+UNMERGED = ("open", "ready", "unknown", "planned")
+
+
 def state_at(ref: str, path: str) -> dict | None:
     code, out = git("show", f"{ref}:{path}")
     try:
@@ -2545,7 +2557,7 @@ def dep_states(name: str, requires: list[str], base: str, wt: Path) -> list[dict
     """State of every required change, transitively, deepest first. `ok`: merged into the
     base and in wt's branch; `missing`: merged into the base, not yet in the branch; `ready`:
     finished (`finish` ran), its PR not merged; `open`: still being worked on, even if already
-    synced; `unknown`: no branch found."""
+    synced; `planned`: no branch, its intent.md is on the base; `unknown`: neither."""
     batch = [f"{CFG['branch_prefix']}{d}" for d in requires]
     if git("fetch", "origin", base, *batch)[0] == 0:
         fetched = set(batch)
@@ -2584,6 +2596,9 @@ def dep_states(name: str, requires: list[str], base: str, wt: Path) -> list[dict
                         row.update(state="open", detail=f"phase {st.get('phase') or '?'}{pr}"
                                    + (" (synced, `finish` not run)" if arch else ""))
                     nxt = st.get("requires", [])
+                elif (plan := planned_at(f"origin/{base}", dep)) is not None:
+                    row.update(state="planned", detail=f"planned on {base}, not started")
+                    nxt = [str(x) for x in plan.list("requires")]
                 walk(nxt, chain + [dep])
             out.append(row)
 
@@ -2596,14 +2611,16 @@ def dep_lines(rows: list[dict]) -> list[str]:
 
 
 def dep_next(rows: list[dict]) -> str:
-    row = next(r for r in rows if r["state"] in ("open", "ready", "unknown"))
+    row = next(r for r in rows if r["state"] in UNMERGED)
     if row["state"] == "ready":
         return f"merge the PR of {row['dep']}" + (f" (#{row['pr']})" if row["pr"] else "")
+    if row["state"] == "planned":
+        return f"start {row['dep']}"
     return f"resume {row['dep']}" if row["state"] == "open" else f"{row['dep']} has no branch: check `requires`"
 
 
 def blocked(rows: list[dict]) -> bool:
-    return any(r["state"] in ("open", "ready", "unknown") for r in rows)
+    return any(r["state"] in UNMERGED for r in rows)
 
 
 def missing(rows: list[dict]) -> bool:
@@ -2631,23 +2648,36 @@ def cmd_start(args):
     check_change_id(name)
     requires = parse_requires([opt(args, "--requires") or ""], name)
     title = opt(args, "--title") or name
-    pr_title = opt(args, "--pr-title") or title
     base = base_branch(opt(args, "--base"))
     branch = CFG["branch_prefix"] + name
     wt = ROOT / CFG["worktree_dir"] / f"sdd-{name}"
-    dep_rows = dep_states(name, requires, base, ROOT) if requires else []  # dies on a cycle, before any side effect
     if wt.exists() or git("rev-parse", "--verify", "-q", f"refs/heads/{branch}")[0] == 0:
         die(f"{branch} or {wt.relative_to(ROOT)} already exists; use `resume {name}`", 1)
-    if not requires:  # otherwise dep_states fetched the base already
-        git_ok("fetch", "origin", base)
+    git_ok("fetch", "origin", base)
     if git("cat-file", "-e", f"origin/{base}:.claude/sdd.json")[0] != 0:
         die(f"commit and push .claude/sdd.json (and .gitignore) to {base} first: the worktree starts from origin/{base}", 1)
+    # A change planned on the base (intent.md committed before `start`) is adopted, not
+    # scaffolded: its intent.md is the one source of its title and requires.
+    plan = planned_at(f"origin/{base}", name)
+    if plan is not None:
+        if state_at(f"origin/{base}", f"{CFG['changes_dir']}/{name}/state.json") is not None:
+            die(f"{name} has a state.json on {base}: it was started already; use `resume {name}`", 1)
+        planned = parse_requires([",".join(str(x) for x in plan.list("requires"))], name)
+        if "--requires" in args and requires != planned:
+            die(f"--requires {','.join(requires) or '-'} differs from intent.md requires "
+                f"{','.join(planned) or '-'}: edit the intent on {base}, or drop --requires")
+        if "--title" in args and title != (plan.str("title") or name):
+            die(f"--title differs from intent.md title '{plan.str('title')}': drop --title")
+        requires, title = planned, plan.str("title") or name
+    pr_title = opt(args, "--pr-title") or title
+    dep_rows = dep_states(name, requires, base, ROOT) if requires else []  # dies on a cycle, before any side effect
     git_ok("worktree", "add", str(wt), "-b", branch, f"origin/{base}")
     try:
-        code, out = sh([sys.executable, str(Path(__file__).resolve()), "new", name, "--title", title], wt)
-        if code != 0:
-            die(out, 1)
         d = wt / CFG["changes_dir"] / name
+        if plan is None:
+            code, out = sh([sys.executable, str(Path(__file__).resolve()), "new", name, "--title", title], wt)
+            if code != 0:
+                die(out, 1)
         save_state(d, {"phase": "spec", "branch": branch, "base": base, "pr": None, "pr_url": None,
                        "requires": requires})
         commit_all(wt, f"chore(sdd): start {name}")
@@ -2670,6 +2700,8 @@ def cmd_start(args):
         commit_all(wt, f"chore(sdd): record PR #{num}")
         push(wt)
     print(f"worktree {wt}")
+    if plan is not None:
+        print(f"adopted planned {CFG['changes_dir']}/{name}/ (title and requires from intent.md)")
     print(f"branch {branch} (base {base})")
     if num:
         print(f"pr {num} {url}")
@@ -2677,7 +2709,7 @@ def cmd_start(args):
         print(f"PR missing ({(out.splitlines() or ['gh failed'])[-1][:120]}): create a draft PR for "
               f"{branch}, then run `set-pr {name} <number>`")
     if blocked(dep_rows):  # `missing`/`ok` don't matter: the branch was just cut from origin/<base>
-        for line in dep_lines([r for r in dep_rows if r["state"] in ("open", "ready", "unknown")]):
+        for line in dep_lines([r for r in dep_rows if r["state"] in UNMERGED]):
             print(f"WARN requires {line}")
         print("WARN spec work may go on; plan and later phases wait until they are merged")
     print(f"next: EnterWorktree path={wt}")
@@ -2746,10 +2778,14 @@ def cmd_requires(args):
     st["requires"] = [] if "--clear" in args else parse_requires(args[1:], args[0])
     rows = dep_states(args[0], st["requires"], base_of(st), ROOT) if st["requires"] else []  # dies on a cycle
     save_state(d, st)
+    doc = read_doc(d / "intent.md")
+    if "requires" in doc.fm:  # a planned change keeps its intent in step with state.json
+        doc.fm.set("requires", st["requires"])
+        write_doc(d / "intent.md", doc.fm, doc.body)
     commit_all(ROOT, f"chore(sdd): {args[0]} requires {','.join(st['requires']) or 'nothing'}")
     push(ROOT)
     print(f"{args[0]}: requires {','.join(st['requires']) or '-'}")
-    for line in dep_lines([r for r in rows if r["state"] in ("open", "ready", "unknown")]):
+    for line in dep_lines([r for r in rows if r["state"] in UNMERGED]):
         print(f"WARN requires {line}")
 
 

@@ -1540,6 +1540,82 @@ class TestDeps(GitCase):
         self.assertEqual(self.git("status", "--porcelain", cwd=wt), "")
 
 
+class TestPlanned(GitCase):
+    """Changes planned on the base (intent.md committed before `start`), as a backlog."""
+
+    def plan(self, name: str, title: str = "Planned", requires: str = ""):
+        self.assertEqual(self.sdd("new", name, "--title", title)[0], 0)
+        intent = self.root / f"changes/{name}/intent.md"
+        text = intent.read_text().replace(f"title: {title}\n", f'title: "{title}"\nrequires: [{requires}]\n')
+        intent.write_text(text.replace("## Why\n", "## Why\nWritten while planning.\n"))
+        self.git("add", "-A", cwd=self.root)
+        self.git("commit", "-qm", f"plan {name}", cwd=self.root)
+        self.git("push", "-q", "origin", "main", cwd=self.root)
+
+    def test_start_adopts_a_planned_change_and_keeps_its_intent(self):
+        self.plan("010-dep", "The dependency")
+        self.plan("020-c1", "Change one", "010-dep")
+        code, out = self.sdd("start", "020-c1")
+        self.assertEqual(code, 0, out)
+        self.assertIn("adopted planned changes/020-c1/", out)
+        self.assertIn("WARN requires planned 010-dep planned on main, not started", out)
+        wt = self.root / ".claude/worktrees/sdd-020-c1"
+        self.assertIn("Written while planning.", (wt / "changes/020-c1/intent.md").read_text())
+        self.assertEqual(self.state(wt, "020-c1")["requires"], ["010-dep"])
+        self.assertIn("--title Change one", self.log.read_text())
+        code, out = self.sdd("deps", "020-c1", cwd=wt)
+        self.assertEqual(code, 1, out)
+        self.assertIn("next: start 010-dep", out)
+
+    def test_start_refuses_flags_that_contradict_the_intent(self):
+        self.plan("010-dep")
+        self.plan("020-c1", "Change one", "010-dep")
+        self.assertEqual(self.sdd("start", "020-c1", "--requires", "010-dep")[0], 0)
+        self.plan("030-c2", "Change two", "010-dep")
+        code, out = self.sdd("start", "030-c2", "--requires", "020-c1")
+        self.assertEqual(code, 2, out)
+        self.assertIn("differs from intent.md requires 010-dep", out)
+        code, out = self.sdd("start", "030-c2", "--title", "Other")
+        self.assertEqual(code, 2, out)
+        self.assertFalse((self.root / ".claude/worktrees/sdd-030-c2").exists())
+
+    def test_start_refuses_a_planned_change_already_started_on_the_base(self):
+        self.plan("020-c1")
+        (self.root / "changes/020-c1/state.json").write_text('{"phase": "spec", "branch": "sdd/020-c1"}')
+        self.git("add", "-A", cwd=self.root)
+        self.git("commit", "-qm", "stray state", cwd=self.root)
+        self.git("push", "-q", "origin", "main", cwd=self.root)
+        code, out = self.sdd("start", "020-c1")
+        self.assertEqual(code, 1, out)
+        self.assertIn("started already", out)
+
+    def test_a_cycle_in_planned_requires_is_refused_before_any_side_effect(self):
+        self.plan("010-a", "A", "020-b")
+        self.plan("020-b", "B", "010-a")
+        code, out = self.sdd("start", "010-a")
+        self.assertEqual(code, 1, out)
+        self.assertIn("cycle 010-a -> 020-b -> 010-a", out)
+        self.assertEqual(self.git("branch", "--list", "sdd/010-a", cwd=self.root), "")
+
+    def test_new_points_at_start_for_a_planned_change(self):
+        self.plan("020-c1")
+        code, out = self.sdd("new", "020-c1")
+        self.assertNotEqual(code, 0)
+        self.assertIn("a planned change, `start` adopts it", out)
+
+    def test_requires_command_keeps_the_intent_in_step(self):
+        self.plan("010-dep")
+        self.plan("020-c1", "Change one", "010-dep")
+        self.assertEqual(self.sdd("start", "020-c1")[0], 0)
+        wt = self.root / ".claude/worktrees/sdd-020-c1"
+        self.assertEqual(self.sdd("requires", "020-c1", "--clear", cwd=wt)[0], 0)
+        self.assertIn("requires: []", (wt / "changes/020-c1/intent.md").read_text())
+
+    def test_start_without_a_plan_is_unchanged(self):
+        wt = self.start()
+        self.assertNotIn("requires", (wt / "changes/c1/intent.md").read_text())
+
+
 class TestBaselineProof(GitCase):
     """Baseline tests are frozen on unchanged code and re-run on the base commit."""
     def setUp(self):

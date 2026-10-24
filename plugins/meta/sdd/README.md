@@ -119,10 +119,14 @@ For a full change or a fix the lead runs `sdd start <id>` before any artifact ex
   lead runs `sdd checkpoint <id> [--phase P] -m "<message>"`: store the phase, commit all,
   push. It refuses to run off the change's branch.
 - **Dependencies**: `sdd start <id> --requires a,b` (or `sdd requires <id> a b`, `--clear`)
-  stores the changes this one needs in `state.json`. A required change is done when its
+  stores the changes this one needs in `state.json`.
+- **Planned changes**: a backlog can be committed to the base ahead of time with `sdd new`,
+  each intent.md carrying `requires: [...]`. `sdd start <id>` then adopts the folder instead
+  of scaffolding it, taking title and requires from the intent; a planned dependency shows as
+  `planned` with `next: start <dep>`. A required change is done when its
   archive is on `origin/<base>`, i.e. its PR is **merged**. `sdd deps <id>` lists each one
   (`ok`, `missing` = merged but not in this branch yet, `ready` = finished, PR unmerged,
-  `open`, `unknown`), transitively; cycles are refused. Spec work can start anyway, but
+  `open`, `planned`, `unknown`), transitively; cycles are refused. Spec work can start anyway, but
   `checkpoint --phase plan` (or later) and `resume` refuse until all are merged. Once they
   are, `resume` / `checkpoint` merge `origin/<base>` into the branch, so the dependency's
   specs and code are there. The lead handles a blocked resume by resuming the unfinished
