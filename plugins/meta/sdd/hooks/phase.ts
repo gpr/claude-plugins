@@ -55,7 +55,7 @@ export function phaseOf(change: SddChange, running: readonly string[]): PhaseId 
       }
       if (isRunning('spec-author')) return 'spec'
       // a declared surface without contract files yet: the contract step is next
-      if (isRunning('contract-designer') || (change.surface?.length && !change.contracts)) return 'contract'
+      if (isRunning('contract-designer') || (change.size !== 'baseline' && change.surface?.length && !change.contracts)) return 'contract'
       return 'gate1'
     case 'approved':
       return isRunning('planner') || change.tasks.length === 0 ? 'plan' : 'gate2'

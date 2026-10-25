@@ -268,7 +268,16 @@ export async function checkPath(
 }
 
 const WRITE_BASH =
-  /(>>?|\btee\b|\bsed\s+-i|\bperl\s+-[a-z]*i|\bmv\b|\bcp\b|\brm\b|\btouch\b|\bln\b|\bmkdir\b|\brmdir\b|\btruncate\b|\bdd\b|\bgit\s+(checkout|restore|rm|mv|apply)\b|\bpatch\b|\binstall\b|write_text|open\([^)]*['"][wa])/
+  /(\btee\b|\bsed\s+-i|\bperl\s+-[a-z]*i|\bmv\b|\bcp\b|\brm\b|\btouch\b|\bln\b|\bmkdir\b|\brmdir\b|\btruncate\b|\bdd\b|\bgit\s+(checkout|restore|rm|mv|apply)\b|\bpatch\b|\binstall\b|write_text|open\([^)]*['"][wa])/
+
+/** An output redirect: a `>` outside quotes is the only one that writes (`grep "=>" f` does not). */
+const GT = />/
+
+/** Quoted strings that do not follow a redirect operator (a redirect's target keeps its quotes). */
+const QUOTED = /(?<!>\|?\s*)("(?:[^"\\]|\\.)*"|'[^']*')/g
+
+/** Heredoc bodies: their text is data, not commands (`cat > f <<EOF` keeps its first line). */
+const HEREDOC = /(<<-?\s*(['"]?)(\w+)\2[^\n]*)\n[\s\S]*?(?:\n\s*\3(?=\n|$)|$)/g
 
 /** fd duplications and /dev/null sinks (`2>&1`, `>/dev/null`): redirects that write no file. */
 const FD_REDIRECT = /[0-9]*>&[0-9]*-?|[0-9]*>>?\s*\/dev\/null\b/g
@@ -294,6 +303,8 @@ export function segments(cmd: string): string[] {
     } else if (c === '"' || c === "'") {
       quote = c
       cur += c
+    } else if (c === '|' && cmd[i - 1] === '>') {
+      cur += c // the clobber redirect `>|`, not a pipe
     } else if (c === ';' || c === '\n' || c === '|' || (c === '&' && cmd[i + 1] !== '>' && cmd[i - 1] !== '>')) {
       out.push(cur)
       cur = ''
@@ -325,7 +336,7 @@ export function checkBash(cmd: string, role: Role, cfg: Cfg, bases: string[]): s
   const { specs_dir: S, changes_dir: C, adr_dir: A, acceptance_dir: T } = cfg
   const start = normalize(bases[0] ?? '/')
   let dir = start
-  for (const seg of segments(cmd.replace(FD_REDIRECT, ''))) {
+  for (const seg of segments(cmd.replace(HEREDOC, '$1').replace(FD_REDIRECT, ''))) {
     const ws = words(seg)
     const head = (ws[0] ?? '').replace(/^\(+/, '')
     if (head === 'cd' || head === 'pushd') {
@@ -334,10 +345,15 @@ export function checkBash(cmd: string, role: Role, cfg: Cfg, bases: string[]): s
       dir = to === undefined || /^[-~$]/.test(to) ? start : to.startsWith('/') ? normalize(to) : normalize(`${dir}/${to}`)
       continue
     }
-    const targets = [...seg.matchAll(REDIRECT)].map(m => m[1] ?? m[2] ?? m[3] ?? '')
+    // quoted strings out of the way (a `>` inside one is text), put back for the words
+    const quoted: string[] = []
+    const bare = seg.replace(QUOTED, m => `\0${quoted.push(m) - 1}\0`)
+    const restore = (t: string) => t.replace(/\0(\d+)\0/g, (_, i) => quoted[Number(i)] ?? '')
+    const targets = [...bare.matchAll(REDIRECT)].map(m => restore(m[1] ?? m[2] ?? m[3] ?? ''))
     // what the segment writes besides its redirects (`pytest tests > /tmp/log` writes only /tmp/log)
-    const rest = seg.replace(REDIRECT, ' ')
-    const writes = WRITE_BASH.test(rest)
+    const bareRest = bare.replace(REDIRECT, ' ')
+    const rest = restore(bareRest)
+    const writes = WRITE_BASH.test(rest) || GT.test(bareRest)
     if (!writes && targets.length === 0) continue
     const restWords = words(rest)
     const args = restWords.slice(1).filter(w => !w.startsWith('-'))
