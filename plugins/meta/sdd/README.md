@@ -113,7 +113,10 @@ and not migrated: see `docs/how-to/migrate-to-okf-layout.md`.
 | Mod | `hooks/register.tsx`, `hooks/guard.ts`, `hooks/phase.ts` | lead role for the main conversation, write guard per agent, the `sdd` tool, status band, `/sdd` and `/sdd phase` panes |
 
 ## Branches, PRs and resume
-For a full change or a fix the lead runs `sdd start <id>` before any artifact exists:
+For a full change or a fix the lead runs `sdd start <slug>` before any artifact exists:
+- the change id `<NNNN>-<YYMMDD>-<slug>` (e.g. `0007-261025-add-login`): the next number not
+  used by a change, an archive or an `sdd/` branch (local, on `origin/<base>` or pushed from
+  another machine), today's date and the slug. Every later command takes this id.
 - branch `sdd/<id>` from `origin/<base>`, a worktree in `.claude/worktrees/sdd-<id>` (the
   lead moves into it with `EnterWorktree`), the scaffolded change pushed, and a **draft PR**
   opened with `gh`. If `gh` is missing or fails, the lead opens the PR and records it with
@@ -126,7 +129,7 @@ For a full change or a fix the lead runs `sdd start <id>` before any artifact ex
 - After every artifact outcome (spec, plan, each test task, each impl task, each fix) the
   lead runs `sdd checkpoint <id> [--phase P] -m "<message>"`: store the phase, commit all,
   push. It refuses to run off the change's branch.
-- **Dependencies**: `sdd start <id> --requires a,b` (or `sdd requires <id> a b`, `--clear`)
+- **Dependencies**: `sdd start <slug> --requires a,b` (or `sdd requires <id> a b`, `--clear`)
   stores the changes this one needs in `state.json`. A required change is done when its
   archive is on `origin/<base>`, i.e. its PR is **merged**. `sdd deps <id>` lists each one
   (`ok`, `missing` = merged but not in this branch yet, `ready` = finished, PR unmerged,

@@ -40,8 +40,10 @@ If it starts with `resume`, see "Resume" below; with `adopt`, see "Adopt" below.
 
 ## Branch, worktree, PR, checkpoints
 Every full change and fix lives on its own branch `sdd/<id>` in its own worktree, with a
-draft PR. `sdd start` creates all three; `state.json` stores `phase`, branch, base and PR
-number. Direct-path work has no change id and none of this.
+draft PR. `sdd start <slug>` creates all three and generates the change id
+`<NNNN>-<YYMMDD>-<slug>` (next free number, today's date): use the `id` line it prints as
+`<id>` from then on. `state.json` stores `phase`, branch, base and PR number. Direct-path work
+has no change id and none of this.
 - **Checkpoint**: each time an agent (or you) finishes an artifact, run
   `sdd checkpoint <id> [--phase <next>] -m "<conventional message>"`. It stores the phase,
   commits everything and pushes. Phase ids: `spec contract gate1 plan gate2 acceptance implement
@@ -79,7 +81,7 @@ number. Direct-path work has no change id and none of this.
 (sdd:formats), with passing acceptance tests, and changes no code.
 Delegate to `Explore` (medium): the area's public surface, the files that implement it, and
 existing tests for it, plus decisions the code commits to (with file evidence); skip this when
-`sdd:discover` already gave these findings. `sdd start <id> --title "Baseline: <area>" --pr-title "docs(<id>): baseline spec"`,
+`sdd:discover` already gave these findings. `sdd start <area> --title "Baseline: <area>" --pr-title "docs(<area>): baseline spec"`,
 enter the worktree, set `size: baseline` in intent.md, then steps 2.2-6 as usual (spec-author
 with the Explore findings, told the change is an adopt; Gate 1 asks "is this what the code
 does, and what it should keep doing?"). Step 6 ends with `--phase verify`; skip step 7 and the
@@ -96,7 +98,7 @@ Apply this rule, in order, and state the result in one line:
 - Makes a decision with lasting consequences (technology, data model, boundary,
   security posture) -> **full change** with ADR, even if behavior is unchanged.
 - Code diverges from what users expect, but no living criterion covers it (an existing
-  repo) -> **fix with a criterion**. `sdd start <id> --title ... --pr-title "fix: ..."`, enter the
+  repo) -> **fix with a criterion**. `sdd start <slug> --title ... --pr-title "fix: ..."`, enter the
   worktree, set `size: fix` in intent.md, delegate to `spec-author` (request, Explore
   findings, "a fix: only ADDED criteria"): it writes the correct behavior as a criterion,
   plus Baseline ones for kept behavior nearby. `sdd checkpoint <id> --phase gate1 -m "docs(<id>): fix criterion"`.
@@ -106,7 +108,7 @@ Apply this rule, in order, and state the result in one line:
   needs more than ADDED criteria (a changed criterion, a section, an invariant, an ADR),
   `sdd check` refuses it: re-triage as a full change (step 9).
 - Code diverges from an existing acceptance criterion or invariant (bug) -> **fix**: no
-  spec delta, but a failing acceptance test first. `sdd start <id> --title ... --pr-title "fix: ..."`, enter the worktree,
+  spec delta, but a failing acceptance test first. `sdd start <slug> --title ... --pr-title "fix: ..."`, enter the worktree,
   set `size: fix` in intent.md, then `sdd checkpoint <id> --phase plan -m "chore(<id>): fix"` (so the size is committed
   with the phase), write one test task citing the existing criterion (`capabilities/<id>#AC-NN`) or invariant, then go
   to step 4 (it runs step 6 alongside).
@@ -114,9 +116,10 @@ Apply this rule, in order, and state the result in one line:
   to `general-purpose` (or do it yourself if trivial), run the unit tests, done.
 
 ## 2. Capture intent and spec delta
-1. Pick a kebab-case id. If the request builds on an open change (its PR not merged yet),
-   add `--requires <id>[,<id>]`. `sdd start <id> --title "<title>" --pr-title "<feat|fix>: <title>"`
-   (conventional type from triage). Then `EnterWorktree` with `path` = the worktree it
+1. Pick a short kebab-case slug (`add-login`), never a number or date: `start` adds them. If the
+   request builds on an open change (its PR not merged yet), add `--requires <id>[,<id>]` with
+   the full ids. `sdd start <slug> --title "<title>" --pr-title "<feat|fix>: <title>"`
+   (conventional type from triage); the change id is its `id` line. Then `EnterWorktree` with `path` = the worktree it
    prints. Do this before any agent writes an artifact. If it prints `PR missing`, create a
    draft PR for the branch (GitHub tools) and run `sdd set-pr <id> <number>`.
 2. Delegate to `spec-author` with: change id, the user's request verbatim, and the

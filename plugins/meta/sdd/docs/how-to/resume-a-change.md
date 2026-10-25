@@ -16,7 +16,7 @@ generated:
 1. Ask the lead:
 
    ```
-   /sdd:change resume add-login
+   /sdd:change resume 0003-261020-add-login
    ```
 
    If you only know the PR number, say so ("resume the change in PR 42"). The lead runs `sdd resume --pr 42`, which asks `gh` for the branch.
@@ -24,12 +24,12 @@ generated:
 2. The lead runs `sdd resume <id>`. It fetches the branch, reuses or creates the worktree `.claude/worktrees/sdd-<id>`, fast-forwards it, and prints:
 
    ```
-   worktree /repo/.claude/worktrees/sdd-add-login
-   branch sdd/add-login
+   worktree /repo/.claude/worktrees/sdd-0003-261020-add-login
+   branch sdd/0003-261020-add-login
    pr 42 https://github.com/o/r/pull/42
    status approved
    phase plan: step 4: planner writes plan.md and tasks.md
-   next: EnterWorktree path=/repo/.claude/worktrees/sdd-add-login
+   next: EnterWorktree path=/repo/.claude/worktrees/sdd-0003-261020-add-login
    ```
 
 3. The lead enters the worktree, runs `sdd status <id>`, and continues at the step the phase names. If the files say more was done than the phase (a step finished without a checkpoint), the files win.
@@ -53,7 +53,7 @@ flowchart TD
 ```
 open other-change phase implement pr #40
 blocked: required changes are not merged into main
-next: resume other-change, then `resume add-login` again
+next: resume other-change, then `resume 0003-261020-add-login` again
 ```
 
 A required change isn't merged yet. The lead resumes and finishes that one first. If the output says `next: merge the PR of <dep> (#40)`, merge that PR yourself, then tell the lead to resume again. The base is merged into the branch at that point. See [Manage dependencies](manage-dependencies.md).
@@ -63,9 +63,9 @@ A required change isn't merged yet. The lead resumes and finishes that one first
 Your local branch and `origin` diverged (commits made on both sides). sdd won't guess. In the worktree:
 
 ```
-cd .claude/worktrees/sdd-add-login
+cd .claude/worktrees/sdd-0003-261020-add-login
 git fetch origin
-git rebase origin/sdd/add-login     # or: git merge origin/sdd/add-login
+git rebase origin/sdd/0003-261020-add-login     # or: git merge origin/sdd/0003-261020-add-login
 git push
 ```
 
