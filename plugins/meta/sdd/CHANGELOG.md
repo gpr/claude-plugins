@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## sdd-0.12.0 - 2026-10-25
+#### Features
+- (**sdd**) add discover and from-doc skills (#31) - (b81bcba) - Grégory R.
+
+- - -
+
 ## sdd-0.11.0 - 2026-10-25
 #### Features
 - (**sdd**) contract step with TypeSpec API, CLI synopsis and UI mockup (#30) - (e422247) - Grégory R.

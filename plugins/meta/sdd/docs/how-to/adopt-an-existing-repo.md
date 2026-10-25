@@ -7,6 +7,7 @@ sources:
   - resource: ../../tools/sdd.py
   - resource: ../../skills/change/SKILL.md
   - resource: ../../skills/formats/SKILL.md
+  - resource: ../../skills/discover/SKILL.md
 generated:
   by: claude-code
   at: 2026-10-24T00:00:00Z
@@ -77,6 +78,16 @@ A **bug** in code that no criterion covers is a `fix` that adds its criterion fi
 ```
 
 The lead starts a `size: baseline` change titled `Baseline: <area>`, with the PR title `docs(<id>): baseline spec`. It follows the usual steps up to the acceptance tests, then goes straight to verify, with no implementation and no code review. `sdd check` enforces the rules: only Baseline criteria and new invariants, and only `(test)` tasks. The verifier fails the change if anything outside the change folder and the acceptance tests moved. Since it is a `docs` change, merging it releases nothing.
+
+## 4. Or discover the whole repo
+
+```
+/sdd:discover
+```
+
+The lead asks `Explore` to map the repository into areas (public surface, implementing files, tests) and into the decisions the code commits to (technology, data model, boundary, security posture). You pick the areas, their order and which decisions to record. Then it runs `adopt` once per area, one change and one PR each, and asks after each whether to go on. `/sdd:discover billing exports` limits it to the named areas.
+
+Decisions are written as draft ADRs whose Context says they were recorded after the fact; `sync` accepts them. A decision with no rejected alternative visible in the code is not made up: it stays a line in the capability's Scope. Invariants are written only for rules the code already enforces.
 
 ## When a Baseline test fails
 

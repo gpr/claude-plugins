@@ -105,6 +105,8 @@ and not migrated: see `docs/how-to/migrate-to-okf-layout.md`.
 | Part | Where | What it does |
 |---|---|---|
 | Lead workflow | `skills/change` (`/sdd:change`) | triage, gates, routing, close-out, reopen path |
+| Discover | `skills/discover` (`/sdd:discover`) | maps an existing repo into areas and decisions, then runs one `adopt` change per area: tested Baseline criteria and draft ADRs |
+| Document to changes | `skills/from-doc` (`/sdd:from-doc <file>`) | splits a spec or PRD into changes with triage and `requires`, starts them after approval, runs the first |
 | Format rules | `skills/formats` (`sdd:formats`) | Capability/Invariant/CapabilityDelta/ADR/task formats, preloaded into the authoring agents |
 | Agents | `agents/` (`sdd:spec-author`, `sdd:contract-designer`, `sdd:planner`, `sdd:acceptance-tester`, `sdd:implementer`, `sdd:verifier`) | one job each, minimal tools, project memory in `.claude/agent-memory/sdd-<agent>/` |
 | Spec tool | `tools/sdd.py`, exposed as the `mcp__sdd__sdd` and `mcp__sdd__bundle` tools | check, context bundles, delta-new from the concept templates, delta-stub and contract-stub with base hashes, freeze/verify-frozen, deterministic per-unit sync into the specs bundle, ADR accept/supersede, bundle check/fix |
