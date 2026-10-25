@@ -7,6 +7,7 @@ export type Cfg = {
   changes_dir: string
   adr_dir: string
   acceptance_dir: string
+  contracts_dir: string
 }
 
 export const DEFAULT_CFG: Cfg = {
@@ -14,11 +15,13 @@ export const DEFAULT_CFG: Cfg = {
   changes_dir: 'changes',
   adr_dir: 'adrs',
   acceptance_dir: 'tests/acceptance',
+  contracts_dir: 'contracts',
 }
 
 export type Role =
   | 'lead'
   | 'spec-author'
+  | 'contract-designer'
   | 'planner'
   | 'acceptance-tester'
   | 'implementer'
@@ -37,7 +40,7 @@ const DECIDED = new Set(['stable', 'deprecated', 'accepted', 'superseded'])
 
 export const WRITE_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit'])
 
-const ROLES: Role[] = ['spec-author', 'planner', 'acceptance-tester', 'implementer', 'verifier']
+const ROLES: Role[] = ['spec-author', 'contract-designer', 'planner', 'acceptance-tester', 'implementer', 'verifier']
 
 /** Agent type as the engine reports it (`sdd:implementer`) to a role. */
 export function roleOf(agentType: string | undefined): Role {
@@ -87,6 +90,14 @@ export function relTo(path: string, bases: string[]): { rel: string; base: strin
 }
 
 const under = (rel: string, dir: string) => rel === dir || rel.startsWith(`${dir}/`)
+
+/** The kinds of contract file (sdd.py SURFACES): their directories in the living contracts dir
+ * are written only by `sdd sync`. The rest of that dir (tspconfig, emitter output) is not. */
+const SURFACES = ['api', 'cli', 'ui']
+
+export function isLivingContract(rel: string, cfg: Cfg): boolean {
+  return SURFACES.some(k => under(rel, `${cfg.contracts_dir}/${k}`))
+}
 
 /**
  * A workflow agent's own `memory:` directories. Claude Code names them after the agent type
@@ -178,6 +189,9 @@ export async function checkPath(
     return role === 'lead' ? undefined : `${rel}: concept templates are changed by the lead only.`
   }
   if (under(rel, S)) return `${rel}: living specs change only through \`sdd sync <change>\`.`
+  if (isLivingContract(rel, cfg)) {
+    return `${rel}: living contracts change only through a change's contracts/ and \`sdd sync <change>\`.`
+  }
   if (under(rel, `${C}/archive`)) return `${rel}: archived changes are immutable.`
   if (under(rel, C) && rel.endsWith('/frozen.json')) return `${rel}: written only by \`sdd freeze\`.`
   if (under(rel, C) && rel.endsWith('/state.json')) {
@@ -217,6 +231,15 @@ export async function checkPath(
           : `change ${ch} is ${st}: its spec is frozen. Ask the lead to reopen it.`
       }
       return `${rel}: spec-author writes only intent.md, the spec delta and draft ADRs.`
+    }
+    case 'contract-designer': {
+      if (ch && under(rel, `${C}/${ch}/contracts`)) {
+        const st = await chStatus()
+        return st === undefined || st === 'draft'
+          ? undefined
+          : `change ${ch} is ${st}: its contract is frozen. Ask the lead to reopen it.`
+      }
+      return `${rel}: contract-designer writes only ${C}/<change>/contracts/.`
     }
     case 'planner': {
       if (isTopLevelOfChange && (name === 'plan.md' || name === 'tasks.md')) {
@@ -330,7 +353,9 @@ export function checkBash(cmd: string, role: Role, cfg: Cfg, bases: string[]): s
       if (!hit || hit.rel.startsWith('..')) continue
       const r = hit.rel
       const isProtected =
-        [S, A, '.claude', `${C}/archive`].some(d => under(r, d)) || (under(r, C) && (r.endsWith('/frozen.json') || r.endsWith('/state.json')))
+        [S, A, '.claude', `${C}/archive`].some(d => under(r, d)) ||
+        isLivingContract(r, cfg) ||
+        (under(r, C) && (r.endsWith('/frozen.json') || r.endsWith('/state.json')))
       if (role === 'verifier') return `verifier is read-only (${r}).`
       if (role === 'implementer' && (under(r, T) || (under(r, C) && !r.endsWith('tasks.md')))) {
         return `Bash write touching ${r} is not allowed for the implementer. Report BLOCKED instead.`
@@ -359,6 +384,8 @@ const SDD_RULES: Record<string, Role[]> = {
   'delta-new': ['lead', 'spec-author'],
   'delta-stub': ['lead', 'spec-author'],
   'adr-new': ['lead', 'spec-author'],
+  'contract-stub': ['lead', 'contract-designer'],
+  'contract-preview': ['lead', 'contract-designer'],
 }
 
 export function checkSdd(sub: string | undefined, role: Role): string | undefined {

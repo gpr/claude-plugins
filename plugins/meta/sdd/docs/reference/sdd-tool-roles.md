@@ -35,17 +35,18 @@ After a mutating subcommand or `check`, the band and panes refresh. Every `check
 
 The caller's role comes from the tool call's `agentId` (see [Guard rules](guard-rules.md#roles)). Subcommands absent from `SDD_RULES` are open to every role.
 
-| Subcommand | lead | spec-author | planner | acceptance-tester | implementer | verifier | other |
-|---|---|---|---|---|---|---|---|
-| `init`, `new`, `set-status`, `sync`, `adr-accept` | ✓ | | | | | | |
-| `start`, `checkpoint`, `set-pr`, `requires`, `resume`, `finish` | ✓ | | | | | | |
-| `freeze` (once per batch of test tasks, so no half-written test is snapshotted) | ✓ | | | | | | |
-| `baseline-tree` | ✓ | | | | | ✓ | |
-| `delta-new`, `delta-stub`, `adr-new` | ✓ | ✓ | | | | | |
-| `config`, `status`, `check`, `context`, `verify-frozen`, `deps` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `bundle <target>` (check only) | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `bundle specs --fix`, `bundle adrs --fix` | ✓ | | | | | | |
-| `bundle <change> --fix` | ✓ | ✓ | | | | | |
+| Subcommand | lead | spec-author | contract-designer | planner | acceptance-tester | implementer | verifier | other |
+|---|---|---|---|---|---|---|---|---|
+| `init`, `new`, `set-status`, `sync`, `adr-accept` | ✓ | | | | | | | |
+| `start`, `checkpoint`, `set-pr`, `requires`, `resume`, `finish` | ✓ | | | | | | | |
+| `freeze` (once per batch of test tasks, so no half-written test is snapshotted) | ✓ | | | | | | | |
+| `baseline-tree` | ✓ | | | | | | ✓ | |
+| `delta-new`, `delta-stub`, `adr-new` | ✓ | ✓ | | | | | | |
+| `contract-stub`, `contract-preview` | ✓ | | ✓ | | | | | |
+| `config`, `status`, `check`, `context`, `contract-diff`, `verify-frozen`, `deps` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `bundle <target>` (check only) | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `bundle specs --fix`, `bundle adrs --fix` | ✓ | | | | | | | |
+| `bundle <change> --fix` | ✓ | ✓ | | | | | | |
 
 A refusal reads ``[sdd] `sdd <sub>` is run by <roles> only, not <role>.`` `bundle` is not in `SDD_RULES`: `checkBundle` decides it, from the target and the `--fix` flag (`--fix` may sit anywhere in `args`). Refusals: ``[sdd] `bundle specs --fix` is run by the lead only, not <role>.`` (`adrs` alike), ``[sdd] `bundle <id> --fix` is run by lead or spec-author only, not <role>.``, `bundle` with other than one target is `usage: bundle <specs|adrs|change> [--fix]`.
 

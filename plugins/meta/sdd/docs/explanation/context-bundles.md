@@ -13,7 +13,7 @@ generated:
 
 # Context bundles
 
-`sdd context <change> <task> [--plan]` prints exactly what one agent needs for one task. The lead pastes it into the agent's prompt.
+`sdd context <change> <task> [--plan]` prints exactly what one agent needs for one task, and `sdd context <change> --contract` what the contract-designer needs for the whole change. The lead pastes it into the agent's prompt.
 
 ## What each task gets
 
@@ -24,11 +24,13 @@ flowchart LR
         D["delta / living spec<br/>criteria, invariants"]
         AD["ADRs<br/>Decision only"]
         PC["plan.md<br/>Contracts"]
+        CF["contract files<br/>citing the task's criteria"]
         PF["plan.md<br/>whole"]
         FZ["tests/acceptance<br/>frozen paths"]
     end
     T & D & AD --> CT["context T1<br/>(test task)"]
-    PC --> CT
+    PC & CF --> CT
+    CF --> CI
     T & D & AD --> CI["context T2 --plan<br/>(impl task)"]
     FZ & PF --> CI
     CT --> ATS([acceptance-tester])
@@ -42,10 +44,13 @@ flowchart LR
 | the `## Decision` paragraph of each ADR it cites, with its status | ✓ | ✓ | ✓ |
 | the id and title of every invariant in force that the task does not cite (`## Invariants in force`) | | ✓ | ✓ |
 | the plan's `## Contracts` section | ✓ | | (in the full plan) |
+| the contract files citing its criteria, in full (the change's copy, else the living file); paths of the others | ✓ | ✓ | ✓ |
 | the paths of the frozen acceptance tests for its criteria | | ✓ | ✓ |
 | the whole plan | | | ✓ |
 
 The workflow uses `context <id> <Tn>` for test tasks and `context <id> <Tn> --plan` for impl tasks.
+
+`context <id> --contract` gives the contract-designer the change's `surface`, the criteria it adds or modifies, and the contract files that cite them or the same capabilities, in full; other contract files by path. That bundle is why the contract-designer has no `Grep` or `Glob`: it designs the surface from the criteria and the current contract, not from the code.
 
 ## Why minimal
 

@@ -32,6 +32,8 @@ Checks, in order (stop at the first hard failure and report it):
 5. Diff review (`git diff` against the base branch, or `git status` + the files the tasks
    list). Check only:
    - code that contradicts an ADR decision listed for the change;
+   - a public surface that differs from the change's contract files (`changes/<id>/contracts/`:
+     a route, status code, field, flag, exit code, `data-testid` or label the tests do not pin);
    - behavior added that no criterion asks for, or that a Non-goal excludes;
    - a criterion whose test passes but whose implementation is a special case for the test
      (hard-coded values, test-detection) instead of the behavior;

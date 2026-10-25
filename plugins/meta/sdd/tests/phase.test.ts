@@ -16,6 +16,10 @@ const change = (status: string, tasks: SddTask[] = [], size = 'change'): SddChan
 const CASES: [string, SddChange, string[], string | undefined][] = [
   ['draft while spec-author runs', change('draft'), ['spec-author'], 'spec'],
   ['draft, nobody running: waits on the user', change('draft'), [], 'gate1'],
+  ['draft while contract-designer runs', change('draft'), ['contract-designer'], 'contract'],
+  ['draft, surface declared, no contract files yet', { ...change('draft'), surface: ['api'] }, [], 'contract'],
+  ['draft, surface declared, contracts written: Gate 1', { ...change('draft'), surface: ['api'], contracts: true }, [], 'gate1'],
+  ['draft, surface none: Gate 1', { ...change('draft'), surface: [] }, [], 'gate1'],
   ['draft fix skips the spec', change('draft', [], 'fix'), [], 'plan'],
   ['draft fix with only its test task', change('draft', [task('T1', 'test', false)], 'fix'), [], 'plan'],
   ['draft fix while planner runs', change('draft', [task('T1', 'test', false), task('T2', 'impl', false)], 'fix'), ['planner'], 'plan'],
@@ -58,7 +62,14 @@ for (const [name, c, running, want] of [...CASES, ...STORED]) {
 
 test('a fix lists no spec or Gate 1 step, and its tests come before Gate 2', () => {
   expect(phasesOf(change('draft', [], 'fix')).map(p => p.id)).toEqual(['plan', 'acceptance', 'gate2', 'implement', 'verify', 'sync'])
-  expect(phasesOf(change('draft')).length).toBe(8)
+  expect(phasesOf(change('draft')).length).toBe(9)
+})
+
+test('a change lists the Contract step unless its surface is none', () => {
+  expect(phasesOf(change('draft')).map(p => p.id).slice(0, 3)).toEqual(['spec', 'contract', 'gate1'])
+  expect(phasesOf({ ...change('draft'), surface: ['cli'] }).map(p => p.id)).toContain('contract')
+  expect(phasesOf({ ...change('draft'), surface: [] }).map(p => p.id)).not.toContain('contract')
+  expect(phasesOf({ ...change('draft'), surface: null }).map(p => p.id)).toContain('contract')
 })
 
 test('a fix that adds a criterion lists Spec and Gate 1 first', () => {
@@ -79,7 +90,7 @@ const fixInAcceptance = named('fix-acceptance', change('draft', [task('T1', 'tes
 test('stepOf counts in the change\'s own workflow', () => {
   expect(stepOf(fixInAcceptance)).toBe(1)
   expect(stepOf(fixAtGate2)).toBe(2)
-  expect(stepOf(change('approved', [task('T1', 'test', false)]))).toBe(3)
+  expect(stepOf(change('approved', [task('T1', 'test', false)]))).toBe(4)
   expect(stepOf(change('?'))).toBe(-1)
 })
 

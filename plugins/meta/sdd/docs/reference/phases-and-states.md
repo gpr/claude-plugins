@@ -37,8 +37,8 @@ stateDiagram-v2
 
 | Status | Set by | Meaning |
 |---|---|---|
-| `draft` | template | spec being written; spec-author may edit intent and delta |
-| `approved` | `set-status` after Gate 1 | spec frozen; planner may still edit plan and tasks |
+| `draft` | template | spec being written; spec-author may edit intent and delta, contract-designer the contract files |
+| `approved` | `set-status` after Gate 1 | spec and contract frozen; planner may still edit plan and tasks |
 | `implementing` | `set-status` after Gate 2 | plan frozen; tests and code being written |
 | `verified` | `set-status` after the verifier passes | ready to sync |
 | `archived` | `sync` | merged into `specs/`, moved to `changes/archive/` |
@@ -48,6 +48,7 @@ stateDiagram-v2
 | Phase id | Label | Workflow step | Statuses that fit |
 |---|---|---|---|
 | `spec` | Spec | 2: spec-author writes intent, delta, ADRs | `draft` |
+| `contract` | Contract | 2.4: contract-designer writes the contract files (skipped for `surface: none`) | `draft` |
 | `gate1` | Gate 1 | 3: your review | `draft` |
 | `plan` | Plan | 4: planner writes plan and tasks | `draft`, `approved` |
 | `gate2` | Gate 2 | 5: `sdd check`, then set implementing | `draft`, `approved` |
@@ -77,9 +78,11 @@ flowchart LR
     end
     subgraph full ["full change"]
         direction LR
-        a1[spec] --> a2[gate1] --> a3[plan] --> a4[gate2] --> a5[acceptance] --> a6[implement] --> a7[verify] --> a8[sync] --> a9[done]
+        a1[spec] --> a0["contract<br/>(unless surface: none)"] --> a2[gate1] --> a3[plan] --> a4[gate2] --> a5[acceptance] --> a6[implement] --> a7[verify] --> a8[sync] --> a9[done]
     end
 ```
+
+A full change whose intent.md says `surface: none` skips Contract: Spec goes straight to Gate 1. A fix and a baseline never have a Contract step: their contract is the existing surface.
 
 ### Order for a baseline
 
@@ -96,7 +99,7 @@ The band and panes show the stored phase. For a change without one (made before 
 
 | Status | Derived phase |
 |---|---|
-| `draft`, full change | `spec` while spec-author runs, else `gate1` |
+| `draft`, full change | `spec` while spec-author runs; `contract` while contract-designer runs, or while `surface` lists a kind and no contract file exists yet; else `gate1` |
 | `draft`, fix with a delta and no tasks | `spec` while spec-author runs, else `gate1` |
 | `draft`, fix | `plan` while planner runs or no `(impl)` task yet; then `acceptance` while acceptance-tester runs or a `(test)` task is open; else `gate2` |
 | `approved` | `plan` while planner runs or no tasks; else `gate2` |

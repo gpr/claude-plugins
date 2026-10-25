@@ -22,9 +22,13 @@ Steps
    intent.md, and the code the delta touches (Grep/Glob first, read only what you need).
 2. Write `changes/<id>/plan.md`:
    - Approach: short, cites criterion, invariant and ADR ids, never restates them.
-   - Contracts: the exact public surface the acceptance tests will call (signatures,
-     endpoints with request/response shapes, CLI flags, events). Acceptance tests are
-     written from this section alone, before the code exists, so it must be complete
+   - Contracts: the exact public surface the acceptance tests will call. When the change
+     has contract files (`changes/<id>/contracts/`, approved at Gate 1), list their paths
+     and add only what they do not cover (library signatures, events); never restate or
+     change them: a wrong contract file is a problem to report. Without contract files
+     (`surface: none`, a fix), write the surface here: signatures, endpoints with
+     request/response shapes, CLI flags, events. Acceptance tests are written from this
+     section and the contract files alone, before the code exists, so it must be complete
      and stable. If a contract is unknowable without a decision, stop and report it.
    - Components: file/module -> criterion and invariant ids.
    - Risks: only real ones.

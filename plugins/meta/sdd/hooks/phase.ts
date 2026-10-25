@@ -3,7 +3,8 @@ import type { SddChange } from '../types'
 // The workflow phases of skills/change, in order. Triage happens before a change exists.
 export const PHASES = [
   { id: 'spec', label: 'Spec', hint: 'spec-author writes intent, delta and ADRs' },
-  { id: 'gate1', label: 'Gate 1', hint: 'your review: intent, capabilities, invariants and ADRs' },
+  { id: 'contract', label: 'Contract', hint: 'contract-designer writes the TypeSpec, CLI synopsis or UI mockup' },
+  { id: 'gate1', label: 'Gate 1', hint: 'your review: intent, capabilities, invariants, contract and ADRs' },
   { id: 'plan', label: 'Plan', hint: 'planner writes plan.md and tasks.md' },
   { id: 'gate2', label: 'Gate 2', hint: 'sdd check, then set implementing' },
   { id: 'acceptance', label: 'Acceptance tests', hint: 'acceptance-tester writes failing tests, then freeze' },
@@ -28,7 +29,8 @@ export function phasesOf(change: SddChange) {
   const specFix = change.delta === true || change.phase === 'spec' || change.phase === 'gate1'
   const order =
     change.size === 'fix' ? (specFix ? FIX_SPEC_ORDER : FIX_ORDER) : change.size === 'baseline' ? BASELINE_ORDER : undefined
-  if (!order) return [...PHASES]
+  // `surface: none`: nothing public changes, so no contract step
+  if (!order) return PHASES.filter(p => p.id !== 'contract' || change.surface?.length !== 0)
   return order.map(id => PHASES.find(p => p.id === id)!)
 }
 
@@ -51,7 +53,10 @@ export function phaseOf(change: SddChange, running: readonly string[]): PhaseId 
         if (isRunning('planner') || !change.tasks.some(t => t.kind === 'impl')) return 'plan'
         return isRunning('acceptance-tester') || open('test') ? 'acceptance' : 'gate2'
       }
-      return isRunning('spec-author') ? 'spec' : 'gate1'
+      if (isRunning('spec-author')) return 'spec'
+      // a declared surface without contract files yet: the contract step is next
+      if (isRunning('contract-designer') || (change.surface?.length && !change.contracts)) return 'contract'
+      return 'gate1'
     case 'approved':
       return isRunning('planner') || change.tasks.length === 0 ? 'plan' : 'gate2'
     case 'implementing':

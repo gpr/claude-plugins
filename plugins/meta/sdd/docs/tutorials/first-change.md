@@ -14,7 +14,7 @@ generated:
 
 # Your first spec-driven change
 
-In this tutorial we add a `--name` option to a one-file Python CLI. Along the way you will see every step of the workflow once: triage, the spec delta, Gate 1, the plan, Gate 2, acceptance tests, implementation, verification and sync.
+In this tutorial we add a `--name` option to a one-file Python CLI. Along the way you will see every step of the workflow once: triage, the spec delta, the contract, Gate 1, the plan, Gate 2, acceptance tests, implementation, verification and sync.
 
 It takes about 20 minutes. Everything stays on your machine: a local bare repository plays `origin`, so you need neither GitHub nor `gh`.
 
@@ -93,9 +93,9 @@ next: EnterWorktree path=...
 
 `PR missing` is expected here: there's no GitHub. If the lead offers to open a PR some other way, tell it to continue without one. The band above the prompt now shows the change in phase **Spec**.
 
-## 5. Gate 1: review the spec
+## 5. Gate 1: review the spec and the contract
 
-The spec-author writes `changes/greet-by-name/intent.md` and a new Capability concept, `changes/greet-by-name/specs/capabilities/greeting.md`, from the template `sdd init` installed. Its acceptance criteria look like:
+The spec-author writes `changes/greet-by-name/intent.md` (with `surface: [cli]`: the change alters a command line) and a new Capability concept, `changes/greet-by-name/specs/capabilities/greeting.md`, from the template `sdd init` installed. Its acceptance criteria look like:
 
 ```markdown
 ## Intent
@@ -111,17 +111,47 @@ As a user, I can greet someone by name, so that the greeting is personal.
 - **Then** stdout is `Hello, Ada!` and the exit code is 0
 ```
 
-Your wording will differ. The spec-author also runs `bundle` with `fix` on the change, which regenerates the change's `index.md`. The lead then shows you a compact summary (why, outcome, non-goals, the capability's Intent and each criterion) and asks you to approve, change something, or stop.
+Your wording will differ. The spec-author also runs `bundle` with `fix` on the change, which regenerates the change's `index.md`.
+
+Because the surface is `cli`, the **contract-designer** runs next (the band shows phase **Contract**). It writes `changes/greet-by-name/contracts/cli/greet.md` from the CLI template, with the criteria it serves in a comment:
+
+````markdown
+<!-- capabilities/greeting#AC-01 capabilities/greeting#AC-02 -->
+
+## Synopsis
+
+```
+python greet.py [--name NAME]
+```
+
+## Options
+
+| Option | Value | Default | Meaning |
+|---|---|---|---|
+| `--name` | `NAME` | none | who to greet |
+
+## Output
+
+`Hello, NAME!` on stdout, or `Hello!` without `--name`.
+
+## Exit codes
+
+| Code | When |
+|---|---|
+| 0 | success |
+````
+
+The lead then shows you a compact summary (why, outcome, non-goals, the capability's Intent and each criterion, and the contract: the synopsis line and its options) and asks you to approve, change something, or stop.
 
 This is the one review that needs your full attention. Check that there is a criterion for the default behavior too (`Hello!` without `--name`). If there isn't, answer:
 
 > Change: add a criterion that `greet` without options still prints `Hello!`.
 
-The lead sends that to the same spec-author and shows you Gate 1 again. When it's right, answer **approve**. The lead sets the status to `approved`.
+The lead sends that to the same spec-author (and, if the contract must change too, to the same contract-designer) and shows you Gate 1 again. When it's right, answer **approve**. The lead sets the status to `approved`.
 
 ## 6. Plan and Gate 2
 
-The planner writes `plan.md` (with a **Contracts** section: the `--name` flag and its output) and `tasks.md`:
+The planner writes `plan.md` (its **Contracts** section points to `contracts/cli/greet.md`) and `tasks.md`:
 
 ```
 - [ ] T1 (test) Named and default greeting — capabilities/greeting#AC-01, capabilities/greeting#AC-02
@@ -165,7 +195,7 @@ ADDED capabilities/greeting (AC-01, AC-02)
 synced 1 change(s); ADRs accepted: -; archived -> changes/archive/2026-10-17-greet-by-name
 ```
 
-Open `specs/capabilities/greeting.md` in the worktree. It now holds your capability, word for word as you approved it, with `status: stable`. `specs/capabilities/index.md` lists it, and `specs/log.md` has a new entry under today's date: `* **Update**: greet-by-name: ADDED capabilities/greeting (AC-01, AC-02)`.
+Sync also prints `CONTRACT ADD     cli/greet.md`. Open `specs/capabilities/greeting.md` in the worktree. It now holds your capability, word for word as you approved it, with `status: stable`, and `contracts/cli/greet.md` holds the contract the next change will start from. `specs/capabilities/index.md` lists it, and `specs/log.md` has a new entry under today's date: `* **Update**: greet-by-name: ADDED capabilities/greeting (AC-01, AC-02)`.
 
 Finally `sdd finish` marks the phase `done` and pushes. With GitHub it would mark the PR ready for review. Here it says to do that by hand.
 
@@ -185,7 +215,7 @@ Hello, Ada!
 
 ## What you've done
 
-You turned a one-sentence request into an approved capability, a frozen acceptance test that encodes it, code that passes it, and a living spec that records it. Along the way you reviewed only once: at Gate 1.
+You turned a one-sentence request into an approved capability, a reviewed CLI contract, a frozen acceptance test that encodes it, code that passes it, and a living spec and contract that record it. Along the way you reviewed only once: at Gate 1.
 
 Next:
 - [Your first fix](first-fix.md): the shorter path when code breaks an existing criterion.

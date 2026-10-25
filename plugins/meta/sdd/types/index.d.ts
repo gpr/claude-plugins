@@ -17,6 +17,10 @@ export type SddChange = {
   delta?: boolean
   /** state.json records the base commit its Baseline tests pass on. */
   baseline?: boolean
+  /** intent.md `surface`: api, cli, ui; [] for `none`; null when not set yet. */
+  surface?: string[] | null
+  /** The change has contract files under changes/<id>/contracts/. */
+  contracts?: boolean
 }
 
 export type SddCheck = { isOk: boolean; summary: string; lines: string[]; at: number; withTests: boolean }

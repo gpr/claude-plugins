@@ -2115,5 +2115,200 @@ class TestReviewFixes(SddCase):
 CAP_INV_OLD = "capabilities/auth/old.md"
 
 
+# --------------------------------------------------------------- contracts --
+CLI_CONTRACT = """\
+---
+type: Contract
+title: "greet"
+description: "Prints a greeting."
+---
+
+# greet
+
+<!-- capabilities/tokens#AC-01 -->
+
+## Synopsis
+
+```
+greet --name <name>
+```
+
+## Options
+
+`--name`: who to greet.
+
+## Output
+
+`Hello, <name>`
+
+## Exit codes
+
+0 on success.
+"""
+
+
+class TestContracts(SddCase):
+    def setUp(self):
+        super().setUp()
+        self.added_change()
+        self.edit("changes/c1/intent.md", "surface:\n", "surface: [cli]\n")
+
+    def phase(self, phase: str, change: str = "c1"):
+        self.write(f"changes/{change}/state.json", json.dumps({"phase": phase}))
+
+    def test_missing_surface_is_an_error_at_gate1_only(self):
+        self.edit("changes/c1/intent.md", "surface: [cli]\n", "surface:\n")
+        code, out = self.sdd("check", "c1")
+        self.assertIn("WARN  intent.md has no `surface:`", out)
+        self.phase("gate1")
+        self.assert_fails(self.sdd("check", "c1"), "ERROR intent.md has no `surface:`")
+        self.edit("changes/c1/intent.md", "surface:\n", "surface: none\n")
+        code, out = self.sdd("check", "c1")
+        self.assertNotIn("surface", out)
+
+    def test_declared_surface_needs_files_after_the_contract_step(self):
+        self.assert_ok(self.sdd("check", "c1"))
+        self.phase("gate1")
+        self.assert_fails(self.sdd("check", "c1"), "surface cli declared but changes/c1/contracts/cli/ is empty")
+
+    def test_new_file_from_template_must_cite_a_criterion(self):
+        code, out = self.sdd("contract-stub", "c1", "cli/greet.md")
+        self.assertEqual(code, 0, out)
+        self.assertIn("NEW cli/greet.md (template)", out)
+        text = self.read("changes/c1/contracts/cli/greet.md")
+        for s in ("## Synopsis", "## Options", "## Output", "## Exit codes", 'title: "greet"'):
+            self.assertIn(s, text)
+        self.assert_fails(self.sdd("check", "c1"), "contracts/cli/greet.md: cites no acceptance criterion")
+        self.write("changes/c1/contracts/cli/greet.md", CLI_CONTRACT)
+        self.phase("gate1")
+        self.assert_ok(self.sdd("check", "c1"))
+
+    def test_bad_files_kinds_sections_and_refs(self):
+        self.write("changes/c1/contracts/cli/greet.txt", "x")
+        self.write("changes/c1/contracts/api/x.tsp", "// capabilities/tokens#AC-01\n")
+        self.write("changes/c1/contracts/cli/bye.md", CLI_CONTRACT.replace("## Exit codes", "## Codes")
+                   .replace("tokens#AC-01", "tokens#AC-09"))
+        code, out = self.sdd("check", "c1")
+        self.assertEqual(code, 1, out)
+        self.assertIn("contracts/cli/greet.txt: not a contract file", out)
+        self.assertIn("contracts/api/x.tsp: surface api not declared", out)
+        self.assertIn("contracts/cli/bye.md: missing section(s) ## Exit codes", out)
+        self.assertIn("contracts/cli/bye.md: references unknown capabilities/tokens#AC-09", out)
+        self.assert_fails(self.sdd("contract-stub", "c1", "../x.md"), "is not a contract path", code=2)
+        self.assert_fails(self.sdd("contract-stub", "c1", "cli/x.tsp"), "is not a contract path", code=2)
+
+    def test_stub_carries_the_base_and_detects_a_moved_living_file(self):
+        self.write("contracts/cli/greet.md", CLI_CONTRACT)
+        h = hashlib.sha256(CLI_CONTRACT.encode()).hexdigest()[:8]
+        code, out = self.sdd("contract-stub", "c1", "contracts/cli/greet.md")
+        self.assertIn(f"STUB cli/greet.md base={h}", out)
+        stub = self.read("changes/c1/contracts/cli/greet.md")
+        self.assertIn(f'description: "Prints a greeting."\n---\n<!-- base: {h} -->\n', stub)
+        self.assert_ok(self.sdd("check", "c1"))
+        self.write("contracts/cli/greet.md", CLI_CONTRACT + "\nmore\n")
+        self.assert_fails(self.sdd("check", "c1"), "CONFLICT changes/c1/contracts/cli/greet.md")
+        self.write("changes/c1/contracts/cli/greet.md", CLI_CONTRACT)
+        self.assert_fails(self.sdd("check", "c1"), "without a base line")
+
+    def test_tsp_base_line_is_a_line_comment(self):
+        self.edit("changes/c1/intent.md", "surface: [cli]", "surface: [api]")
+        self.write("contracts/api/tokens.tsp", "// capabilities/tokens#AC-01\nop get(): void;\n")
+        self.assert_ok(self.sdd("contract-stub", "c1", "api/tokens.tsp"))
+        self.assertTrue(self.read("changes/c1/contracts/api/tokens.tsp").startswith("// base: "))
+        self.assert_ok(self.sdd("check", "c1"))
+
+    def test_retire(self):
+        self.write("contracts/cli/old.md", CLI_CONTRACT)
+        self.assert_fails(self.sdd("contract-stub", "c1", "cli/none.md", "--retire"), "does not exist", code=2)
+        code, out = self.sdd("contract-stub", "c1", "cli/old.md", "--retire")
+        self.assertEqual(code, 0, out)
+        self.assertIn("retire_contracts: [cli/old.md@", self.read("changes/c1/intent.md"))
+        self.phase("gate1")
+        self.assert_ok(self.sdd("check", "c1"))
+        self.write("contracts/cli/old.md", "changed")
+        self.assert_fails(self.sdd("check", "c1"), "CONFLICT retire cli/old.md")
+
+    def test_context_bundles(self):
+        self.write("changes/c1/contracts/cli/greet.md", CLI_CONTRACT)
+        self.write("contracts/ui/other.html", "<p>capabilities/auth/login#AC-01</p>")
+        code, out = self.sdd("context", "c1", "--contract")
+        self.assertEqual(code, 0, out)
+        self.assertIn("surface: cli", out)
+        self.assertIn("#### capabilities/tokens AC-01: Expired token", out)
+        self.assertIn("### changes/c1/contracts/cli/greet.md\n```\n---\ntype: Contract", out)
+        self.assertIn("other contract files: contracts/ui/other.html", out)
+        for task in ("T1", "T2"):
+            code, out = self.sdd("context", "c1", task)
+            self.assertEqual(code, 0, out)
+            self.assertIn("## Contract files (the public surface; read-only)", out)
+            self.assertIn("greet --name <name>", out)
+
+    def test_diff_and_sync_promote_without_base(self):
+        self.write("contracts/cli/greet.md", CLI_CONTRACT)
+        self.write("contracts/cli/old.md", CLI_CONTRACT)
+        self.assert_ok(self.sdd("contract-stub", "c1", "cli/greet.md"))
+        self.edit("changes/c1/contracts/cli/greet.md", "`Hello, <name>`", "`Hi, <name>!`")
+        self.assert_ok(self.sdd("contract-stub", "c1", "cli/old.md", "--retire"))
+        self.edit("changes/c1/intent.md", "surface: [cli]", "surface: [cli, ui]")
+        self.write("changes/c1/contracts/ui/form.html", "<!-- capabilities/tokens#AC-01 -->\n<form></form>\n")
+        code, out = self.sdd("contract-diff", "c1")
+        self.assertEqual(code, 0, out)
+        self.assertIn("MODIFIED cli/greet.md\n", out)
+        self.assertIn("-`Hello, <name>`\n+`Hi, <name>!`", out)
+        self.assertNotIn("base:", out)
+        self.assertIn("ADDED ui/form.html (2 lines)\n<!-- capabilities/tokens#AC-01 -->", out)
+        self.assertIn("RETIRED cli/old.md", out)
+        self.set_tasks("c1", "- [x] T1 (test) x — capabilities/tokens#AC-01",
+                       "- [x] T2 (impl) y — capabilities/tokens#AC-01 | blocked-by: T1")
+        self.sdd("set-status", "c1", "verified")
+        code, out = self.sdd("sync", "c1", "--dry-run")
+        self.assertEqual(code, 0, out)
+        for line in ("CONTRACT REPLACE cli/greet.md", "CONTRACT ADD     ui/form.html", "CONTRACT RETIRE  cli/old.md"):
+            self.assertIn(line, out)
+        self.assertTrue((self.root / "contracts/cli/old.md").exists())
+        code, out = self.sdd("sync", "c1")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(self.read("contracts/cli/greet.md"), CLI_CONTRACT.replace("`Hello, <name>`", "`Hi, <name>!`"))
+        self.assertIn("<form></form>", self.read("contracts/ui/form.html"))
+        self.assertFalse((self.root / "contracts/cli/old.md").exists())
+
+    def test_fix_with_contracts_warns_and_status_json_has_surface(self):
+        self.edit("changes/c1/intent.md", "size: change", "size: fix")
+        self.write("changes/c1/contracts/cli/greet.md", CLI_CONTRACT)
+        code, out = self.sdd("check", "c1")
+        self.assertIn("WARN  contracts in a size: fix change", out)
+        self.edit("changes/c1/intent.md", "size: fix", "size: change")
+        code, out = self.sdd("status", "--json")
+        self.assertEqual(json.loads(out)["changes"][0]["surface"], ["cli"])
+
+    def test_preview_overlays_the_change_on_the_living_contracts(self):
+        self.edit("changes/c1/intent.md", "surface: [cli]", "surface: [api, cli]")
+        self.write("contracts/api/users.tsp", "// capabilities/tokens#AC-01\nop users(): void;\n")
+        self.write("contracts/api/orders.tsp", "// old\n")
+        self.write("contracts/cli/old.md", CLI_CONTRACT)
+        self.assert_ok(self.sdd("contract-stub", "c1", "api/orders.tsp"))
+        self.edit("changes/c1/contracts/api/orders.tsp", "// old", "// capabilities/tokens#AC-01\nop orders(): void;")
+        self.assert_ok(self.sdd("contract-stub", "c1", "api/tokens.tsp"))
+        self.assert_ok(self.sdd("contract-stub", "c1", "cli/old.md", "--retire"))
+        code, out = self.sdd("contract-preview", "c1")
+        self.assertEqual(code, 0, out)
+        d = self.root / ".claude/worktrees/sdd-c1-contracts"
+        self.assertIn("files 3 (2 from the change)", out)
+        self.assertIn("contract_cmd not set", out)
+        self.assertEqual((d / "api/orders.tsp").read_text(), "// capabilities/tokens#AC-01\nop orders(): void;\n")
+        self.assertFalse((d / "cli/old.md").exists())
+        self.assertEqual((d / "api/sdd-main.tsp").read_text(),
+                         'import "./orders.tsp";\nimport "./tokens.tsp";\nimport "./users.tsp";\n')
+        cfg = json.loads(self.read(".claude/sdd.json"))
+        self.write(".claude/sdd.json", json.dumps({**cfg, "contract_cmd": "tsp compile {dir}/api/sdd-main.tsp --no-emit"}))
+        code, out = self.sdd("contract-preview", "c1")
+        self.assertIn("run: tsp compile .claude/worktrees/sdd-c1-contracts/api/sdd-main.tsp --no-emit", out)
+        self.assert_ok(self.sdd("contract-preview", "c1", "--remove"))
+        self.assertFalse(d.exists())
+
+    def test_config_has_contracts_dir(self):
+        self.assertIn('"contracts_dir": "contracts"', self.sdd("config")[1])
+
+
 if __name__ == "__main__":
     unittest.main()
