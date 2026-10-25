@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## sdd-0.12.1 - 2026-10-25
+#### Bug Fixes
+- (**sdd**) address code-review findings in freeze, survey, preview, sync and guard (#32) - (f207a66) - Grégory R.
+
+- - -
+
 ## sdd-0.12.0 - 2026-10-25
 #### Features
 - (**sdd**) add discover and from-doc skills (#31) - (b81bcba) - Grégory R.
