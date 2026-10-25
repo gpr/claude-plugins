@@ -1,12 +1,14 @@
 ---
 type: Reference
 title: Slash commands, band and panes
-description: The /sdd:change skill, the /sdd command and its arguments, and what the band above the prompt and the two panes show.
+description: The /sdd:change, /sdd:discover and /sdd:from-doc skills, the /sdd command and its arguments, and what the band above the prompt and the two panes show.
 tags: [sdd, reference, ui, commands]
 sources:
   - resource: ../../hooks/register.tsx
   - resource: ../../hooks/phase.ts
   - resource: ../../skills/change/SKILL.md
+  - resource: ../../skills/discover/SKILL.md
+  - resource: ../../skills/from-doc/SKILL.md
 generated:
   by: claude-code
   at: 2026-10-18T00:00:00Z
@@ -19,6 +21,18 @@ generated:
 `/sdd:change <what you want changed>` or `/sdd:change resume <change-id>`
 
 Runs the lead workflow (`skills/change`). You don't have to type it: with the plugin enabled, the main conversation routes every change request to it.
+
+## /sdd:discover
+
+`/sdd:discover [all | <area> ...]`
+
+Maps an existing repository into areas and the decisions its code embodies, lets you choose, then runs one `adopt` change per area (`skills/discover`). See [Adopt sdd in an existing repository](../how-to/adopt-an-existing-repo.md#4-or-discover-the-whole-repo).
+
+## /sdd:from-doc
+
+`/sdd:from-doc <path to a spec or PRD>`
+
+Splits the document into changes, asks you to approve the split, starts every change (branch, worktree, draft PR, `requires`) and runs the first (`skills/from-doc`). See [Turn a document into changes](../how-to/turn-a-document-into-changes.md).
 
 ## /sdd
 

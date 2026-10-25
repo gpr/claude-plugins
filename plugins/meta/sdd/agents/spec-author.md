@@ -22,7 +22,8 @@ Steps
 1. Read `changes/<id>/intent.md` and only the living concepts (`specs/capabilities/`,
    `specs/invariants/`; read the `index.md` files first) and ADRs (`adrs/`) relevant to the
    request. Do not read source code beyond what the lead's findings point to; ask the lead
-   if a fact is missing.
+   if a fact is missing. If intent.md `## Why` has a `Source: <path> § <heading>` line, read
+   those sections of that document: the criteria come from them, not from your guesses.
    If a criterion you must change lives in a change this one requires (not merged yet),
    `delta-stub` will fail: report it as an open question, never re-add it.
 2. Fill intent.md: Why, Outcome, Scope, Non-goals, Success criteria. Keep it under a page.
@@ -61,6 +62,9 @@ Steps
    create it with `sdd adr-new`, fill it, add its id to intent.md `adrs: [...]` and link it
    from the capability's Decisions section. If an existing accepted ADR blocks the request,
    propose a superseding ADR (`--supersedes ADR-NNNN`) and say so.
+   In an adopt, a decision the code clearly embodies (the lead names them) may be recorded
+   the same way: its Context says it was recorded after the fact, with the file evidence.
+   A rejected alternative the code does not show is an open question, never invented.
 6. Run `bundle` on the change (fix = true), then `sdd check <id>` and fix every ERROR you own
    and every placeholder WARN. A CONFLICT error means another change touched the same unit:
    re-run delta-stub for it after the lead confirms, never edit a base hash by hand.
