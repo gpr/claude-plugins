@@ -19,6 +19,7 @@ const CASES: [string, SddChange, string[], string | undefined][] = [
   ['draft while contract-designer runs', change('draft'), ['contract-designer'], 'contract'],
   ['draft, surface declared, no contract files yet', { ...change('draft'), surface: ['api'] }, [], 'contract'],
   ['draft, surface declared, contracts written: Gate 1', { ...change('draft'), surface: ['api'], contracts: true }, [], 'gate1'],
+  ['draft baseline with a surface: no contract step', { ...change('draft'), size: 'baseline', surface: ['api'] }, [], 'gate1'],
   ['draft, surface none: Gate 1', { ...change('draft'), surface: [] }, [], 'gate1'],
   ['draft fix skips the spec', change('draft', [], 'fix'), [], 'plan'],
   ['draft fix with only its test task', change('draft', [task('T1', 'test', false)], 'fix'), [], 'plan'],

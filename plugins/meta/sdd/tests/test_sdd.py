@@ -905,6 +905,15 @@ class TestFreeze(SddCase):
         (self.root / rel).unlink()
         self.assert_fails(self.sdd("verify-frozen", "c1"), f"{rel} deleted after freeze")
 
+    def test_what_a_test_run_writes_is_not_tampering(self):
+        self.accept_test()
+        self.assert_ok(self.sdd("freeze", "c1"))
+        for f in ("run.log", "junit.xml", "coverage.xml", "out.tmp"):
+            self.write(f"tests/acceptance/{f}", "output\n")
+        self.assert_ok(self.sdd("verify-frozen", "c1"))
+        self.write("tests/acceptance/data.xml", "<fixture/>\n")  # a fixture is test content
+        self.assert_fails(self.sdd("verify-frozen", "c1"), "tests/acceptance/data.xml added after freeze")
+
     def test_a_helper_changed_or_added_after_freeze_is_tampering(self):
         self.accept_test()
         self.write("tests/acceptance/helpers.py", "def ok(): return True\n")
@@ -1647,6 +1656,11 @@ class TestBaselineProof(GitCase):
         self.assertEqual(code, 0, out)
         self.assertIn("WARN  production code already changed", out)
 
+    def test_init_files_are_not_production_code(self):
+        put(self.wt / ".gitattributes", "specs/log.md merge=union\n")
+        code, out = self.sdd("freeze", "c1", cwd=self.wt)
+        self.assertEqual(code, 0, out)
+
     def test_mixed_baseline_file_warns(self):
         put(self.wt / "changes/c1/specs/capabilities/tokens.md", NEW_CAP.replace(
             "- **Then** the response is 401\n", "- **Then** the response is 401\n- **Baseline**: src/tokens.py\n")
@@ -1798,6 +1812,15 @@ class TestSyncAcrossBranches(GitCase):
         self.assertIn("ca: MODIFIED capabilities/auth/login#AC-01", log)
         self.assertIn("cb: MODIFIED capabilities/auth/login#AC-02", log)
         self.assertNotIn("<<<<<<<", log + spec)
+
+    def test_dry_run_does_not_fetch_but_sync_warns_when_it_cannot(self):
+        wt = self.verified("ca", "AC-02", "the response is 429")
+        self.git("remote", "set-url", "origin", str(self.tmp / "gone.git"), cwd=wt)
+        code, out = self.sdd("sync", "ca", "--dry-run", cwd=wt)
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("could not fetch", out)
+        code, out = self.sdd("sync", "ca", cwd=wt)
+        self.assertIn("WARN  could not fetch origin/main", out)
 
     def test_a_unit_both_changed_after_sync_stops_finish(self):
         a, b = self.verified("ca", "AC-02", "the response is 429"), self.verified("cb", "AC-02", "the response is 403")
@@ -2305,6 +2328,18 @@ class TestContracts(SddCase):
         self.assertIn("run: tsp compile .claude/worktrees/sdd-c1-contracts/api/sdd-main.tsp --no-emit", out)
         self.assert_ok(self.sdd("contract-preview", "c1", "--remove"))
         self.assertFalse(d.exists())
+
+    def test_preview_copies_only_contract_files(self):
+        self.write("contracts/api/users.tsp", "// capabilities/tokens#AC-01\nop users(): void;\n")
+        self.write("contracts/api/sdd-main.tsp", 'import "./sdd-main.tsp";\n')
+        self.write("contracts/api/tsp-output/openapi.yaml", "generated\n")
+        self.write("contracts/tspconfig.yaml", "emit: []\n")
+        code, out = self.sdd("contract-preview", "c1")
+        self.assertEqual(code, 0, out)
+        d = self.root / ".claude/worktrees/sdd-c1-contracts"
+        self.assertFalse((d / "api/tsp-output").exists())
+        self.assertFalse((d / "tspconfig.yaml").exists())
+        self.assertEqual((d / "api/sdd-main.tsp").read_text(), 'import "./users.tsp";\n')
 
     def test_config_has_contracts_dir(self):
         self.assertIn('"contracts_dir": "contracts"', self.sdd("config")[1])

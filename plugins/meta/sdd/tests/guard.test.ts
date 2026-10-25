@@ -148,6 +148,19 @@ describe('bash', () => {
   })
   test('a relative path is resolved against the cwd once', () =>
     expect(checkBash("sed -i 's/a/b/' ../tests/acceptance/test_a.py", 'implementer', DEFAULT_CFG, [`${ROOT}/src`, ROOT])).toBeDefined())
+  test('a clobber redirect `>|` is a write, not a pipe', () => {
+    expect(bash('planner', 'echo x >| specs/capabilities/a.md')).toBe('deny')
+    expect(segments('echo x >| f')).toEqual(['echo x >| f'])
+  })
+  test('a `>` inside quotes is not a write for the verifier', () => {
+    expect(bash('verifier', 'grep -rn "=>" src/app.ts')).toBe('allow')
+    expect(bash('verifier', "git log --format='%h -> %s' -- src/x.ts")).toBe('allow')
+    expect(bash('verifier', 'echo "a > b" > src/app.ts')).toBe('deny')
+  })
+  test('a heredoc body is data, its redirect target is still checked', () => {
+    expect(bash('verifier', "cat <<'EOF'\nit's a > b; rm src/x\nEOF")).toBe('allow')
+    expect(bash('planner', 'cat > specs/capabilities/a.md <<EOF\nbody\nEOF')).toBe('deny')
+  })
   test('the verifier cannot write a file whose name has no slash', () => {
     expect(bash('verifier', 'echo pwned > notes.txt')).toBe('deny')
     expect(bash('verifier', 'echo pwned>notes.txt')).toBe('deny')

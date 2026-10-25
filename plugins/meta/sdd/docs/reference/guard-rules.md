@@ -98,8 +98,8 @@ The lead passes every other write.
 The lead's Bash calls are not checked. For subagents:
 
 1. A command mentioning `tools/sdd.py` is refused: use the `sdd` tool.
-2. The command is split into segments at `;`, `&&`, `||`, `|`, `&` and newlines (outside quotes), after dropping fd duplications (`2>&1`) and `/dev/null` sinks. A `cd` or `pushd` segment moves the directory the next segments resolve paths from (`cd`, `cd -`, `cd ~/...`, `cd $X` go back to the cwd).
-3. A segment writes when it has a redirect into a file (`>`, `>>`, `x>f`, `&>`) or contains `tee`, `sed -i`, `perl -i`, `mv`, `cp`, `rm`, `touch`, `ln`, `mkdir`, `rmdir`, `truncate`, `dd`, `git checkout|restore|rm|mv|apply`, `patch`, `install`, `write_text`, or `open(..., 'w'|'a')`. Other segments pass.
+2. The command is split into segments at `;`, `&&`, `||`, `|`, `&` and newlines (outside quotes; the clobber redirect `>|` is not a pipe), after dropping heredoc bodies, fd duplications (`2>&1`) and `/dev/null` sinks. A `cd` or `pushd` segment moves the directory the next segments resolve paths from (`cd`, `cd -`, `cd ~/...`, `cd $X` go back to the cwd).
+3. A segment writes when it has a redirect into a file outside quotes (`>`, `>>`, `>|`, `x>f`, `&>`; `grep "=>" f` does not write) or contains `tee`, `sed -i`, `perl -i`, `mv`, `cp`, `rm`, `touch`, `ln`, `mkdir`, `rmdir`, `truncate`, `dd`, `git checkout|restore|rm|mv|apply`, `patch`, `install`, `write_text`, or `open(..., 'w'|'a')`. Other segments pass.
 4. A writing segment's candidate paths are its redirect targets, and, when it writes by more than a redirect:
    - every word containing `/` or ending in `.md`;
    - every argument, once a `cd` moved away from the cwd;
