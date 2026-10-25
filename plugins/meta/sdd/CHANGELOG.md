@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## sdd-0.11.0 - 2026-10-25
+#### Features
+- (**sdd**) contract step with TypeSpec API, CLI synopsis and UI mockup (#30) - (e422247) - Grégory R.
+
+- - -
+
 ## sdd-0.10.1 - 2026-10-24
 #### Bug Fixes
 - (**sdd**) tasks template matches sequential implementers and Baseline - (cd534ac) - Claude, *Claude Opus 5.5*
