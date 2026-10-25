@@ -16,14 +16,14 @@ generated:
 
 The guard is a `tool.call` hook in the plugin's mod. It checks every `Edit`, `Write`, `MultiEdit`, `NotebookEdit` and `Bash` call before it runs. A refusal comes back to the caller as `[sdd-guard] <reason>`, shows as a toast, and is kept as the "last guard refusal" in the `/sdd` pane.
 
-Paths in the rules use the configured directory names (`specs_dir`, `changes_dir`, `adr_dir`, `acceptance_dir`), written here as their defaults.
+Paths in the rules use the configured directory names (`specs_dir`, `changes_dir`, `adr_dir`, `acceptance_dir`, `contracts_dir`), written here as their defaults.
 
 ## Roles
 
 | Agent type reported by Claude Code | Role |
 |---|---|
 | none (no `agentId`: the main conversation) | `lead` |
-| `sdd:spec-author`, `sdd:planner`, `sdd:acceptance-tester`, `sdd:implementer`, `sdd:verifier` | the name without `sdd:` |
+| `sdd:spec-author`, `sdd:contract-designer`, `sdd:planner`, `sdd:acceptance-tester`, `sdd:implementer`, `sdd:verifier` | the name without `sdd:` |
 | anything else (`Explore`, `general-purpose`, other plugins' agents, an unknown `sdd:` name) | `other` |
 
 The role is looked up from the call's `agentId` with `$.agent.list()` and cached per agent id. An `agentId` the session does not list has no role: the call is refused, as a [guard failure](#failure-policy).
@@ -36,7 +36,7 @@ The checks run in this order (`checkPath`). The first one that matches decides:
 
 ```mermaid
 flowchart TD
-    W([write to path]) --> P{"specs/, archive, frozen.json,<br/>state.json, or a stable/deprecated ADR?"}
+    W([write to path]) --> P{"specs/, contracts/api|cli|ui, archive,<br/>frozen.json, state.json, or a stable/deprecated ADR?"}
     P -- yes --> X1[refuse: everyone]
     P -- no --> L{"role = lead?"}
     L -- yes --> A1[allow]
@@ -62,6 +62,7 @@ The status check reads the file, applies the write to it (Write content, Edit or
 | Path | Rule |
 |---|---|
 | `specs/**` | refused: living specs change only through `sdd sync` (and `sdd bundle specs --fix`, run by the lead through the tool) |
+| `contracts/api/**`, `contracts/cli/**`, `contracts/ui/**` | refused: living contracts change only through a change's `contracts/` and `sdd sync`. The rest of `contracts/` (tspconfig, emitter output) is not guarded |
 | `changes/archive/**` | refused: archived changes are immutable |
 | `changes/**/frozen.json` | refused: written only by `sdd freeze` |
 | `changes/**/state.json` | refused: written only by `sdd.py` |
@@ -85,6 +86,7 @@ The lead passes every other write.
 | Role | May write | While |
 |---|---|---|
 | `spec-author` | `adrs/**` (not its `index.md`, `log.md` or `.templates/`); `changes/<c>/intent.md`; `changes/<c>/specs/**` (new concepts and CapabilityDeltas under `capabilities/` and `invariants/`) | intent and delta only while the change is `draft` (or has no status yet). The generated `changes/<c>/index.md` is not writable: it comes from `sdd` |
+| `contract-designer` | `changes/<c>/contracts/**` | change is `draft` (or has no status yet) |
 | `planner` | `changes/<c>/plan.md`, `changes/<c>/tasks.md` | change is `draft` or `approved` |
 | `acceptance-tester` | `tests/acceptance/**`, `changes/<c>/tasks.md` | any status |
 | `implementer` | anything except `tests/acceptance/**`, `adrs/**` and `changes/**` (but `changes/<c>/tasks.md` is allowed) | any status |
@@ -106,7 +108,7 @@ The lead's Bash calls are not checked. For subagents:
    So `pytest tests/acceptance > /tmp/log` checks only `/tmp/log`. Each candidate is resolved from the segment's directory, and:
    - `verifier`: refused if it is inside the project.
    - `implementer`: refused if it is under `tests/acceptance/`, or under `changes/` and not a `tasks.md`.
-   - any subagent: refused if it is under `specs/`, `adrs/`, `.claude/`, `changes/archive/`, or is a `frozen.json` / `state.json` under `changes/`.
+   - any subagent: refused if it is under `specs/`, `adrs/`, `.claude/`, `changes/archive/`, `contracts/api|cli|ui/`, or is a `frozen.json` / `state.json` under `changes/`.
 
 This check is a heuristic backstop: a path built at run time (`python -c "...write_text(...)"`) gets past it. `sdd verify-frozen`, run by the verifier and ideally in CI, is the real enforcement for the acceptance tests: it hashes the whole acceptance dir, helpers and fixtures included, and reports added files too.
 

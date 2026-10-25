@@ -30,9 +30,9 @@ Documentation for the `sdd` Claude Code plugin, a spec-driven multi-agent workfl
 * [sdd subcommands](reference/cli.md) - every `sdd.py` subcommand, its effect and its role, plus the `check` rules.
 * [sdd tool and its role rules](reference/sdd-tool-roles.md) - `mcp__sdd__sdd` and `mcp__sdd__bundle` input, output and roles.
 * [Guard rules](reference/guard-rules.md) - who may write what, Bash heuristics, failure policy.
-* [Workflow agents](reference/agents.md) - the five agents: job, input, output, tools, model, memory.
+* [Workflow agents](reference/agents.md) - the six agents: job, input, output, tools, model, memory.
 * [Phases, statuses and state.json](reference/phases-and-states.md) - phase ids, statuses, fix order, derived phase, dependency states.
-* [File formats](reference/file-formats.md) - Capability and Invariant concepts, citations, CapabilityDelta, base markers, intent, ADR, plan, task lines, test citations.
+* [File formats](reference/file-formats.md) - Capability and Invariant concepts, citations, CapabilityDelta, base markers, intent, contract files, ADR, plan, task lines, test citations.
 * [OKF bundles](reference/bundles.md) - the layout of `specs/` and of a change, front matter per type, bundle checks and fixes, migration.
 * [Repository layout](reference/repo-layout.md) - the files sdd creates and who writes each.
 * [Configuration](reference/configuration.md) - `.claude/sdd.json` keys, project root, requirements.
@@ -41,7 +41,7 @@ Documentation for the `sdd` Claude Code plugin, a spec-driven multi-agent workfl
 
 ## Explanation
 
-* [How the workflow fits together](explanation/workflow-overview.md) - triage, two gates, tests outside and TDD inside, sync.
+* [How the workflow fits together](explanation/workflow-overview.md) - triage, contract, two gates, tests outside and TDD inside, sync.
 * [Why sdd.py exists](explanation/determinism.md) - exact sync, base-hash conflicts, traceability, freezing.
 * [Why the guard works the way it does](explanation/guard-design.md) - roles from agentId, status-bound permissions, fail-closed.
 * [Why the main conversation is the lead](explanation/lead-as-main-conversation.md) - an appended prompt section, not an agent.

@@ -10,8 +10,10 @@ change: {{id}}
      Cite their ids (capabilities/<id>#AC-NN, invariants/<id>) and ADR ids, never restate them. -->
 
 ## Contracts
-<!-- Public surface the acceptance tests will call: signatures, endpoints, events, CLI.
-     Frozen at Gate 2; the acceptance-tester sees ONLY this section of the plan. -->
+<!-- Public surface the acceptance tests will call. With contract files (changes/<id>/contracts/,
+     approved at Gate 1): their paths, plus only what they do not cover (library signatures, events).
+     Without (surface: none, a fix): signatures, endpoints, events, CLI here.
+     Frozen at Gate 2; the acceptance-tester sees ONLY this section of the plan (and the contract files). -->
 
 ## Components
 <!-- component/file -> which AC and invariant ids it serves. One line each. -->

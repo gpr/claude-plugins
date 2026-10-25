@@ -1,6 +1,6 @@
 # sdd: spec-driven multi-agent workflow for Claude Code
 
-One plugin: a lead workflow, five workflow agents, a deterministic spec tool, and a mod
+One plugin: a lead workflow, six workflow agents, a deterministic spec tool, and a mod
 that makes the main conversation the lead, guards writes per agent and shows the
 workflow's state live.
 
@@ -8,7 +8,11 @@ workflow's state live.
 request ─► lead (/sdd:change) ─► triage ──direct──► general-purpose / lead
                                   │ fix ──► failing test on the existing AC  ║ plan ─► implement ─► verify
                                   ▼ change: sdd start (branch sdd/<id>, worktree, draft PR)
-                          sdd:spec-author ─► GATE 1 (you: intent, criteria, invariants, ADRs)
+                          sdd:spec-author (intent, criteria, invariants, ADRs, surface)
+                                  ▼ surface api/cli/ui (none: skipped)
+                     sdd:contract-designer (TypeSpec, CLI synopsis, UI mockup)
+                                  ▼
+                          GATE 1 (you: intent, criteria, invariants, contract, ADRs)
                                   ▼
                             sdd:planner ─► GATE 2 (sdd check, automatic)
                                   ▼
@@ -18,7 +22,7 @@ request ─► lead (/sdd:change) ─► triage ──direct──► general-pu
                                   ▼
                            sdd:verifier ─► PASS ─► code-review (findings ─► implementer / reopen)
                                   ▼
-                              sdd sync (merge origin/<base>, concepts → specs/, ADRs accepted, archive)
+                              sdd sync (merge origin/<base>, concepts → specs/, contracts → contracts/, ADRs accepted, archive)
                                   ▼
                               sdd finish (commit, merge a moved base, push, PR ready)
 ```
@@ -102,8 +106,8 @@ and not migrated: see `docs/how-to/migrate-to-okf-layout.md`.
 |---|---|---|
 | Lead workflow | `skills/change` (`/sdd:change`) | triage, gates, routing, close-out, reopen path |
 | Format rules | `skills/formats` (`sdd:formats`) | Capability/Invariant/CapabilityDelta/ADR/task formats, preloaded into the authoring agents |
-| Agents | `agents/` (`sdd:spec-author`, `sdd:planner`, `sdd:acceptance-tester`, `sdd:implementer`, `sdd:verifier`) | one job each, minimal tools, project memory in `.claude/agent-memory/sdd-<agent>/` |
-| Spec tool | `tools/sdd.py`, exposed as the `mcp__sdd__sdd` and `mcp__sdd__bundle` tools | check, context bundles, delta-new from the concept templates, delta-stub with base hashes, freeze/verify-frozen, deterministic per-unit sync into the specs bundle, ADR accept/supersede, bundle check/fix |
+| Agents | `agents/` (`sdd:spec-author`, `sdd:contract-designer`, `sdd:planner`, `sdd:acceptance-tester`, `sdd:implementer`, `sdd:verifier`) | one job each, minimal tools, project memory in `.claude/agent-memory/sdd-<agent>/` |
+| Spec tool | `tools/sdd.py`, exposed as the `mcp__sdd__sdd` and `mcp__sdd__bundle` tools | check, context bundles, delta-new from the concept templates, delta-stub and contract-stub with base hashes, freeze/verify-frozen, deterministic per-unit sync into the specs bundle, ADR accept/supersede, bundle check/fix |
 | Mod | `hooks/register.tsx`, `hooks/guard.ts`, `hooks/phase.ts` | lead role for the main conversation, write guard per agent, the `sdd` tool, status band, `/sdd` and `/sdd phase` panes |
 
 ## Branches, PRs and resume
@@ -113,7 +117,7 @@ For a full change or a fix the lead runs `sdd start <id>` before any artifact ex
   opened with `gh`. If `gh` is missing or fails, the lead opens the PR and records it with
   `sdd set-pr <id> <number>`.
 - `changes/<id>/state.json` stores `phase`, `branch`, `base`, `pr`, `pr_url`, `requires`. Only `sdd.py`
-  writes it; the guard refuses every other write. Phases: `spec gate1 plan gate2 acceptance
+  writes it; the guard refuses every other write. Phases: `spec contract gate1 plan gate2 acceptance
   implement verify sync done`. The band and `/sdd phase` show the stored phase (older
   changes without it keep the derived one) and `sdd check` warns when phase and status
   disagree.
@@ -149,16 +153,18 @@ remote's default branch), `branch_prefix` (`sdd/`), `worktree_dir` (`.claude/wor
   answered directly. Claude Code's default system prompt stays as it is.
 - **Guard, in-process.** Every Edit/Write/MultiEdit/NotebookEdit/Bash call is checked
   against the calling agent, identified by the call's `agentId`:
-  - Nobody edits `specs/` by hand: it changes only through `sdd sync`.
+  - Nobody edits `specs/` or the living contract files (`contracts/api|cli|ui/`) by hand:
+    they change only through `sdd sync`.
   - Nobody edits accepted (stable) or deprecated ADRs, `frozen.json`, `state.json` or archived changes.
   - Only the lead edits the concept templates (`specs/.templates/`, `adrs/.templates/`) and
     the ADR bundle's `index.md` and `log.md`.
   - `spec-author` writes only the intent, the delta and draft ADRs, and only while
     the change is `draft`.
+  - `contract-designer` writes only the change's `contracts/`, while the change is `draft`.
   - `planner` writes only `plan.md` and `tasks.md`, while the change is `draft` or
     `approved`.
   - `acceptance-tester` writes only the acceptance tests and `tasks.md`.
-  - `implementer` can never touch the acceptance tests, the spec or the ADRs.
+  - `implementer` can never touch the acceptance tests, the spec, the contract files or the ADRs.
   - `verifier` writes nothing but its memory.
   - No subagent edits `.claude/` outside its own memory directory, or changes the `status:` of `intent.md` or an ADR
     (that is `sdd set-status` / `sdd adr-accept`, lead only). The guard compares the file's
@@ -172,6 +178,7 @@ remote's default branch), `branch_prefix` (`sdd/`), `worktree_dir` (`.claude/wor
   - read-only, any role: `deps`
   - lead and verifier: `baseline-tree`
   - lead and spec-author: `delta-new`, `delta-stub`, `adr-new`
+  - lead and contract-designer: `contract-stub`, `contract-preview`
 - **`bundle` tool.** `mcp__sdd__bundle` takes `target` (`specs`, `adrs` or a change id) and
   `fix`. Checking is open to every role; `fix` on `specs` or `adrs` is lead-only, `fix` on a
   change is lead or spec-author.
@@ -187,9 +194,10 @@ remote's default branch), `branch_prefix` (`sdd/`), `worktree_dir` (`.claude/wor
   change with its phase, tasks, PR, requires, check result and a failed check's ERROR lines.
   Then running agents and the last guard refusal. `/sdd check <change> [--tests]` runs a
   check without the model; `/sdd refresh` re-reads the state.
-- **`/sdd phase` pane.** The workflow's phases for the active change (Spec, Gate 1,
-  Plan, Gate 2, Acceptance tests, Implement, Verify, Sync; a `size: fix` change skips
-  Spec and Gate 1 and writes its tests alongside the plan, before Gate 2): done ones
+- **`/sdd phase` pane.** The workflow's phases for the active change (Spec, Contract, Gate 1,
+  Plan, Gate 2, Acceptance tests, Implement, Verify, Sync; `surface: none` skips Contract, a
+  `size: fix` change skips Spec, Contract and Gate 1 and writes its tests alongside the plan,
+  before Gate 2): done ones
   ticked, the current one marked with what happens in it, plus the phase of every other
   open change. The phase is derived from the change's
   status, its open test/impl tasks and which workflow agent is running.
@@ -214,6 +222,14 @@ the agents run without it.
   in git (a merge keeps the capability's `generated.at`; the logs merge by union). A change
   merged into the base *after* this one synced, and that edited the same unit, shows up as a
   git conflict at `finish`: see `docs/how-to/resolve-sync-conflict.md`.
+- **Contracts.** A full change declares its public `surface` (`api`, `cli`, `ui`, or `none`)
+  in intent.md. For each kind the contract-designer writes typed files under
+  `changes/<id>/contracts/` (TypeSpec, CLI synopsis, static HTML mockup), each citing the
+  criteria it serves; you review them at Gate 1. `contract-stub` copies a living file with a
+  base hash (a moved living file is a CONFLICT), `contract-diff` shows the change, and `sync`
+  copies whole files into `contracts/` (`contracts_dir`). `contract-preview` builds the contracts as
+  the change leaves them in a git-ignored dir for `contract_cmd` (e.g.
+  `npx tsp compile {dir}/api/sdd-main.tsp --no-emit`), which the agent runs, never sdd.py.
 - **Traceability.** `check` fails when a criterion has no Given/When/Then, no test task or
   no impl task, an invariant no check or test task, or when anything cites a criterion,
   invariant, ADR or task that doesn't exist (or is retired or deprecated).
@@ -226,6 +242,9 @@ the agents run without it.
   - every task: the criteria it cites (with their capability's Intent), the invariants it
     cites in full, and the ADR Decision sections
   - test tasks: the plan's Contracts section, nothing else from the plan
+  - test and impl tasks: the contract files citing their criteria
+  - `context <change> --contract`: the contract-designer's bundle (touched criteria, the
+    contract files they cite)
   - impl tasks: the statements of the invariants in force, the frozen test paths, plus the
     full plan with `--plan`
 

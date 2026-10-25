@@ -1,7 +1,7 @@
 ---
 type: Reference
 title: File formats
-description: Exact syntax sdd.py parses - Capability and Invariant concepts, acceptance criteria, CapabilityDelta sections and base markers, intent and ADR front matter, task lines and acceptance test citations.
+description: Exact syntax sdd.py parses - Capability and Invariant concepts, acceptance criteria, CapabilityDelta sections and base markers, intent and ADR front matter, contract files, task lines and acceptance test citations.
 tags: [sdd, reference, formats, capability, invariant, adr, tasks]
 sources:
   - resource: ../../skills/formats/SKILL.md
@@ -12,6 +12,9 @@ sources:
   - resource: ../../skills/change/templates/adr.md.tmpl
   - resource: ../../skills/change/templates/plan.md
   - resource: ../../skills/change/templates/tasks.md
+  - resource: ../../skills/change/templates/contracts/api.tsp.tmpl
+  - resource: ../../skills/change/templates/contracts/cli.md.tmpl
+  - resource: ../../skills/change/templates/contracts/ui.html.tmpl
   - resource: ../../tools/sdd.py
 generated:
   by: claude-code
@@ -160,7 +163,9 @@ id: add-login
 title: Add login
 status: draft          # draft | approved | implementing | verified | archived
 size: change           # change | fix | baseline
+surface: [api, ui]     # size: change only: a subset of api, cli, ui, or none
 adrs: [ADR-0007]
+retire_contracts: [cli/old.md@1a2b3c4d]   # written by contract-stub --retire
 created: 2026-10-17
 archived: 2026-10-20   # added by sync
 ---
@@ -168,7 +173,25 @@ archived: 2026-10-20   # added by sync
 
 `size`: `change` (the default), `fix` (a test on an existing criterion, or on criteria it ADDs; nothing else in its delta, no ADR), `baseline` (an adopt: only Baseline criteria and new invariants, only `(test)` tasks, no code change).
 
+`surface` (a full change): the public surface the change adds or alters. Each kind gets contract files before Gate 1; `none` skips the contract step. A missing `surface` is a WARN, and an ERROR while the stored phase is `contract` or `gate1` and the status `draft`. Parsed as a flow list, a comma-separated string or `none`; empty means not set.
+
 Body sections from the template: Why, Outcome, Scope, Non-goals, Success criteria, Open questions. Open questions must be empty before Gate 1 approval.
+
+## Contract files
+
+`changes/<id>/contracts/<kind>/...`, copied to `<contracts_dir>/<kind>/...` by `sync`. The kind is the first directory and fixes the suffix:
+
+| Kind | Path | Format | `check` requires |
+|---|---|---|---|
+| `api` | `api/<resource>.tsp` | TypeSpec | a citation |
+| `cli` | `cli/<command>.md` | Markdown, front matter `type: Contract` | a citation; `## Synopsis`, `## Options`, `## Output`, `## Exit codes` |
+| `ui` | `ui/<screen>.html` | self-contained static HTML mockup | a citation |
+
+- Each file cites at least one criterion (`capabilities/<id>#AC-NN`, the same match as in tests); every citation must resolve as in tasks. A file of a kind `surface` does not list, or outside the three kinds, is an ERROR. After the `contract` phase, a kind `surface` lists with no file (and nothing retired) is an ERROR.
+- **Base line**: `contract-stub` copies a living file with `// base: <8 hex>` (TypeSpec) or `<!-- base: <8 hex> -->` (Markdown, after the front matter; HTML) holding the first 8 hex digits of the living file's sha256. `check` reports `CONFLICT` when the living file changed since, or no longer exists, and an ERROR when a file replaces a living one without a base line. `sync` drops the line.
+- A new file starts from `skills/change/templates/contracts/<kind>.<ext>.tmpl` (placeholders `{{stem}}`, `{{title}}`, `{{type}}`).
+- `retire_contracts` entries are `<path>@<base>`; `check` reports `CONFLICT` when the living file changed since, `sync` deletes it.
+- A contract file in a `size: fix` or `baseline` change is a WARN: their contract is the existing surface.
 
 ## ADR
 
@@ -194,7 +217,7 @@ Sections: Context, Decision drivers, Options considered, Decision, Consequences,
 
 ## plan.md
 
-Front matter `type: plan`, `change: <id>`; sections Approach, Contracts, Components, Risks. `sdd context` sends test tasks only `## Contracts`, and sends the whole plan only with `--plan`. `check` validates criterion, invariant and ADR citations outside comments.
+Front matter `type: plan`, `change: <id>`; sections Approach, Contracts, Components, Risks. `sdd context` sends test tasks only `## Contracts`, and sends the whole plan only with `--plan`. Test and impl tasks also get the contract files that cite their criteria (the change's copy, else the living file), and the paths of the others. `check` validates criterion, invariant and ADR citations outside comments.
 
 ## Task line
 

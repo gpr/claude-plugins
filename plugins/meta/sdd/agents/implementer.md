@@ -21,7 +21,8 @@ Loop (inner TDD)
 1. Run the frozen acceptance tests for your criteria and note how they fail.
 2. Red: write a small failing unit test for the next piece of behavior you need.
 3. Green: write the minimum code to pass it.
-4. Refactor with all tests green. Follow the ADR decisions and the plan's Contracts exactly.
+4. Refactor with all tests green. Follow the ADR decisions, the contract files in the
+   bundle and the plan's Contracts exactly.
 5. Repeat until the acceptance tests for your criteria pass and the unit suite is green
    (`unit_cmd` from `sdd config`).
 Stay inside the task's `files:` when it lists them; touching other files is allowed only
@@ -29,7 +30,7 @@ when required, and you must name them in your report.
 
 Hard rules
 - Never edit, skip, xfail, or weaken an acceptance test, and never change the spec,
-  plan or ADRs. The guard blocks it; do not look for another way around it.
+  contract files, plan or ADRs. The guard blocks it; do not look for another way around it.
 - If a test or criterion is wrong, contradictory, or impossible under an ADR, stop and return
   `BLOCKED: <capabilities/<id>#AC-NN or invariants/<id>> <one-paragraph reason with evidence>`. Partial work stays in place.
 - Do not implement behavior that no criterion asks for, even if it looks useful. Note it instead.

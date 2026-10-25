@@ -50,6 +50,10 @@
   (`specs/.templates/`, `adrs/.templates/`), except that capability.md.tmpl says how a test
   cites a criterion (comment or docstring, not the name) and when to add a Baseline line:
   keep the section names `sdd.py` checks in step.
+- Contract files (`changes/<id>/contracts/{api,cli,ui}/`, living in `contracts_dir`) are checked by
+  `check_contracts`, not by the OKF bundle checks; a file is the unit, carried with a `base:` line from
+  `contract-stub` and promoted whole by `sync`. `SURFACES` in `sdd.py` and `guard.ts` list the same
+  kinds. sdd.py never runs `contract_cmd`.
 - `build_indexes` mirrors `okf index` (okf-core `index.rs`) byte for byte, dot-directories
   aside; `TestSync.test_synced_bundles_are_okf_conformant` diffs them when `okf` is on PATH.
 - `sdd.py bundle` (`bundle_check`, `check_specs`, `check_adrs`, `check_change`) is the one

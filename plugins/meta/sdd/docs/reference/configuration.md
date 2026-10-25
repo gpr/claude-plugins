@@ -29,10 +29,12 @@ Created by `sdd init` with every key below except `req_id_pattern`; `sdd init ke
 | `base_branch` | `""` | base for new changes; empty means the remote's default branch (`origin/HEAD`), else `main` |
 | `branch_prefix` | `sdd/` | change branch name prefix |
 | `worktree_dir` | `.claude/worktrees` | where change worktrees go |
+| `contracts_dir` | `contracts` | living contract files (`api/`, `cli/`, `ui/`), written by `sync`; other files there (tspconfig, emitter output) are yours |
+| `contract_cmd` | `""` | how the contract-designer validates the contracts as the change leaves them; `{dir}` is the dir `sdd contract-preview` builds, e.g. `npx tsp compile {dir}/api/sdd-main.tsp --no-emit`; empty: not validated |
 
-`acceptance_cmd` and `unit_cmd` are read by the agents through `sdd config`; `sdd.py` itself never runs them. Set them for your stack, for example `"acceptance_cmd": "npx vitest run {files}"`.
+`acceptance_cmd`, `unit_cmd` and `contract_cmd` are read by the agents through `sdd config`; `sdd.py` itself never runs them. Set them for your stack, for example `"acceptance_cmd": "npx vitest run {files}"`.
 
-The guard reads the four `*_dir` keys (trimmed, `./` and trailing `/` removed). An unreadable or invalid file falls back to the defaults.
+The guard reads the `specs_dir`, `changes_dir`, `adr_dir`, `acceptance_dir` and `contracts_dir` keys (trimmed, `./` and trailing `/` removed). An unreadable or invalid file falls back to the defaults.
 
 ## Project root
 
@@ -51,6 +53,7 @@ Nothing above the git root counts. Inside a change worktree, the root is the wor
 | Python 3.9+ as `python3` on PATH, no dependencies | everything |
 | git, remote `origin`, `.claude/sdd.json` committed on the base branch | `start`, `checkpoint`, `resume`, `requires`, `deps`, `finish` |
 | `gh`, authenticated | opening the draft PR (`start`), `resume --pr`, marking it ready (`finish`) |
+| the TypeSpec compiler (`@typespec/compiler`, `@typespec/http`), optional | `contract_cmd` on `api/*.tsp` contract files |
 
 ## Plugin scope
 

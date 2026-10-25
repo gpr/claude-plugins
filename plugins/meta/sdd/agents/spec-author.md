@@ -27,6 +27,10 @@ Steps
    `delta-stub` will fail: report it as an open question, never re-add it.
 2. Fill intent.md: Why, Outcome, Scope, Non-goals, Success criteria. Keep it under a page.
    Keep the front matter `size:` the lead set (`baseline` for an adopt).
+   For `size: change`, set `surface:` to the public surface the criteria are observed
+   through and that this change adds or alters: a list of `api`, `cli`, `ui`, or `none`
+   (internal behavior, a library call). Each kind listed costs a contract step before Gate 1;
+   `none` skips it, so list only what really changes.
    Non-goals are mandatory: name the adjacent things a reasonable engineer might also do.
 3. Capabilities, following sdd:formats. A new one: `sdd delta-new <id> capabilities/<cid>
    --title "<name>"`, then fill every placeholder of the template. An existing one:

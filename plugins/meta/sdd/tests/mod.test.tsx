@@ -121,9 +121,9 @@ test('the phase pane marks the current phase of the most active change', async (
       requestId: 'sdd-phase',
       props: { title: 'sdd phase', isFocused: false, bodyColumns: 80, placement: 'dock', ...SITE },
     })
-    expect(await ui.find({ type: 'Text', text: /▶ 6\. Implement/ })).toBeDefined()
-    expect(await ui.find({ type: 'Text', text: /✓ 5\. Acceptance tests/ })).toBeDefined()
-    expect(await ui.find({ type: 'Text', text: /· 7\. Verify/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /▶ 7\. Implement/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /✓ 6\. Acceptance tests/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /· 8\. Verify/ })).toBeDefined()
     await ui.unmount()
   }
 })

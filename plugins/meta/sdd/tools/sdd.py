@@ -29,6 +29,15 @@ Commands
   adr-accept <ADR-NNNN>              draft -> stable (+ deprecates the superseded one)
   check <change> [--tests]           traceability + conflicts (+ acceptance coverage)
   context <change> <task> [--plan]   minimal context bundle for one task
+  context <change> --contract        the contract-designer's bundle (touched criteria, contract files)
+  contract-stub <change> <path> [--retire]
+                                     copy a living contract file (api/*.tsp, cli/*.md, ui/*.html) with
+                                     its base hash, or start a new one from its template; --retire
+                                     records it in intent.md retire_contracts
+  contract-diff <change>             the change's contract files against the living ones (Gate 1)
+  contract-preview <change> [--remove]
+                                     the living contracts with the change's files over them, in
+                                     <worktree_dir>/sdd-<change>-contracts, for contract_cmd ({dir})
   freeze <change> [--after-code]     record hashes of the whole acceptance dir and the base commit
                                      (and the commit the Baseline tests pass on)
   baseline-tree <change> [--remove] [--link PATH ...]
@@ -38,7 +47,8 @@ Commands
                                      freeze (a change the base merged in is accepted)
   sync <change> [--dry-run] [--force]
                                      merge origin/<base> in first (started changes), then the delta
-                                     into living specs, accept ADRs, archive
+                                     into living specs and the contract files into contracts_dir,
+                                     accept ADRs, archive
   bundle <specs|adrs|change> [--fix] validate (and repair) an OKF bundle
 Branch / PR / resume (git + gh; the lead runs them)
   start <change> --title T [--pr-title P] [--base B] [--requires a,b]
@@ -58,6 +68,7 @@ Exit code: 0 ok, 1 errors found, 2 usage error.
 from __future__ import annotations
 
 import datetime as _dt
+import difflib
 import hashlib
 import json
 import os
@@ -74,15 +85,16 @@ STATUSES = ["draft", "approved", "implementing", "verified", "archived"]
 SIZES = ["change", "fix", "baseline"]
 # Workflow phases (same ids as hooks/phase.ts PHASES, plus `done`), with the statuses a
 # change may have while in each (a fix is still `draft` through plan and acceptance).
-PHASES = ["spec", "gate1", "plan", "gate2", "acceptance", "implement", "verify", "sync", "done"]
+PHASES = ["spec", "contract", "gate1", "plan", "gate2", "acceptance", "implement", "verify", "sync", "done"]
 PHASE_STATUSES = {
-    "spec": {"draft"}, "gate1": {"draft"}, "plan": {"draft", "approved"},
+    "spec": {"draft"}, "contract": {"draft"}, "gate1": {"draft"}, "plan": {"draft", "approved"},
     "gate2": {"draft", "approved"}, "acceptance": {"draft", "implementing"},
     "implement": {"implementing"}, "verify": {"implementing"}, "sync": {"verified"},
     "done": {"archived"},
 }
 PHASE_STEPS = {
     "spec": "step 2: spec-author writes intent, capabilities, invariants, ADRs (files may be partial: sdd check)",
+    "contract": "step 2.4: contract-designer writes the contract files of the intent's surface",
     "gate1": "step 3: show Gate 1 to the user",
     "plan": "step 4: planner writes plan.md and tasks.md",
     "gate2": "step 5: sdd check, then set-status implementing",
@@ -92,6 +104,14 @@ PHASE_STEPS = {
     "sync": "step 8.4: sdd sync, then sdd finish",
     "done": "nothing left: the PR is ready for review",
 }
+# Contracts: the public surface a change declares in intent.md `surface:`, one directory per
+# kind below `changes/<id>/contracts/` and the living `contracts_dir`. A file is the unit: the
+# change's copy replaces the living one. `contract-stub` puts the living file's hash in a
+# `base:` line, so `check` sees when the living file moved since the copy.
+SURFACES = {"api": ".tsp", "cli": ".md", "ui": ".html"}
+CONTRACT_BASE_RE = re.compile(r"^(?://|<!--)\s*base:\s*([0-9a-f]{8})\s*(?:-->)?\s*$")
+CLI_SECTIONS = ["Synopsis", "Options", "Output", "Exit codes"]
+CONTRACT_SHOW_MAX = 60               # lines: a longer file is listed by path in contract-diff and context
 TASK_RE = re.compile(r"^- \[( |x|X)\] (T\d+) \((test|impl|chore)\) (.*)$")
 BASE_RE = re.compile(r"^<!--\s*base:\s*([0-9a-f]{8})\s*-->\s*$")
 
@@ -147,6 +167,8 @@ CFG = {
     "base_branch": "",               # empty: the remote's default branch, else main
     "branch_prefix": "sdd/",
     "worktree_dir": ".claude/worktrees",
+    "contracts_dir": "contracts",
+    "contract_cmd": "",              # validates `contract-preview`'s {dir} (e.g. `npx tsp compile {dir}/api/sdd-main.tsp --no-emit`); agents run it
 }
 DEFAULT_CFG = dict(CFG)
 _cfg_file = ROOT / ".claude" / "sdd.json"
@@ -164,10 +186,11 @@ if _cfg_file.exists():
 
 def use_config(cfg: dict):
     """Set the effective config and every path derived from it (`init key=value` changes it)."""
-    global SPECS, CHANGES, ADRS, ACCEPT, CONCEPT_TEMPLATES
+    global SPECS, CHANGES, ADRS, ACCEPT, CONTRACTS, CONCEPT_TEMPLATES
     CFG.update(cfg)
     SPECS, CHANGES = ROOT / CFG["specs_dir"], ROOT / CFG["changes_dir"]
     ADRS, ACCEPT = ROOT / CFG["adr_dir"], ROOT / CFG["acceptance_dir"]
+    CONTRACTS = ROOT / CFG["contracts_dir"]
     # Concept templates, overridable per repo in <bundle>/.templates/ (the lintel layout).
     CONCEPT_TEMPLATES = {"Capability": (SPECS, "capability.md.tmpl"), "Invariant": (SPECS, "invariant.md.tmpl"),
                          "ADR": (ADRS, "adr.md.tmpl")}
@@ -1129,6 +1152,148 @@ def acceptance_hits(refs: set[str]) -> dict[str, list[Path]]:
     return hits
 
 
+# -------------------------------------------------------------- contracts --
+def surface_of(fm: FM) -> list[str] | None:
+    """intent.md `surface:` as a list of kinds, [] for `none`, None when it is not set."""
+    v = fm.get("surface")
+    if v is None:
+        return None
+    if isinstance(v, str):
+        if not v.strip():
+            return None
+        return [] if v.strip() == "none" else [x.strip() for x in v.split(",") if x.strip()]
+    return [x for x in v if isinstance(x, str)] if isinstance(v, list) else None
+
+
+def contract_files(root: Path) -> list[str]:
+    """Files below a contracts dir (a change's, or the living one), relative to it, without the
+    generated OKF index/log files and anything under a dot-directory."""
+    if not root.is_dir():
+        return []
+    return sorted(f.relative_to(root).as_posix() for f in root.rglob("*")
+                  if f.is_file() and f.name not in RESERVED and not is_hidden(f.relative_to(root)))
+
+
+def contract_kind(path: str) -> str | None:
+    """`api`, `cli` or `ui` when `path` is a contract file of that kind (directory and suffix)."""
+    kind = path.split("/", 1)[0]
+    return kind if "/" in path and kind in SURFACES and path.endswith(SURFACES[kind]) else None
+
+
+def file_hash(p: Path) -> str:
+    return hashlib.sha256(p.read_bytes()).hexdigest()[:8]
+
+
+def contract_base(text: str) -> str | None:
+    return next((m.group(1) for m in map(CONTRACT_BASE_RE.match, text.split("\n")) if m), None)
+
+
+def without_base(text: str) -> str:
+    """A contract file as it goes into the living dir: its `base:` line dropped."""
+    lines = text.split("\n")
+    i = next((i for i, l in enumerate(lines) if CONTRACT_BASE_RE.match(l)), None)
+    return text if i is None else "\n".join(lines[:i] + lines[i + 1:])
+
+
+def with_base(path: str, text: str, h: str) -> str:
+    """`text` with a `base: h` line in the comment syntax of its kind, after any front matter."""
+    line = f"// base: {h}" if path.endswith(".tsp") else f"<!-- base: {h} -->"
+    lines = text.split("\n")
+    at = 0
+    if lines and lines[0] == "---":
+        end = next((i for i, l in enumerate(lines[1:], 1) if l == "---"), None)
+        at = end + 1 if end is not None else 0
+    return "\n".join(lines[:at] + [line] + lines[at:])
+
+
+def retired_contracts(fm: FM) -> dict[str, str]:
+    """intent.md `retire_contracts`: `path@base` entries -> {path: base}."""
+    out = {}
+    for x in fm.list("retire_contracts"):
+        if isinstance(x, str):
+            path, _, h = x.partition("@")
+            out[path.strip()] = h.strip()
+    return out
+
+
+def contract_arg(arg: str) -> str:
+    path = arg.removeprefix(f"{CFG['contracts_dir']}/")
+    if Path(path).is_absolute() or ".." in Path(path).parts or not contract_kind(path):
+        die(f"'{arg}' is not a contract path: api/<name>.tsp, cli/<name>.md or ui/<name>.html")
+    return path
+
+
+def check_contracts(change: Path, fm: FM, ref_problem) -> tuple[list[str], list[str], list[tuple[str, list[str]]]]:
+    """Contract files of a change: kind, citations, CLI sections and base markers.
+    Returns (errors, warnings, [(path, criteria it cites)])."""
+    errs, warns, cited = [], [], []
+    size = fm.str("size") or "change"
+    surface = surface_of(fm)
+    own = change / "contracts"
+    files = contract_files(own)
+    retired = retired_contracts(fm)
+    where = f"{CFG['changes_dir']}/{change.name}/contracts"
+    if size != "change":
+        if files or retired or surface:
+            warns.append(f"contracts in a size: {size} change: the existing surface is its contract, "
+                         "they are not reviewed at Gate 1")
+    elif surface is None:
+        phase = load_state(change).get("phase")
+        msg = "intent.md has no `surface:` (api, cli, ui, or none): the contract step cannot be decided"
+        (errs if fm.str("status") == "draft" and phase in ("contract", "gate1") else warns).append(msg)
+    for k in surface or []:
+        if k not in SURFACES:
+            errs.append(f"intent.md surface: unknown '{k}' ({', '.join(SURFACES)} or none)")
+    phase = load_state(change).get("phase")
+    past_contract = phase in PHASES and PHASES.index(phase) > PHASES.index("contract")
+    for k in surface or [] if size == "change" and past_contract else []:
+        if k in SURFACES and not any(contract_kind(f) == k for f in files) \
+                and not any(contract_kind(p) == k for p in retired):
+            errs.append(f"surface {k} declared but {where}/{k}/ is empty")
+    for f in files:
+        kind = contract_kind(f)
+        if not kind:
+            errs.append(f"{where}/{f}: not a contract file (api/*.tsp, cli/*.md, ui/*.html)")
+            continue
+        if surface is not None and kind not in surface:
+            errs.append(f"{where}/{f}: surface {kind} not declared in intent.md")
+        text = (own / f).read_text(errors="ignore")
+        refs = [r for r in refs_in(text) if "#" in r]
+        if not refs:
+            errs.append(f"{where}/{f}: cites no acceptance criterion (capabilities/<id>#AC-NN in a comment)")
+        for r in refs:
+            p = ref_problem(r)
+            if p:
+                errs.append(f"{where}/{f}: {p}")
+        cited.append((f, refs))
+        if kind == "cli":
+            body = strip_comments(split_doc(text).body)
+            missing = [s for s in CLI_SECTIONS if not re.search(rf"^## {re.escape(s)}\s*$", body, re.M)]
+            if missing:
+                errs.append(f"{where}/{f}: missing section(s) {', '.join('## ' + s for s in missing)}")
+        living, base = CONTRACTS / f, contract_base(text)
+        if living.is_file() and base is None:
+            errs.append(f"{where}/{f}: replaces {CFG['contracts_dir']}/{f} without a base line "
+                        f"(start from `contract-stub {change.name} {f}`)")
+        elif living.is_file() and base != file_hash(living):
+            errs.append(f"CONFLICT {where}/{f}: {CFG['contracts_dir']}/{f} changed since the copy "
+                        f"(base {base}, now {file_hash(living)}): stub it again and redo this change's edit")
+        elif not living.is_file() and base is not None:
+            errs.append(f"CONFLICT {where}/{f}: {CFG['contracts_dir']}/{f} no longer exists")
+    for path, base in retired.items():
+        living = CONTRACTS / path
+        if not contract_kind(path):
+            errs.append(f"intent.md retire_contracts: '{path}' is not a contract path")
+        elif path in files:
+            errs.append(f"intent.md retire_contracts: {path} is also in {where}/")
+        elif not living.is_file():
+            errs.append(f"intent.md retire_contracts: {CFG['contracts_dir']}/{path} does not exist")
+        elif base != file_hash(living):
+            errs.append(f"CONFLICT retire {path}: {CFG['contracts_dir']}/{path} changed since "
+                        f"`contract-stub --retire` (base {base or '-'}, now {file_hash(living)})")
+    return errs, warns, cited
+
+
 # ---------------------------------------------------------------- commands --
 # `bundle` and `changes/` give these names another meaning: never a change id.
 RESERVED_IDS = {"specs", "adrs", "archive"}
@@ -1174,6 +1339,8 @@ ADR_HEAD_RE = re.compile(r"^(?:#+\s*|\*\*)?status\b", re.I | re.M)
 DECISION_RE = re.compile(r"^(?:#+\s*|\*\*)?decision\b", re.I | re.M)
 TEST_DIR_NAMES = {"tests", "test", "spec", "specs", "__tests__", "e2e", "integration", "features"}
 SURVEY_DEPTH, SURVEY_MAX = 4, 10
+# Existing API descriptions, listed by `init` so the lead can ask whether to adopt them as contracts_dir.
+CONTRACT_HINTS = [("TypeSpec", re.compile(r"^.+\.tsp$")), ("OpenAPI", re.compile(r"^(openapi|swagger)\.(ya?ml|json)$"))]
 MANIFESTS = ["pyproject.toml", "setup.cfg", "tox.ini", "package.json", "Gemfile", "go.mod", "Cargo.toml",
              "pom.xml", "build.gradle", "build.gradle.kts", "mix.exs", "composer.json", "Makefile"]
 
@@ -1258,7 +1425,11 @@ def survey() -> list[str]:
             reported.append(d)
             n = sum(kinds.values())
             tests.append(f"{rel(d)}/ ({n} test file{'s' if n > 1 else ''}: {', '.join(sorted(kinds))})")
-    return capped(list(adrs.values())) + capped(tests) + [m for m in MANIFESTS if (ROOT / m).is_file()]
+    contracts = [f"{rel(d)}/ (contract: {', '.join(sorted(kinds))})" for d in [ROOT] + dirs
+                 if (kinds := {k for k, rx in CONTRACT_HINTS if any(rx.match(f.name) for f in d.glob("*"))})
+                 and d != CONTRACTS]
+    return capped(list(adrs.values())) + capped(tests) + capped(contracts) \
+        + [m for m in MANIFESTS if (ROOT / m).is_file()]
 
 
 def init_values(sets: list[str]) -> dict:
@@ -1371,11 +1542,12 @@ def cmd_status(args):
             st = load_state(d)
             out.append({
                 "id": d.name, "title": fm.str("title") or d.name, "status": fm.str("status") or "?",
-                "size": fm.str("size") or "change",
+                "size": fm.str("size") or "change", "surface": surface_of(fm),
                 "phase": st.get("phase"), "pr": st.get("pr"), "branch": st.get("branch"),
                 "requires": st.get("requires", []),
                 "adrs": [a for a in fm.list("adrs") if isinstance(a, str)],
                 "delta": bool(delta_files(d)), "baseline": bool(st.get("baseline")),
+                "contracts": bool(contract_files(d / "contracts")),
                 "tasks": [{"id": t["id"], "kind": t["kind"], "done": t["done"],
                            "refs": t["refs"]} for t in parse_tasks(d)],
             })
@@ -1537,6 +1709,102 @@ def cmd_delta_stub(args):
     atomic_write(f, text)
     write_indexes(d)
     print(f"{msg} -> {rel}")
+
+
+def cmd_contract_stub(args):
+    if len(args) < 2:
+        die("usage: contract-stub <change> <api/<name>.tsp | cli/<name>.md | ui/<name>.html> [--retire]")
+    d, path = change_dir(args[0]), contract_arg(args[1])
+    f, living = d / "contracts" / path, CONTRACTS / path
+    if "--retire" in args:
+        if not living.is_file():
+            die(f"{CFG['contracts_dir']}/{path} does not exist: nothing to retire")
+        if f.exists():
+            die(f"{f.relative_to(ROOT)} exists: delete it before retiring {path}")
+        doc = read_doc(d / "intent.md")
+        retired = retired_contracts(doc.fm)
+        retired[path] = file_hash(living)
+        doc.fm.set("retire_contracts", [f"{k}@{v}" for k, v in sorted(retired.items())])
+        write_doc(d / "intent.md", doc.fm, doc.body)
+        print(f"RETIRE {path} base={retired[path]} -> {(d / 'intent.md').relative_to(ROOT)} retire_contracts")
+        return
+    if f.exists():
+        die(f"{f.relative_to(ROOT)} already exists")
+    if living.is_file():
+        text, msg = with_base(path, living.read_text(), file_hash(living)), f"STUB {path} base={file_hash(living)}"
+    else:
+        kind = contract_kind(path)
+        name = Path(path).stem
+        words = re.split(r"[_\-\s]+", name)
+        if not (TEMPLATES / f"contracts/{kind}{SURFACES[kind]}.tmpl").exists():
+            die(f"template contracts/{kind}{SURFACES[kind]}.tmpl missing from the plugin", 1)
+        text = render_template(f"contracts/{kind}{SURFACES[kind]}.tmpl", "", stem=name,
+                               title=" ".join(words).capitalize(), type="".join(w.capitalize() for w in words))
+        msg = f"NEW {path} (template)"
+    f.parent.mkdir(parents=True, exist_ok=True)
+    atomic_write(f, text)
+    write_indexes(d)
+    print(f"{msg} -> {f.relative_to(ROOT)}")
+
+
+PREVIEW_MAIN = "sdd-main.tsp"
+
+
+def cmd_contract_preview(args):
+    """The living contracts as this change leaves them (its files over the living ones, base lines
+    dropped, retired files gone) in a git-ignored dir, with `api/sdd-main.tsp` importing every
+    TypeSpec file, for `contract_cmd`. sdd.py never runs the command itself."""
+    if not args:
+        die("usage: contract-preview <change> [--remove]")
+    d = change_dir(args[0])
+    out = ROOT / CFG["worktree_dir"] / f"sdd-{d.name}-contracts"
+    if out.exists():
+        shutil.rmtree(out)
+    if "--remove" in args:
+        print(f"removed {rel(out)}")
+        return
+    own, retired = d / "contracts", retired_contracts(intent_fm(d))
+    files = {p: CONTRACTS / p for p in contract_files(CONTRACTS) if p not in retired}
+    files.update({p: own / p for p in contract_files(own) if contract_kind(p)})
+    for p, src in sorted(files.items()):
+        (out / p).parent.mkdir(parents=True, exist_ok=True)
+        (out / p).write_text(without_base(src.read_text(errors="ignore")) if src.is_relative_to(own) else src.read_text(errors="ignore"))
+    tsp = sorted(p.removeprefix("api/") for p in files if contract_kind(p) == "api")
+    if tsp:
+        (out / "api").mkdir(parents=True, exist_ok=True)
+        (out / "api" / PREVIEW_MAIN).write_text("".join(f'import "./{p}";\n' for p in tsp))
+    print(f"dir {rel(out)}\nfiles {len(files)} ({len([p for p in files if (own / p).exists()])} from the change)")
+    if CFG["contract_cmd"]:
+        print("run: " + CFG["contract_cmd"].replace("{dir}", rel(out)))
+    else:
+        print("contract_cmd not set: nothing to run")
+
+
+def cmd_contract_diff(args):
+    if not args:
+        die("usage: contract-diff <change>")
+    d = change_dir(args[0])
+    own = d / "contracts"
+    shown = 0
+    for path in contract_files(own):
+        new = without_base((own / path).read_text(errors="ignore"))
+        living = CONTRACTS / path
+        if living.is_file():
+            diff = list(difflib.unified_diff(living.read_text(errors="ignore").splitlines(), new.splitlines(),
+                                             f"{CFG['contracts_dir']}/{path}", f"change/{path}", lineterm="", n=2))
+            print(f"MODIFIED {path}" if diff else f"UNCHANGED {path}")
+            print("\n".join(diff[2:]))
+        else:
+            lines = new.rstrip("\n").split("\n")
+            print(f"ADDED {path} ({len(lines)} lines)")
+            if len(lines) <= CONTRACT_SHOW_MAX:
+                print("\n".join(lines))
+        shown += 1
+    for path in retired_contracts(intent_fm(d)):
+        print(f"RETIRED {path}")
+        shown += 1
+    if not shown:
+        print(f"no contract files ({'surface: ' + ', '.join(surface_of(intent_fm(d)) or ['none'])})")
 
 
 def cmd_adr_new(args):
@@ -2149,6 +2417,9 @@ def collect(change: Path):
         for a in sorted(set(ADR_RE.findall(ptxt))):
             if a not in adrs:
                 errs.append(f"plan.md references unknown {a}")
+    c_errs, c_warns, contracts = check_contracts(change, fm, ref_problem)
+    errs += c_errs
+    warns += c_warns
 
     for r, kind in sorted(touched.items()):
         if kind in ("RETIRED", "DEPRECATED"):
@@ -2176,7 +2447,7 @@ def collect(change: Path):
                 warns.append(f"{t['id']}: impl not blocked-by its test task(s) {','.join(sorted(needed))}")
     return errs, warns, {"touched": touched, "tasks": tasks, "deltas": deltas, "living": living,
                          "units": units, "texts": texts, "test_ids": test_ids, "test_refs": test_refs,
-                         "baselined": baselined}
+                         "baselined": baselined, "contracts": contracts}
 
 
 def cmd_check(args):
@@ -2213,10 +2484,56 @@ def section_text(c: Concept, name: str, d: Delta | None = None) -> str:
     return "\n".join(s.content) if s else ""
 
 
+def contract_texts(d: Path, refs: set[str], cited: list[tuple[str, list[str]]], note: str = "the public surface; read-only"):
+    """Print the contract files that cite `refs` in full (the change's copy wins over the living
+    file), and the paths of the other ones."""
+    own = d / "contracts"
+    mine = {p for p, _ in cited}
+    living = [p for p in contract_files(CONTRACTS) if contract_kind(p) and p not in mine]
+    hits, rest = [], []
+    for p in sorted(mine | set(living)):
+        f = own / p if p in mine else CONTRACTS / p
+        text = without_base(f.read_text(errors="ignore"))
+        (hits if set(refs_in(text)) & refs else rest).append((rel(f), text))
+    if not hits and not rest:
+        return
+    print(f"## Contract files ({note})\n")
+    for path, text in hits:
+        print(f"### {path}\n```\n{text.rstrip()}\n```\n")
+    if rest:
+        print("other contract files: " + ", ".join(p for p, _ in rest) + "\n")
+
+
+def context_contract(d: Path):
+    """The contract-designer's bundle: surface, the criteria this change adds or modifies, and the
+    contract files they touch."""
+    _, _, info = collect(d)
+    fm = intent_fm(d)
+    surface = surface_of(fm)
+    print(f"# Contract {d.name}\n\nsurface: {', '.join(surface) if surface else 'none' if surface == [] else 'unset'}"
+          f"\ncontracts_dir: {CFG['contracts_dir']}  contract_cmd: {CFG['contract_cmd'] or '-'}\n")
+    texts = info["texts"]
+    refs = {r for r, k in info["touched"].items() if k in ("ADDED", "MODIFIED") and "#" in r and r in texts}
+    if refs:
+        print("## Acceptance criteria (ADDED or MODIFIED in this change)\n")
+    for r in sorted(refs):
+        print(f"<!-- {info['touched'][r]} -->\n" + texts[r].ac.text.replace("### ", f"#### {r.partition('#')[0]} ", 1) + "\n")
+    caps = {r.partition("#")[0] for r in refs}
+    cited = {r for p in contract_files(CONTRACTS) for r in refs_in((CONTRACTS / p).read_text(errors="ignore"))}
+    contract_texts(d, refs | {r for r in cited if r.partition("#")[0] in caps}, info["contracts"],
+                   "start each from `contract-stub`; the change's copy shown when it has one")
+    retired = retired_contracts(fm)
+    if retired:
+        print("retired by this change: " + ", ".join(retired) + "\n")
+
+
 def cmd_context(args):
     if len(args) < 2:
-        die("usage: context <change> <task> [--plan]")
+        die("usage: context <change> <task> [--plan] | context <change> --contract")
     d = change_dir(args[0])
+    if args[1] == "--contract":
+        context_contract(d)
+        return
     tasks = parse_tasks(d)
     t = next((x for x in tasks if x["id"] == args[1]), None)
     if not t:
@@ -2286,6 +2603,8 @@ def cmd_context(args):
         if files:
             print("## Frozen acceptance tests (read-only, make them pass)\n")
             print("\n".join(files) + "\n")
+    if t["kind"] in ("test", "impl"):
+        contract_texts(d, set(t["refs"]), info["contracts"])
     plan = strip_comments(read_doc(d / "plan.md").body) if (d / "plan.md").exists() else ""
     if "--plan" in args and plan:
         print("## Plan\n")
@@ -2344,7 +2663,8 @@ def code_changes(commit: str) -> list[str]:
     # the working tree against the commit (tracked files), plus untracked ones
     _, diff = git("-c", "core.quotePath=false", "diff", "--name-only", commit)
     _, new = git("-c", "core.quotePath=false", "ls-files", "--others", "--exclude-standard")
-    own = [CFG[k].strip("/") + "/" for k in ("changes_dir", "acceptance_dir", "specs_dir", "adr_dir")] + [".claude/"]
+    own = [CFG[k].strip("/") + "/" for k in ("changes_dir", "acceptance_dir", "specs_dir", "adr_dir", "contracts_dir")] \
+        + [".claude/"]
     return sorted({x for x in diff.splitlines() + new.splitlines()
                    if x and x != ".gitignore" and not any(x.startswith(o) for o in own)})
 
@@ -2519,6 +2839,10 @@ def cmd_sync(args):
         die("ADR problems", 1)
     results = [apply_delta(x, info["living"]) for x in info["deltas"]]
     log = [line for _, lines in results for line in lines]
+    own = d / "contracts"
+    retired = retired_contracts(fm)
+    log += [f"CONTRACT {'REPLACE' if (CONTRACTS / p).exists() else 'ADD    '} {p}" for p in contract_files(own)]
+    log += [f"CONTRACT RETIRE  {p}" for p in sorted(retired)]
     for line in log:
         print(line)
     if dry:
@@ -2526,6 +2850,11 @@ def cmd_sync(args):
         return
     for c, _ in results:
         atomic_write(c.path, c.render())
+    for p in contract_files(own):
+        (CONTRACTS / p).parent.mkdir(parents=True, exist_ok=True)
+        atomic_write(CONTRACTS / p, without_base((own / p).read_text()))
+    for p in retired:
+        (CONTRACTS / p).unlink(missing_ok=True)
     write_indexes(SPECS)
     summary = "; ".join(" ".join(l.split()) for l in log) or "no spec change"
     append_log(SPECS, f"* **Update**: {d.name}: {summary}")
@@ -2992,7 +3321,8 @@ def cmd_finish(args):
 
 COMMANDS = {
     "init": cmd_init, "config": cmd_config, "new": cmd_new, "status": cmd_status, "set-status": cmd_set_status,
-    "delta-new": cmd_delta_new, "delta-stub": cmd_delta_stub, "adr-new": cmd_adr_new, "adr-accept": cmd_adr_accept,
+    "delta-new": cmd_delta_new, "delta-stub": cmd_delta_stub,
+    "contract-stub": cmd_contract_stub, "contract-diff": cmd_contract_diff, "contract-preview": cmd_contract_preview, "adr-new": cmd_adr_new, "adr-accept": cmd_adr_accept,
     "check": cmd_check, "context": cmd_context, "freeze": cmd_freeze,
     "verify-frozen": cmd_verify_frozen, "baseline-tree": cmd_baseline_tree, "sync": cmd_sync, "bundle": cmd_bundle,
     "start": cmd_start, "requires": cmd_requires, "deps": cmd_deps, "checkpoint": cmd_checkpoint, "set-pr": cmd_set_pr, "resume": cmd_resume,

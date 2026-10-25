@@ -1,6 +1,6 @@
 ---
 name: change
-description: Lead workflow for any request to change the codebase, and to adopt (write down) an existing area as a spec - triage, capabilities, invariants and ADRs, user gate, plan, test-first implementation, verification, spec sync. Use for every feature, behavior change, or bug fix request, and when the user types /sdd:change.
+description: Lead workflow for any request to change the codebase, and to adopt (write down) an existing area as a spec - triage, capabilities, invariants and ADRs, contract (TypeSpec API, CLI, UI mockup), user gate, plan, test-first implementation, verification, spec sync. Use for every feature, behavior change, or bug fix request, and when the user types /sdd:change.
 argument-hint: <what you want changed> | resume <change-id> | adopt <area>
 ---
 
@@ -17,12 +17,14 @@ ADR dirs, test dirs and build manifests the repo already has, and WARNs about a 
 `adrs/` sdd did not create). If the repo has code, delegate to `Explore`: how are the tests
 run (whole suite, a file list), where would end-to-end tests go. Ask the user (AskUserQuestion)
 for `adr_dir` (never an existing ADR folder: sdd keeps its own, old ADRs stay as they are and
-are linked as plain references), `acceptance_dir`, `acceptance_cmd`, `unit_cmd`, then
+are linked as plain references), `acceptance_dir`, `acceptance_cmd`, `unit_cmd`, and, when the
+survey lists a TypeSpec or OpenAPI dir or the repo has a public API, CLI or UI, `contracts_dir`
+and `contract_cmd` (validates the TypeSpec in the dir `contract-preview` builds, e.g. `npx tsp compile {dir}/api/sdd-main.tsp --no-emit`), then
 `sdd init key=value ...` with the answers. Empty repo: `sdd init`, then ask for the two commands.
 In a repo with code, `specs/` starts empty: behavior is written down as it is touched
 (Baseline criteria, step 2), or up front per area with `adopt`.
 
-The workflow agents are plugin agents: `sdd:spec-author`, `sdd:planner`,
+The workflow agents are plugin agents: `sdd:spec-author`, `sdd:contract-designer`, `sdd:planner`,
 `sdd:acceptance-tester`, `sdd:implementer`, `sdd:verifier`. Built-ins reused: `Explore`,
 `general-purpose`. Below they are named without the `sdd:` prefix.
 Request: $ARGUMENTS
@@ -31,7 +33,7 @@ If it starts with `resume`, see "Resume" below; with `adopt`, see "Adopt" below.
 ## Paths at a glance
 | Path (triage) | Steps | `checkpoint --phase` after `start` |
 |---|---|---|
-| full change | 2, 3, 4, 5, 6, 7, 8 | gate1, plan, gate2, acceptance, implement, verify, sync (finish: done) |
+| full change | 2, 3, 4, 5, 6, 7, 8 | contract (skipped for `surface: none`), gate1, plan, gate2, acceptance, implement, verify, sync (finish: done) |
 | fix (existing criterion) | 1, 4 with T1, 5, 7, 8 | plan, gate2, implement, verify, sync |
 | fix with a criterion | 1, short 3, 4 with T1, 5, 7, 8 | gate1, plan, gate2, implement, verify, sync |
 | adopt | Adopt, 2.2-6, 8 without code-review | gate1, plan, gate2, acceptance, verify, sync |
@@ -42,7 +44,7 @@ draft PR. `sdd start` creates all three; `state.json` stores `phase`, branch, ba
 number. Direct-path work has no change id and none of this.
 - **Checkpoint**: each time an agent (or you) finishes an artifact, run
   `sdd checkpoint <id> [--phase <next>] -m "<conventional message>"`. It stores the phase,
-  commits everything and pushes. Phase ids: `spec gate1 plan gate2 acceptance implement
+  commits everything and pushes. Phase ids: `spec contract gate1 plan gate2 acceptance implement
   verify sync done`. If it refuses because a required change is not merged, handle it as in Resume. Pass `--phase` when the step you just finished moves the change to
   the next phase; omit it for further commits within a phase.
 - **Requires**: a change may depend on others (`requires` in `state.json`, set with
@@ -64,7 +66,7 @@ number. Direct-path work has no change id and none of this.
    PR to merge and stop; once they say it is merged, `sdd resume <id>` again (it merges the
    base into the branch, so the dependency's specs and code arrive).
 2. `EnterWorktree` with `path` = the printed worktree. From here every `sdd` call acts on it.
-3. `sdd status <id>`, then continue at the step the phase names (spec -> 2, gate1 -> 3,
+3. `sdd status <id>`, then continue at the step the phase names (spec -> 2, contract -> 2.4, gate1 -> 3,
    plan -> 4, gate2 -> 5, acceptance -> 6, implement -> 7, verify -> 8, sync -> 8.4,
    done -> nothing left; "Paths at a glance" gives each path's order). A stored phase can lag a step that was done but not
    checkpointed: trust the files (`sdd check`, task ticks) over the phase when they disagree.
@@ -118,18 +120,30 @@ Apply this rule, in order, and state the result in one line:
    draft PR for the branch (GitHub tools) and run `sdd set-pr <id> <number>`.
 2. Delegate to `spec-author` with: change id, the user's request verbatim, and the
    Explore findings (summarized, with file paths; for code that no capability covers, the
-   files that implement the behavior the change touches). It writes intent.md, the new or changed
+   files that implement the behavior the change touches). It writes intent.md (with `surface:`), the new or changed
    capabilities and invariants under `changes/<id>/specs/`, and any draft ADRs, then runs `bundle` and `sdd check <id>`. Then
-   `sdd checkpoint <id> --phase gate1 -m "docs(<id>): spec delta"`.
+   `sdd checkpoint <id> --phase contract -m "docs(<id>): spec delta"` (`--phase gate1` when
+   intent.md says `surface: none`).
 3. If it returns open questions, ask the user (AskUserQuestion, max 4) and resume the
    same spec-author with the answers (SendMessage), do not start a new one.
+4. Contract (only when `surface:` lists `api`, `cli` or `ui`): delegate to `contract-designer`
+   with the change id and the `sdd context <id> --contract` output pasted in the prompt. It
+   writes `changes/<id>/contracts/` (TypeSpec, CLI synopsis, HTML mockup), runs `contract_cmd`
+   on `sdd contract-preview <id>` and `sdd check <id>`. Open questions as in 2.3, resuming the same contract-designer. A spec
+   problem it reports goes back to the spec-author (SendMessage), then the contract-designer
+   again. Then `sdd checkpoint <id> --phase gate1 -m "docs(<id>): contract"`.
 
 ## 3. Gate 1 - user review (deep)
-Show the user, compactly: the intent's Why/Outcome/Non-goals; per capability its id, title
+Show the user, compactly: the intent's Why/Outcome/Non-goals and `surface:`; per capability its id, title
 and Intent line, then each AC id + name marked added/modified/retired (and any replaced
-section); per invariant its id, Statement and Check; each ADR title + decision paragraph. Give file paths for the full text.
+section); per invariant its id, Statement and Check; each ADR title + decision paragraph;
+the contract from `sdd contract-diff <id>`: per TypeSpec operation one line
+(`POST /orders -> 201 Order | 409`), the CLI synopsis line, per UI screen its mockup path
+(offer to open it in a browser), each marked added/modified/retired, with the diff for a
+small modification. Give file paths for the full text.
 Ask: approve / change something / stop.
-- Change -> resume spec-author with the feedback, then Gate 1 again.
+- Change -> resume spec-author with feedback on the spec or `surface:`, contract-designer with
+  feedback on the contract (both, spec first, when a criterion changes), then Gate 1 again.
 - Approve -> `sdd set-status <id> approved`, then
   `sdd checkpoint <id> --phase plan -m "chore(<id>): approve spec"`. After a "change" round,
   checkpoint without `--phase`.
@@ -211,7 +225,10 @@ After each implementer returns:
    error, run the `bundle` tool on `specs` (with `fix: true` for what it marks fixable) and
    commit that first; old REQ/INV concepts must be rewritten by hand. If sync reports
    CONFLICT, another change modified the same criterion, section or invariant first: resume
-   spec-author to rebase that unit (`delta-stub` again), back to Gate 1 for it only.
+   spec-author to rebase that unit (`delta-stub` again), back to Gate 1 for it only. A CONFLICT
+   on a contract file: resume contract-designer to stub it again and redo the edit, then Gate 1
+   for that file only. Sync also copies the change's contract files into `contracts_dir`
+   (without their base lines) and deletes the retired ones.
 5. `sdd finish <id>`: marks the phase done, commits the synced specs/ADRs/archive, merges
    `origin/<base>` again if it moved since the sync, pushes and marks the PR ready for review
    (merging stays with the user). If that merge conflicts, another change edited the same
@@ -223,6 +240,8 @@ After each implementer returns:
 
 ## 9. Reopen (failure path)
 A wrong or untestable criterion or invariant goes back to the spec, never into the code or the tests.
+A contract file that cannot carry a criterion (tester, implementer or verifier says so) is the
+same: reopen, then contract-designer (after the spec-author when a criterion changes).
 `sdd set-status <id> draft`, `sdd checkpoint <id> --phase spec -m "chore(<id>): reopen spec"`,
 resume spec-author with the BLOCKED report, then Gate 1 for
 the affected units only, then re-plan the affected tasks, re-run their test tasks

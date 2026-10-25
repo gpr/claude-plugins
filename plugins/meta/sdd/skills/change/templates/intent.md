@@ -4,13 +4,16 @@ id: {{id}}
 title: {{title}}
 status: draft
 size: change
+surface:
 adrs: []
 created: {{date}}
 ---
 
 # {{title}}
 
-<!-- size: change (default) | fix (a test on an existing criterion) | baseline (records existing behavior only) -->
+<!-- size: change (default) | fix (a test on an existing criterion) | baseline (records existing behavior only)
+     surface (size: change): the public surface it adds or changes, a list of api | cli | ui, or none.
+     none skips the contract step; anything else gets contract files reviewed at Gate 1. -->
 
 ## Why
 <!-- The problem, who has it, what it costs today. 2-5 sentences. -->

@@ -1,0 +1,33 @@
+<!doctype html>
+<!-- Contract: {{title}} screen. Static mockup, no external scripts or styles.
+     Cite every criterion this screen serves: capabilities/<id>#AC-NN
+     Tests select elements by data-testid and read the visible labels: both are the contract. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{title}}</title>
+<style>
+  body { font: 16px/1.5 system-ui, sans-serif; margin: 2rem; color: #111; background: #fff; }
+  .state { border: 1px dashed #999; padding: 1rem; margin: 1rem 0; }
+  .state > h2 { font-size: .8rem; color: #666; margin: 0 0 .5rem; text-transform: uppercase; }
+</style>
+</head>
+<body>
+<h1>{{title}}</h1>
+
+<!-- One block per state the criteria name (empty, loaded, error, ...). -->
+<section class="state" data-state="default">
+  <h2>default</h2>
+  <form data-testid="{{stem}}-form">
+    <label>Name <input data-testid="{{stem}}-name" name="name"></label>
+    <button type="submit" data-testid="{{stem}}-submit">Save</button>
+  </form>
+</section>
+
+<section class="state" data-state="error">
+  <h2>error</h2>
+  <p role="alert" data-testid="{{stem}}-error">&lt;error message&gt;</p>
+</section>
+</body>
+</html>

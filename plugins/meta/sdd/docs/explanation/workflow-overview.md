@@ -1,8 +1,8 @@
 ---
 type: Explanation
 title: How the workflow fits together
-description: The shape of the sdd workflow - triage, two gates, acceptance tests outside and TDD inside, sync - and the reasons behind each step.
-tags: [sdd, explanation, workflow, atdd, tdd]
+description: The shape of the sdd workflow - triage, contract, two gates, acceptance tests outside and TDD inside, sync - and the reasons behind each step.
+tags: [sdd, explanation, workflow, contract, atdd, tdd]
 sources:
   - resource: ../../skills/change/SKILL.md
   - resource: ../../README.md
@@ -20,9 +20,12 @@ flowchart TD
     T -- "full change" --> S1["sdd start<br/>branch, worktree, draft PR"]
     T -- fix --> S2["sdd start, size: fix"]
 
-    S1 --> SA["spec-author<br/>intent, delta, ADRs"]
-    SA --> G1{{"GATE 1<br/>you review"}}
-    G1 -- change --> SA
+    S1 --> SA["spec-author<br/>intent, delta, ADRs, surface"]
+    SA -- "surface: api / cli / ui" --> CD["contract-designer<br/>TypeSpec, CLI synopsis, UI mockup"]
+    SA -- "surface: none" --> G1
+    CD --> G1{{"GATE 1<br/>you review"}}
+    G1 -- "change spec" --> SA
+    G1 -- "change contract" --> CD
     G1 -- approve --> PL["planner<br/>plan.md, tasks.md"]
 
     S2 --> PL2["planner"] & AT2["acceptance-tester<br/>test on the criterion"]
@@ -59,6 +62,16 @@ Solid arrows are the normal path and dotted arrows the failure path. Each box en
 The living spec in `specs/` says what the system does now, as OKF concepts: a **Capability** per thing an actor can do, with one acceptance criterion (`AC-NN`, Given/When/Then) per observable behavior, and an **Invariant** per rule that must always hold, with a check that passes on an example and fails on a violation. A change never edits them directly. It proposes new concepts or a **delta** (criteria ADDED, MODIFIED, RETIRED, sections replaced), and the delta is merged only when the change is verified. So at any time `specs/` describes merged behavior, and an open change describes only its own difference.
 
 Decisions with lasting consequences go into ADRs. An ADR is never edited once accepted: a new ADR supersedes it. The reasoning behind a past decision therefore stays readable.
+
+## The contract before the plan
+
+A criterion says what is observed (`the response is 409`); a contract says where (`POST /orders`, its body, the error shape; the flag and the exit code; the button and its label). Before the contract step, the planner chose that shape after Gate 1, and only the automatic Gate 2 saw it. Yet the acceptance tests are written against it and every client depends on it, so it was the one public decision you never reviewed.
+
+Now the spec-author records which **surface** the change adds or alters (`api`, `cli`, `ui`, or `none`), and for each kind the contract-designer writes a typed contract: TypeSpec for an API, a synopsis for a CLI, a static HTML mockup for a UI. Each element cites the criteria it serves. You review it at Gate 1 with the criteria, as one diff against the living contract, so a wrong shape is fixed before any plan, test or code exists.
+
+On sync the files become the **living contracts** in `contracts/`, so the next change edits the current TypeSpec instead of describing the API again. Like a criterion, a contract file is copied with a base hash: when another change moved the same file first, `check` reports a CONFLICT.
+
+The step is kept cheap: `surface: none` skips it (most internal changes), fixes and adopts never have it, the agent runs on a smaller model with a bundle instead of the repo, and a small change to an existing file is a small edit of its stub.
 
 ## Triage first
 

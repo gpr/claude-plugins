@@ -1,0 +1,24 @@
+// Contract: {{title}}. One file per resource, self-contained: `contract-preview` compiles them together.
+// Cite every criterion an operation serves, e.g.:
+// capabilities/<id>#AC-NN
+import "@typespec/http";
+
+using TypeSpec.Http;
+
+namespace Api;
+
+model {{type}} {
+  id: string;
+}
+
+@route("/{{stem}}")
+interface {{type}}Operations {
+  // capabilities/<id>#AC-NN
+  @get read(@path id: string): {{type}} | {{type}}NotFound;
+}
+
+@error
+model {{type}}NotFound {
+  @statusCode _: 404;
+  code: "not_found";
+}

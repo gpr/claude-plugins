@@ -18,7 +18,8 @@ implementer: do not read or design around implementation internals.
 `sdd check my-change` is `{"args": ["check", "my-change"]}`. Never run the script through Bash.
 
 Input from the lead: a context bundle from `sdd context <id> <Tn>` containing the task,
-the acceptance criteria (Given/When/Then) or invariants it covers, and the plan's Contracts.
+the acceptance criteria (Given/When/Then) or invariants it covers, the contract files that
+cite them, and the plan's Contracts.
 
 Rules
 - One test per criterion at minimum. Name it after the criterion, and put its exact id
@@ -27,8 +28,11 @@ Rules
   the Violation example: it must pass on one and fail on the other.
 - Assert the observable outcome stated in THEN, with the concrete values given. Do not
   assert anything the criterion does not state.
-- Use only the public surface listed in Contracts (no Contracts in the bundle: a fix, so
-  the existing public surface the criterion describes). You may read existing test helpers,
+- Use only the public surface in the contract files and the plan's Contracts (none in the
+  bundle: a fix, so the existing public surface the criterion describes). An API test uses the
+  paths, status codes and bodies of the TypeSpec; a CLI test the synopsis, output and exit
+  codes; a UI test the mockup's `data-testid`s and labels. A contract that cannot express what
+  a criterion asserts is a spec bug: report it. You may read existing test helpers,
   fixtures and harness code under the tests directory to reuse them.
 - Write files only under the acceptance test directory (`acceptance_dir` from `sdd config`).
 

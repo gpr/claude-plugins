@@ -1,6 +1,6 @@
 ---
 name: formats
-description: File formats and writing rules for Capability and Invariant concepts, capability deltas, ADRs and tasks in the spec-driven workflow. Preloaded by the workflow subagents; read it before writing any of those files.
+description: File formats and writing rules for Capability and Invariant concepts, capability deltas, contract files, ADRs and tasks in the spec-driven workflow. Preloaded by the workflow subagents; read it before writing any of those files.
 user-invocable: false
 ---
 
@@ -21,11 +21,13 @@ specs/.templates/{capability,invariant}.md.tmpl   the templates delta-new fills 
 changes/<change>/intent.md                 why, scope, non-goals, success criteria (front matter: type, status, adrs)
 changes/<change>/specs/capabilities/<id>.md   a new Capability, or a CapabilityDelta of an existing one
 changes/<change>/specs/invariants/<id>.md     a new Invariant, or the full replacement of one
+changes/<change>/contracts/{api,cli,ui}/   the change's contract files (TypeSpec, CLI synopsis, HTML mockup)
 changes/<change>/plan.md                   how: approach, contracts, components
 changes/<change>/tasks.md                  checklist, the only file edited during implementation
 changes/<change>/state.json                phase, branch, base, PR number, requires (written only by `sdd.py`; never edit)
 adrs/NNNN_<slug>.md                        one decision per file (type: ADR), cited as ADR-NNNN
 tests/acceptance/                          acceptance tests, citing criterion and invariant ids
+contracts/{api,cli,ui}/                    living contract files (contracts_dir), written only by `sync`
 ```
 - `specs/`, `adrs/` and every `index.md`/`log.md` are written only by `sdd` (sync, adr-new,
   adr-accept, `bundle --fix`, delta-new/stub). Never edit them.
@@ -93,6 +95,9 @@ Rules:
   It needs a `(test)` task and no `(impl)` task; its acceptance test must pass on the
   current code. Only in a new capability or under ADDED, never on MODIFIED or RETIRED.
   Behavior the change alters is never Baseline. `sync` drops the line.
+- `intent.md` `surface` (size: change only): `[api, cli, ui]` or a subset, or `none`. The
+  public surface the change adds or alters; each kind listed gets contract files before
+  Gate 1, `none` skips the contract step.
 - `intent.md` `size`: `change` (default), `fix` (a test on an existing criterion, or on new
   ADDED criteria only, no other delta and no ADR) or
   `baseline` (an adopt: only Baseline criteria and new invariants, only `(test)` tasks).
@@ -172,6 +177,30 @@ An existing **invariant** is replaced as a whole: `sdd delta-stub <c> invariants
 copies it with `base:` in its front matter; edit the copy. `--deprecate` marks it
 `status: deprecated` (record why in an ADR). Capabilities that list it get a warning: replace
 their Invariants section.
+
+## Contract files
+The public surface, reviewed at Gate 1 with the criteria, then read-only for everyone.
+One kind per `surface:` entry, under `changes/<change>/contracts/`:
+- `api/<resource>.tsp`: TypeSpec (`@typespec/http`), one self-contained file per resource
+  (its own imports; models named after the resource). No shared index file:
+  `sdd contract-preview <c>` generates one that imports them all, for `contract_cmd`.
+  Status codes and error bodies as the criteria state them.
+- `cli/<command>.md`: front matter `type: Contract`, `title`, `description`; sections
+  `## Synopsis`, `## Options`, `## Output`, `## Exit codes` (all four, `check` requires them).
+- `ui/<screen>.html`: a self-contained static mockup (no external scripts or styles), one
+  block per state; elements a test acts on or reads carry `data-testid`.
+Rules:
+- Every file cites the criteria it serves, in a comment next to the element
+  (`// capabilities/orders#AC-02` in TypeSpec, `<!-- capabilities/orders#AC-02 -->` elsewhere).
+  A file citing none fails `check`.
+- A file is the unit: the change's copy replaces the living one at sync. Start every file with
+  `sdd contract-stub <c> <path>`: it copies the living file with a `base:` line
+  (`// base: xxxxxxxx` or `<!-- base: xxxxxxxx -->`), or a new one from the template. Never
+  type or edit a base line: when the living file moved, `check` reports CONFLICT.
+- `sdd contract-stub <c> <path> --retire` records a living file to delete in intent.md
+  `retire_contracts: [<path>@<base>]`.
+- `sdd contract-diff <c>` shows the change's files against the living ones.
+- Without contract files (`surface: none`, a fix), plan.md `## Contracts` holds the surface.
 
 ## ADR
 Create with `sdd adr-new "<title>" [--supersedes ADR-NNNN]` (adrs/NNNN_<slug>.md from the ADR

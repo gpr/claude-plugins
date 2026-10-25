@@ -89,6 +89,22 @@ const FILE_CASES: [Role, string, 'allow' | 'deny'][] = [
   ['implementer', 'adrs/.templates/adr.md.tmpl', 'deny'],
   ['lead', 'adrs/.templates/adr.md.tmpl', 'allow'],
   ['lead', 'adrs/index.md', 'allow'],
+  ['contract-designer', 'changes/c1/contracts/api/orders.tsp', 'allow'],
+  ['contract-designer', 'changes/c1/contracts/ui/form.html', 'allow'],
+  ['contract-designer', 'changes/c2/contracts/api/orders.tsp', 'deny'],
+  ['contract-designer', 'changes/c1/specs/capabilities/auth.md', 'deny'],
+  ['contract-designer', 'changes/c1/intent.md', 'deny'],
+  ['contract-designer', 'contracts/api/orders.tsp', 'deny'],
+  ['contract-designer', 'src/app.py', 'deny'],
+  ['contract-designer', '.claude/agent-memory/sdd-contract-designer/MEMORY.md', 'allow'],
+  ['spec-author', 'changes/c1/contracts/api/orders.tsp', 'deny'],
+  ['planner', 'changes/c1/contracts/cli/greet.md', 'deny'],
+  ['implementer', 'changes/c2/contracts/api/orders.tsp', 'deny'],
+  ['lead', 'contracts/api/orders.tsp', 'deny'],
+  ['lead', 'contracts/cli/greet.md', 'deny'],
+  ['implementer', 'contracts/ui/form.html', 'deny'],
+  ['implementer', 'contracts/tspconfig.yaml', 'allow'],
+  ['implementer', 'contracts/tsp-output/openapi.yaml', 'allow'],
 ]
 
 describe('file writes', () => {
@@ -120,6 +136,11 @@ describe('bash', () => {
   })
   test('state.json is protected from Bash writes too', () => {
     expect(bash('implementer', 'echo {} > changes/c1/state.json')).toBe('deny')
+  })
+  test('living contract files are protected from Bash writes', () => {
+    expect(bash('implementer', 'echo x > contracts/api/orders.tsp')).toBe('deny')
+    expect(bash('contract-designer', 'cp x.tsp contracts/api/orders.tsp')).toBe('deny')
+    expect(bash('implementer', 'npx tsp compile contracts/api --output-dir contracts/tsp-output > /dev/null')).toBe('allow')
   })
   test('frozen.json and the archive are protected for every subagent', () => {
     expect(bash('acceptance-tester', 'echo {} > changes/c1/frozen.json')).toBe('deny')
@@ -211,6 +232,15 @@ describe('sdd subcommands', () => {
     expect(checkSdd('delta-new', 'spec-author')).toBeUndefined()
     expect(checkSdd('delta-new', 'implementer')).toBeDefined()
   })
+  test('contract-stub: contract-designer and lead only; contract-diff is open', () => {
+    expect(checkSdd('contract-stub', 'contract-designer')).toBeUndefined()
+    expect(checkSdd('contract-stub', 'lead')).toBeUndefined()
+    expect(checkSdd('contract-stub', 'spec-author')).toBeDefined()
+    expect(checkSdd('contract-stub', 'implementer')).toBeDefined()
+    expect(checkSdd('contract-diff', 'verifier')).toBeUndefined()
+    expect(checkSdd('contract-preview', 'contract-designer')).toBeUndefined()
+    expect(checkSdd('contract-preview', 'implementer')).toBeDefined()
+  })
   test('check and context are open to everyone', () => {
     expect(checkSdd('check', 'verifier')).toBeUndefined()
     expect(checkSdd('context', 'implementer')).toBeUndefined()
@@ -228,6 +258,7 @@ describe('sdd subcommands', () => {
 describe('roles', () => {
   test('plugin agent types map to roles', () => {
     expect(roleOf('sdd:implementer')).toBe('implementer')
+    expect(roleOf('sdd:contract-designer')).toBe('contract-designer')
     expect(roleOf(undefined)).toBe('lead')
     expect(roleOf('Explore')).toBe('other')
     expect(roleOf('implementer')).toBe('other')
@@ -253,6 +284,7 @@ describe('bundle tool', () => {
     expect(checkBundle('c1', true, 'lead')).toBeUndefined()
     expect(checkBundle('c1', true, 'spec-author')).toBeUndefined()
     expect(checkBundle('c1', true, 'planner')).toBeDefined()
+    expect(checkBundle('c1', true, 'contract-designer')).toBeDefined()
     expect(checkBundle('c1', true, 'verifier')).toBeDefined()
   })
   test('a missing target is refused', () => {
