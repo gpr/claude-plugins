@@ -85,9 +85,10 @@ git add .claude/sdd.json .gitignore specs adrs && git commit -qm "chore: set up 
 Notice what the lead does first. It **triages** in one line: this changes observable CLI behavior, so it's a *full change*. Then it starts the change:
 
 ```
-worktree /home/you/sdd-tutorial/greet/.claude/worktrees/sdd-greet-by-name
-branch sdd/greet-by-name (base main)
-PR missing (...): create a draft PR for sdd/greet-by-name, then run `set-pr greet-by-name <number>`
+id 0001-261025-greet-by-name
+worktree /home/you/sdd-tutorial/greet/.claude/worktrees/sdd-0001-261025-greet-by-name
+branch sdd/0001-261025-greet-by-name (base main)
+PR missing (...): create a draft PR for sdd/0001-261025-greet-by-name, then run `set-pr 0001-261025-greet-by-name <number>`
 next: EnterWorktree path=...
 ```
 
@@ -95,7 +96,7 @@ next: EnterWorktree path=...
 
 ## 5. Gate 1: review the spec and the contract
 
-The spec-author writes `changes/greet-by-name/intent.md` (with `surface: [cli]`: the change alters a command line) and a new Capability concept, `changes/greet-by-name/specs/capabilities/greeting.md`, from the template `sdd init` installed. Its acceptance criteria look like:
+The spec-author writes `changes/0001-261025-greet-by-name/intent.md` (with `surface: [cli]`: the change alters a command line) and a new Capability concept, `changes/0001-261025-greet-by-name/specs/capabilities/greeting.md`, from the template `sdd init` installed. Its acceptance criteria look like:
 
 ```markdown
 ## Intent
@@ -113,7 +114,7 @@ As a user, I can greet someone by name, so that the greeting is personal.
 
 Your wording will differ. The spec-author also runs `bundle` with `fix` on the change, which regenerates the change's `index.md`.
 
-Because the surface is `cli`, the **contract-designer** runs next (the band shows phase **Contract**). It writes `changes/greet-by-name/contracts/cli/greet.md` from the CLI template, with the criteria it serves in a comment:
+Because the surface is `cli`, the **contract-designer** runs next (the band shows phase **Contract**). It writes `changes/0001-261025-greet-by-name/contracts/cli/greet.md` from the CLI template, with the criteria it serves in a comment:
 
 ````markdown
 <!-- capabilities/greeting#AC-01 capabilities/greeting#AC-02 -->
@@ -161,7 +162,7 @@ The planner writes `plan.md` (its **Contracts** section points to `contracts/cli
 Gate 2 is automatic. You'll see something like:
 
 ```
-OK greet-by-name: 2 unit(s), 2 tasks, 0 errors, 0 warnings
+OK 0001-261025-greet-by-name: 2 unit(s), 2 tasks, 0 errors, 0 warnings
 ```
 
 followed by the task count and contracts. There's nothing to do unless you object.
@@ -172,7 +173,7 @@ Run `/sdd phase` and keep the pane open while you watch:
 
 1. The **acceptance-tester** writes `tests/acceptance/test_greet_name.py`, citing `capabilities/greeting#AC-01` or `#AC-02` in a comment above each test. It runs the tests, confirms they fail because `--name` doesn't exist yet, and ticks T1. Once the test tasks are back, the lead runs `sdd freeze`, which hashes the whole acceptance dir:
    ```
-   froze 1 file(s) -> changes/greet-by-name/frozen.json
+   froze 1 file(s) -> changes/0001-261025-greet-by-name/frozen.json
    ```
 2. The **implementer** changes `greet.py`, writing a unit test first, until the frozen acceptance tests and the unit suite pass, then ticks T2.
 
@@ -192,10 +193,10 @@ A `code-review` pass follows. Then the lead syncs:
 
 ```
 ADDED capabilities/greeting (AC-01, AC-02)
-synced 1 change(s); ADRs accepted: -; archived -> changes/archive/2026-10-17-greet-by-name
+synced 1 change(s); ADRs accepted: -; archived -> changes/archive/2026-10-17-0001-261025-greet-by-name
 ```
 
-Sync also prints `CONTRACT ADD     cli/greet.md`. Open `specs/capabilities/greeting.md` in the worktree. It now holds your capability, word for word as you approved it, with `status: stable`, and `contracts/cli/greet.md` holds the contract the next change will start from. `specs/capabilities/index.md` lists it, and `specs/log.md` has a new entry under today's date: `* **Update**: greet-by-name: ADDED capabilities/greeting (AC-01, AC-02)`.
+Sync also prints `CONTRACT ADD     cli/greet.md`. Open `specs/capabilities/greeting.md` in the worktree. It now holds your capability, word for word as you approved it, with `status: stable`, and `contracts/cli/greet.md` holds the contract the next change will start from. `specs/capabilities/index.md` lists it, and `specs/log.md` has a new entry under today's date: `* **Update**: 0001-261025-greet-by-name: ADDED capabilities/greeting (AC-01, AC-02)`.
 
 Finally `sdd finish` marks the phase `done` and pushes. With GitHub it would mark the PR ready for review. Here it says to do that by hand.
 
@@ -205,7 +206,7 @@ Merge the branch as you would a PR:
 
 ```
 cd ~/sdd-tutorial/greet
-git merge --no-ff -q origin/sdd/greet-by-name && git push -q
+git merge --no-ff -q origin/sdd/0001-261025-greet-by-name && git push -q
 python greet.py --name Ada
 ```
 

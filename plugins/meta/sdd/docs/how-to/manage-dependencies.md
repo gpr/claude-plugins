@@ -20,13 +20,13 @@ Use this when a new change builds on one whose PR isn't merged yet.
 When starting: tell the lead the new change builds on the open one. It runs:
 
 ```
-sdd start add-sso --title "Add SSO" --requires add-login
+sdd start add-sso --title "Add SSO" --requires 0003-261020-add-login
 ```
 
 On an existing change:
 
 ```
-sdd requires add-sso add-login add-audit
+sdd requires 0004-261025-add-sso 0003-261020-add-login 0002-261018-add-audit
 ```
 
 Ids can be comma- or space-separated. A change can't require itself, and cycles (including transitive ones) are refused.

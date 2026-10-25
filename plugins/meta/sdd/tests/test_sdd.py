@@ -1236,7 +1236,7 @@ echo "$@" >> "$GH_LOG"
 case "$1 $2" in
   "pr create") [ -n "$GH_FAIL" ] && { echo "gh: not authenticated" >&2; exit 1; }
                echo "https://github.com/o/r/pull/7" ;;
-  "pr view")   echo "sdd/c1" ;;
+  "pr view")   echo "${GH_PR_HEAD:-sdd/c1}" ;;
   "pr ready")  ;;
 esac
 """
@@ -1258,6 +1258,7 @@ class GitCase(unittest.TestCase):
                     "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t",
                     "GIT_COMMITTER_EMAIL": "t@t"}
         self.env.pop("GH_FAIL", None)
+        self.ids: dict[str, str] = {}
         self.git("init", "-q", "--bare", "-b", "main", str(self.origin), cwd=self.tmp)
         self.git("clone", "-q", str(self.origin), str(self.root), cwd=self.tmp)
         self.git("checkout", "-q", "-b", "main", cwd=self.root)
@@ -1279,16 +1280,33 @@ class GitCase(unittest.TestCase):
                            capture_output=True, text=True, env=self.env, timeout=60)
         return p.returncode, p.stdout + p.stderr
 
-    def start(self, name: str = "c1") -> Path:
-        code, out = self.sdd("start", name, "--title", "Change one", "--pr-title", "feat: one")
+    def start(self, slug: str = "c1", *extra: str) -> Path:
+        """`start <slug>`; the generated change id is then `self.id(slug)`."""
+        code, out = self.sdd("start", slug, "--title", "Change one", "--pr-title", "feat: one", *extra)
         self.assertEqual(code, 0, out)
-        return self.root / ".claude" / "worktrees" / f"sdd-{name}"
+        self.ids[slug] = id_in(out)
+        return self.worktree(slug)
 
-    def state(self, wt: Path, name: str = "c1") -> dict:
-        return json.loads((wt / "changes" / name / "state.json").read_text())
+    def id(self, slug: str = "c1") -> str:
+        return self.ids[slug]
+
+    def worktree(self, slug: str = "c1") -> Path:
+        return self.root / ".claude/worktrees" / f"sdd-{self.id(slug)}"
+
+    def state(self, wt: Path, slug: str = "c1") -> dict:
+        return json.loads((wt / "changes" / self.id(slug) / "state.json").read_text())
 
     def remote_subjects(self, branch: str) -> list[str]:
         return self.git("log", "--format=%s", f"origin/{branch}", cwd=self.root).splitlines()
+
+
+def id_in(out: str) -> str:
+    m = re.search(r"^id (\S+)$", out, re.M)
+    assert m, out
+    return m.group(1)
+
+
+TODAY = _dt.date.today().strftime("%y%m%d")
 
 
 class TestStart(GitCase):
@@ -1297,31 +1315,54 @@ class TestStart(GitCase):
 
     def test_start_makes_branch_worktree_state_and_draft_pr(self):
         wt = self.start()
-        self.assertTrue((wt / "changes/c1/intent.md").exists())
+        c1 = self.id()
+        self.assertEqual(c1, f"0001-{TODAY}-c1")
+        self.assertTrue((wt / f"changes/{c1}/intent.md").exists())
         st = self.state(wt)
-        self.assertEqual((st["phase"], st["branch"], st["base"], st["pr"]), ("spec", "sdd/c1", "main", 7))
-        self.assertEqual(self.git("rev-parse", "--abbrev-ref", "HEAD", cwd=wt), "sdd/c1")
-        self.git("fetch", "-q", "origin", "sdd/c1")
-        self.assertEqual(self.remote_subjects("sdd/c1")[:2], ["chore(sdd): record PR #7", "chore(sdd): start c1"])
-        self.assertIn("pr create --draft --base main --head sdd/c1 --title feat: one", self.log.read_text())
-        self.assertFalse((self.root / "changes/c1").exists(), "main checkout stays clean")
+        self.assertEqual((st["phase"], st["branch"], st["base"], st["pr"]), ("spec", f"sdd/{c1}", "main", 7))
+        self.assertEqual(self.git("rev-parse", "--abbrev-ref", "HEAD", cwd=wt), f"sdd/{c1}")
+        self.git("fetch", "-q", "origin", f"sdd/{c1}")
+        self.assertEqual(self.remote_subjects(f"sdd/{c1}")[:2], ["chore(sdd): record PR #7", f"chore(sdd): start {c1}"])
+        self.assertIn(f"pr create --draft --base main --head sdd/{c1} --title feat: one", self.log.read_text())
+        self.assertFalse((self.root / f"changes/{c1}").exists(), "main checkout stays clean")
 
     def test_start_without_gh_still_works_and_set_pr_records(self):
         self.env["GH_FAIL"] = "1"
         code, out = self.sdd("start", "c1", "--title", "One")
         self.assertEqual(code, 0, out)
         self.assertIn("PR missing", out)
-        wt = self.root / ".claude/worktrees/sdd-c1"
-        self.assertIsNone(self.state(wt)["pr"])
-        code, out = self.sdd("set-pr", "c1", "12", "--url", "https://x/pull/12", cwd=wt)
+        c1 = id_in(out)
+        wt = self.root / f".claude/worktrees/sdd-{c1}"
+        self.assertIsNone(json.loads((wt / f"changes/{c1}/state.json").read_text())["pr"])
+        code, out = self.sdd("set-pr", c1, "12", "--url", "https://x/pull/12", cwd=wt)
         self.assertEqual(code, 0, out)
-        self.assertEqual(self.state(wt)["pr"], 12)
-        self.git("fetch", "-q", "origin", "sdd/c1")
-        self.assertEqual(self.remote_subjects("sdd/c1")[0], "chore(sdd): record PR #12")
+        self.assertEqual(json.loads((wt / f"changes/{c1}/state.json").read_text())["pr"], 12)
+        self.git("fetch", "-q", "origin", f"sdd/{c1}")
+        self.assertEqual(self.remote_subjects(f"sdd/{c1}")[0], "chore(sdd): record PR #12")
 
-    def test_start_refuses_duplicates_and_uncommitted_config(self):
+    def test_ids_take_the_next_number_from_branches_and_archives(self):
         self.start()
-        self.assert_exit(self.sdd("start", "c1"), 1, "already exists")
+        self.assertEqual(self.id(), f"0001-{TODAY}-c1")
+        self.start("c1")  # the same slug again is another change
+        self.assertEqual(self.id(), f"0002-{TODAY}-c1")
+        other = self.tmp / "other"  # a change started on another machine, not fetched here
+        self.git("clone", "-q", str(self.origin), str(other), cwd=self.tmp)
+        code, out = self.sdd("start", "far", "--title", "F", cwd=other)
+        self.assertEqual(code, 0, out)
+        self.assertEqual(id_in(out), f"0003-{TODAY}-far")
+        put(self.root / "changes/archive/2026-01-01-0041-260101-old/intent.md", "x\n")  # merged and archived
+        put(self.root / "changes/legacy-name/intent.md", "x\n")  # ids from before the scheme don't count
+        self.git("add", "-A")
+        self.git("commit", "-qm", "old changes")
+        self.git("push", "-q")
+        self.start("c2")
+        self.assertEqual(self.id("c2"), f"0042-{TODAY}-c2")
+
+    def test_start_rejects_what_is_not_a_slug(self):
+        for bad in ["Bad_Name", f"0001-{TODAY}-c1", "x" * 50]:
+            self.assert_exit(self.sdd("start", bad, "--title", "T"), 2, "is not a slug")
+
+    def test_start_refuses_uncommitted_config(self):
         self.git("rm", "-q", ".claude/sdd.json", cwd=self.root)
         self.git("commit", "-qm", "drop cfg", cwd=self.root)
         self.git("push", "-q", cwd=self.root)
@@ -1330,10 +1371,11 @@ class TestStart(GitCase):
     def test_failed_push_leaves_nothing_behind_so_start_can_be_retried(self):
         self.git("config", "remote.origin.pushurl", str(self.tmp / "nowhere.git"), cwd=self.root)
         self.assertEqual(self.sdd("start", "c1", "--title", "One")[0], 1)
-        self.assertFalse((self.root / ".claude/worktrees/sdd-c1").exists())
-        self.assertEqual(self.git("branch", "--list", "sdd/c1", cwd=self.root), "")
+        self.assertEqual(list((self.root / ".claude/worktrees").glob("sdd-*")), [])
+        self.assertEqual(self.git("branch", "--list", "sdd/*", cwd=self.root), "")
         self.git("config", "--unset", "remote.origin.pushurl", cwd=self.root)
         self.start()
+        self.assertEqual(self.id(), f"0001-{TODAY}-c1", "the failed start used no number")
 
     def assert_exit(self, res, code, needle):
         self.assertEqual(res[0], code, res[1])
@@ -1343,20 +1385,20 @@ class TestStart(GitCase):
 class TestCheckpoint(GitCase):
     def test_checkpoint_sets_phase_commits_and_pushes(self):
         wt = self.start()
-        (wt / "changes/c1/specs").mkdir(exist_ok=True)
-        put(wt / "changes/c1/specs/capabilities/tokens.md", NEW_CAP)
-        code, out = self.sdd("checkpoint", "c1", "--phase", "gate1", "-m", "docs(sdd): c1 spec", cwd=wt)
+        c1 = self.id()
+        put(wt / f"changes/{c1}/specs/capabilities/tokens.md", NEW_CAP)
+        code, out = self.sdd("checkpoint", c1, "--phase", "gate1", "-m", "docs(sdd): c1 spec", cwd=wt)
         self.assertEqual(code, 0, out)
         self.assertEqual(self.state(wt)["phase"], "gate1")
-        self.git("fetch", "-q", "origin", "sdd/c1")
-        self.assertEqual(self.remote_subjects("sdd/c1")[0], "docs(sdd): c1 spec")
+        self.git("fetch", "-q", "origin", f"sdd/{c1}")
+        self.assertEqual(self.remote_subjects(f"sdd/{c1}")[0], "docs(sdd): c1 spec")
 
     def test_checkpoint_nothing_to_commit_and_bad_phase(self):
         wt = self.start()
-        code, out = self.sdd("checkpoint", "c1", cwd=wt)
+        code, out = self.sdd("checkpoint", self.id(), cwd=wt)
         self.assertEqual(code, 0, out)
         self.assertIn("nothing to commit", out)
-        self.assertEqual(self.sdd("checkpoint", "c1", "--phase", "nope", cwd=wt)[0], 2)
+        self.assertEqual(self.sdd("checkpoint", self.id(), "--phase", "nope", cwd=wt)[0], 2)
 
     def test_checkpoint_refuses_files_that_look_like_secrets(self):
         wt = self.start()
@@ -1364,23 +1406,23 @@ class TestCheckpoint(GitCase):
         put(wt / "config/id_ed25519", "key\n")
         put(wt / ".env.example", "TOKEN=\n")
         put(wt / "src/auth/credentials.py", "def load(): ...\n")
-        code, out = self.sdd("checkpoint", "c1", "-m", "x", cwd=wt)
+        code, out = self.sdd("checkpoint", self.id(), "-m", "x", cwd=wt)
         self.assertEqual(code, 1, out)
         self.assertIn("look like secrets: .env, config/id_ed25519", out)
         self.assertNotIn(".env", self.git("ls-files", cwd=wt).splitlines())
         (wt / ".env").unlink()
         (wt / "config/id_ed25519").unlink()
-        code, out = self.sdd("checkpoint", "c1", "-m", "y", cwd=wt)
+        code, out = self.sdd("checkpoint", self.id(), "-m", "y", cwd=wt)
         self.assertEqual(code, 0, out)
         self.assertIn("added 2 new file(s): .env.example, src/auth/credentials.py", out)
 
     def test_checkpoint_refuses_on_another_branch(self):
         wt = self.start()
-        code, out = self.sdd("checkpoint", "c1", cwd=wt)  # sanity
+        code, out = self.sdd("checkpoint", self.id(), cwd=wt)  # sanity
         self.git("checkout", "-q", "-b", "other", cwd=wt)
-        code, out = self.sdd("checkpoint", "c1", "-m", "x", cwd=wt)
+        code, out = self.sdd("checkpoint", self.id(), "-m", "x", cwd=wt)
         self.assertEqual(code, 1, out)
-        self.assertIn("expected sdd/c1", out)
+        self.assertIn(f"expected sdd/{self.id()}", out)
 
 
 class TestResume(GitCase):
@@ -1391,30 +1433,32 @@ class TestResume(GitCase):
 
     def test_resume_from_a_fresh_clone_recreates_worktree_and_shows_phase(self):
         wt = self.start()
-        self.assertEqual(self.sdd("checkpoint", "c1", "--phase", "plan", cwd=wt)[0], 0)
+        c1 = self.id()
+        self.assertEqual(self.sdd("checkpoint", c1, "--phase", "plan", cwd=wt)[0], 0)
         other = self.second_clone()
-        code, out = self.sdd("resume", "c1", cwd=other)
+        code, out = self.sdd("resume", c1, cwd=other)
         self.assertEqual(code, 0, out)
-        owt = other / ".claude/worktrees/sdd-c1"
-        self.assertTrue((owt / "changes/c1/state.json").exists())
+        owt = other / f".claude/worktrees/sdd-{c1}"
+        self.assertTrue((owt / f"changes/{c1}/state.json").exists())
         self.assertIn(f"worktree {owt}", out)
         self.assertIn("phase plan:", out)
         self.assertIn("pr 7", out)
-        self.assertEqual(self.git("rev-parse", "--abbrev-ref", "HEAD", cwd=owt), "sdd/c1")
+        self.assertEqual(self.git("rev-parse", "--abbrev-ref", "HEAD", cwd=owt), f"sdd/{c1}")
 
     def test_resume_reuses_existing_worktree_and_pulls(self):
         wt = self.start()
         other = self.second_clone()
-        self.assertEqual(self.sdd("resume", "c1", cwd=other)[0], 0)
-        self.assertEqual(self.sdd("checkpoint", "c1", "--phase", "gate2", cwd=wt)[0], 0)
-        code, out = self.sdd("resume", "c1", cwd=other)
+        self.assertEqual(self.sdd("resume", self.id(), cwd=other)[0], 0)
+        self.assertEqual(self.sdd("checkpoint", self.id(), "--phase", "gate2", cwd=wt)[0], 0)
+        code, out = self.sdd("resume", self.id(), cwd=other)
         self.assertEqual(code, 0, out)
         self.assertIn("phase gate2:", out)
 
     def test_resume_by_pr_number(self):
         self.start()
+        self.env["GH_PR_HEAD"] = f"sdd/{self.id()}"
         other = self.second_clone()
-        code, out = self.sdd("resume", "c1", "--pr", "7", cwd=other)
+        code, out = self.sdd("resume", self.id(), "--pr", "7", cwd=other)
         self.assertEqual(code, 0, out)
         self.assertIn("pr view 7", self.log.read_text())
 
@@ -1424,9 +1468,9 @@ class TestResume(GitCase):
 
 
 class TestDeps(GitCase):
-    def finish_change(self, name: str) -> Path:
-        """Take a change through sync + finish on its branch (not merged into main yet)."""
-        wt = self.start(name)
+    def finish_change(self, slug: str) -> Path:
+        """Take a started change through sync + finish on its branch (not merged into main yet)."""
+        wt, name = self.worktree(slug), self.id(slug)
         self.assertEqual(self.sdd("set-status", name, "verified", cwd=wt)[0], 0)
         put(wt / f"changes/{name}/specs/capabilities/tokens.md", NEW_CAP)
         (wt / f"changes/{name}/tasks.md").write_text(
@@ -1435,159 +1479,165 @@ class TestDeps(GitCase):
         self.assertEqual(self.sdd("finish", name, cwd=wt)[0], 0)
         return wt
 
-    def merge_into_main(self, name: str):
+    def merge_into_main(self, slug: str):
+        name = self.id(slug)
         self.git("fetch", "-q", "origin", f"sdd/{name}")
         self.git("merge", "-q", "--no-ff", "-m", f"merge {name}", f"origin/sdd/{name}", cwd=self.root)
         self.git("push", "-q", "origin", "main", cwd=self.root)
 
-    def started_with(self, dep: str = "dep", name: str = "c1") -> Path:
-        code, out = self.sdd("start", name, "--title", "C", "--requires", dep)
-        self.assertEqual(code, 0, out)
-        return self.root / ".claude/worktrees" / f"sdd-{name}"
+    def started_with(self, dep: str = "dep", slug: str = "c1") -> Path:
+        """Start `dep` if needed, then `slug` requiring it."""
+        if dep not in self.ids:
+            self.start(dep)
+        return self.start(slug, "--requires", self.id(dep))
 
     def test_start_stores_requires_and_warns(self):
         self.start("dep")
-        code, out = self.sdd("start", "c1", "--title", "C", "--requires", "dep,dep")
+        dep = self.id("dep")
+        code, out = self.sdd("start", "c1", "--title", "C", "--requires", f"{dep},{dep}")
         self.assertEqual(code, 0, out)
-        self.assertIn("WARN requires open dep phase spec pr #7", out)
-        wt = self.root / ".claude/worktrees/sdd-c1"
-        self.assertEqual(self.state(wt)["requires"], ["dep"])
+        self.assertIn(f"WARN requires open {dep} phase spec pr #7", out)
+        self.ids["c1"] = id_in(out)
+        wt = self.worktree()
+        self.assertEqual(self.state(wt)["requires"], [dep])
         code, out = self.sdd("status", "--json", cwd=wt)
-        self.assertEqual(json.loads(out)["changes"][0]["requires"], ["dep"])
+        self.assertEqual(json.loads(out)["changes"][0]["requires"], [dep])
 
-    def test_start_rejects_bad_or_self_requires(self):
-        self.assertEqual(self.sdd("start", "c1", "--title", "C", "--requires", "c1")[0], 2)
+    def test_start_rejects_bad_requires(self):
         self.assertEqual(self.sdd("start", "c2", "--title", "C", "--requires", "Bad_Id")[0], 2)
 
-    def test_deps_open_ready_unknown_then_merged(self):
-        wt = self.started_with()
-        code, out = self.sdd("deps", "c1", cwd=wt)
+    def test_deps_unknown_open_then_later_phase(self):
+        wt = self.start()
+        self.assertEqual(self.sdd("requires", self.id(), "ghost", cwd=wt)[0], 0)
+        code, out = self.sdd("deps", self.id(), cwd=wt)
         self.assertEqual(code, 1, out)
-        self.assertIn("unknown dep no branch sdd/dep", out)
-        self.start("dep")
-        code, out = self.sdd("deps", "c1", cwd=wt)
+        self.assertIn("unknown ghost no branch sdd/ghost", out)
+        wt = self.started_with("dep", "c2")
+        dep, c2 = self.id("dep"), self.id("c2")
+        code, out = self.sdd("deps", c2, cwd=wt)
         self.assertEqual(code, 1, out)
-        self.assertIn("open dep phase spec pr #7", out)
-        self.assertIn("next: resume dep", out)
-        self.sdd("checkpoint", "dep", "--phase", "plan", cwd=self.root / ".claude/worktrees/sdd-dep")
-        self.assertIn("phase plan", self.sdd("deps", "c1", cwd=wt)[1])
+        self.assertIn(f"open {dep} phase spec pr #7", out)
+        self.assertIn(f"next: resume {dep}", out)
+        self.sdd("checkpoint", dep, "--phase", "plan", cwd=self.worktree("dep"))
+        self.assertIn("phase plan", self.sdd("deps", c2, cwd=wt)[1])
 
     def test_deps_ready_then_missing_until_base_is_merged_in(self):
         wt = self.started_with()
+        dep = self.id("dep")
         self.finish_change("dep")
-        code, out = self.sdd("deps", "c1", cwd=wt)
+        code, out = self.sdd("deps", self.id(), cwd=wt)
         self.assertEqual(code, 1, out)
-        self.assertIn("ready dep finished pr #7, awaits merge into main", out)
-        self.assertIn("next: merge the PR of dep (#7)", out)
+        self.assertIn(f"ready {dep} finished pr #7, awaits merge into main", out)
+        self.assertIn(f"next: merge the PR of {dep} (#7)", out)
         self.merge_into_main("dep")
-        code, out = self.sdd("deps", "c1", cwd=wt)
+        code, out = self.sdd("deps", self.id(), cwd=wt)
         self.assertEqual(code, 1, out)
-        self.assertIn("missing dep merged into main, not in this branch", out)
+        self.assertIn(f"missing {dep} merged into main, not in this branch", out)
 
     def test_transitive_deps_list_deepest_first(self):
-        self.start("aa")
         self.started_with("aa", "bb")
         wt_c = self.started_with("bb", "cc")
-        code, out = self.sdd("deps", "cc", cwd=wt_c)
+        code, out = self.sdd("deps", self.id("cc"), cwd=wt_c)
         self.assertEqual(code, 1, out)
         lines = [l for l in out.splitlines() if l.startswith(("open", "unknown", "ready"))]
-        self.assertEqual([l.split()[1] for l in lines], ["aa", "bb"])
-        self.assertIn("next: resume aa", out)
+        self.assertEqual([l.split()[1] for l in lines], [self.id("aa"), self.id("bb")])
+        self.assertIn(f"next: resume {self.id('aa')}", out)
 
     def test_cycle_is_an_error(self):
-        wt_a = self.start("aa")
         self.started_with("aa", "bb")
-        code, out = self.sdd("requires", "aa", "bb", cwd=wt_a)
+        aa, bb = self.id("aa"), self.id("bb")
+        wt_a = self.worktree("aa")
+        code, out = self.sdd("requires", aa, bb, cwd=wt_a)
         self.assertEqual(code, 1, out)
-        self.assertIn("cycle aa -> bb -> aa", out)
+        self.assertIn(f"cycle {aa} -> {bb} -> {aa}", out)
         self.assertEqual(self.state(wt_a, "aa").get("requires"), [])
-        self.assertEqual(self.sdd("start", "cc", "--title", "C", "--requires", "cc")[0], 2)
+        self.assertEqual(self.sdd("requires", aa, aa, cwd=wt_a)[0], 2)
 
     def test_requires_command_sets_shows_and_clears(self):
         wt = self.start()
-        self.assertEqual(self.sdd("requires", "c1", cwd=wt)[1].strip(), "-")
-        code, out = self.sdd("requires", "c1", "xx,yy", "zz", cwd=wt)
+        c1 = self.id()
+        self.assertEqual(self.sdd("requires", c1, cwd=wt)[1].strip(), "-")
+        code, out = self.sdd("requires", c1, "xx,yy", "zz", cwd=wt)
         self.assertEqual(code, 0, out)
         self.assertEqual(self.state(wt)["requires"], ["xx", "yy", "zz"])
-        self.git("fetch", "-q", "origin", "sdd/c1")
-        self.assertEqual(self.remote_subjects("sdd/c1")[0], "chore(sdd): c1 requires xx,yy,zz")
-        self.assertEqual(self.sdd("requires", "c1", cwd=wt)[1].strip(), "xx,yy,zz")
-        self.sdd("requires", "c1", "--clear", cwd=wt)
+        self.git("fetch", "-q", "origin", f"sdd/{c1}")
+        self.assertEqual(self.remote_subjects(f"sdd/{c1}")[0], f"chore(sdd): {c1} requires xx,yy,zz")
+        self.assertEqual(self.sdd("requires", c1, cwd=wt)[1].strip(), "xx,yy,zz")
+        self.sdd("requires", c1, "--clear", cwd=wt)
         self.assertEqual(self.state(wt)["requires"], [])
 
     def test_checkpoint_gates_plan_and_later_but_not_earlier_phases(self):
         wt = self.started_with()
-        self.start("dep")
-        self.assertEqual(self.sdd("checkpoint", "c1", "--phase", "gate1", cwd=wt)[0], 0)
-        code, out = self.sdd("checkpoint", "c1", "--phase", "plan", cwd=wt)
+        self.assertEqual(self.sdd("checkpoint", self.id(), "--phase", "gate1", cwd=wt)[0], 0)
+        code, out = self.sdd("checkpoint", self.id(), "--phase", "plan", cwd=wt)
         self.assertEqual(code, 1, out)
         self.assertIn("required changes are not merged", out)
-        self.assertIn("Next: resume dep", out)
+        self.assertIn(f"Next: resume {self.id('dep')}", out)
         self.assertEqual(self.state(wt)["phase"], "gate1")
 
     def test_resume_refuses_while_dep_is_open_and_names_next_step(self):
-        wt = self.started_with()
-        self.start("dep")
+        self.started_with()
         other = self.tmp / "other"
         self.git("clone", "-q", str(self.origin), str(other), cwd=self.tmp)
-        code, out = self.sdd("resume", "c1", cwd=other)
+        code, out = self.sdd("resume", self.id(), cwd=other)
         self.assertEqual(code, 1, out)
         self.assertIn("blocked: required changes are not merged into main", out)
-        self.assertIn("next: resume dep, then `resume c1` again", out)
+        self.assertIn(f"next: resume {self.id('dep')}, then `resume {self.id()}` again", out)
         self.assertNotIn("EnterWorktree", out)
 
     def test_resume_says_to_merge_a_finished_dep(self):
         self.started_with()
         self.finish_change("dep")
-        code, out = self.sdd("resume", "c1")
+        code, out = self.sdd("resume", self.id())
         self.assertEqual(code, 1, out)
-        self.assertIn("next: merge the PR of dep (#7), then `resume c1` again", out)
+        self.assertIn(f"next: merge the PR of {self.id('dep')} (#7), then `resume {self.id()}` again", out)
 
     def test_resume_and_checkpoint_merge_base_once_dep_is_merged(self):
         wt = self.started_with()
         self.finish_change("dep")
         self.merge_into_main("dep")
-        code, out = self.sdd("resume", "c1")
+        code, out = self.sdd("resume", self.id())
         self.assertEqual(code, 0, out)
         self.assertIn("merged origin/main into the branch", out)
-        self.assertTrue(list((wt / "changes/archive").glob("*-dep")))
-        self.assertEqual(self.sdd("deps", "c1", cwd=wt)[0], 0)
+        self.assertTrue(list((wt / "changes/archive").glob(f"*-{self.id('dep')}")))
+        self.assertEqual(self.sdd("deps", self.id(), cwd=wt)[0], 0)
         # a second change: the checkpoint itself brings the base in
         wt2 = self.started_with("dep", "c2")
-        code, out = self.sdd("checkpoint", "c2", "--phase", "plan", cwd=wt2)
+        code, out = self.sdd("checkpoint", self.id("c2"), "--phase", "plan", cwd=wt2)
         self.assertEqual(code, 0, out)
         self.assertEqual(self.state(wt2, "c2")["phase"], "plan")
 
     def test_synced_but_not_finished_dep_is_still_open(self):
         wt = self.started_with()
-        d = self.start("dep")
-        self.assertEqual(self.sdd("set-status", "dep", "verified", cwd=d)[0], 0)
-        put(d / "changes/dep/specs/capabilities/tokens.md", NEW_CAP)
-        (d / "changes/dep/tasks.md").write_text(
+        d, dep = self.worktree("dep"), self.id("dep")
+        self.assertEqual(self.sdd("set-status", dep, "verified", cwd=d)[0], 0)
+        put(d / f"changes/{dep}/specs/capabilities/tokens.md", NEW_CAP)
+        (d / f"changes/{dep}/tasks.md").write_text(
             TOKEN_TASKS)
-        self.assertEqual(self.sdd("sync", "dep", "--force", cwd=d)[0], 0)
+        self.assertEqual(self.sdd("sync", dep, "--force", cwd=d)[0], 0)
         self.git("add", "-A", cwd=d)
         self.git("commit", "-qm", "sync", cwd=d)
         self.git("push", "-q", cwd=d)
-        code, out = self.sdd("deps", "c1", cwd=wt)
+        code, out = self.sdd("deps", self.id(), cwd=wt)
         self.assertEqual(code, 1, out)
-        self.assertIn("open dep phase spec pr #7 (synced, `finish` not run)", out)
-        self.assertIn("next: resume dep", out)
+        self.assertIn(f"open {dep} phase spec pr #7 (synced, `finish` not run)", out)
+        self.assertIn(f"next: resume {dep}", out)
 
     def test_start_does_not_warn_about_a_dep_merged_while_main_checkout_is_stale(self):
+        self.start("dep")
         self.finish_change("dep")
         self.merge_into_main("dep")
         self.git("reset", "-q", "--hard", "HEAD~1", cwd=self.root)  # local main behind origin
-        code, out = self.sdd("start", "c1", "--title", "C", "--requires", "dep")
+        code, out = self.sdd("start", "c1", "--title", "C", "--requires", self.id("dep"))
         self.assertEqual(code, 0, out)
         self.assertNotIn("WARN", out)
 
     def test_requires_command_warns_about_unmerged_and_unknown(self):
         wt = self.start()
         self.start("dep")
-        code, out = self.sdd("requires", "c1", "dep", "lgoin", cwd=wt)
+        code, out = self.sdd("requires", self.id(), self.id("dep"), "lgoin", cwd=wt)
         self.assertEqual(code, 0, out)
-        self.assertIn("WARN requires open dep phase spec", out)
+        self.assertIn(f"WARN requires open {self.id('dep')} phase spec", out)
         self.assertIn("WARN requires unknown lgoin no branch sdd/lgoin", out)
 
     def test_resume_refuses_to_merge_base_over_uncommitted_changes(self):
@@ -1595,22 +1645,22 @@ class TestDeps(GitCase):
         self.finish_change("dep")
         self.merge_into_main("dep")
         (wt / "scratch.txt").write_text("wip\n")
-        code, out = self.sdd("resume", "c1")
+        code, out = self.sdd("resume", self.id())
         self.assertEqual(code, 1, out)
         self.assertIn("uncommitted changes", out)
         self.assertEqual((wt / "scratch.txt").read_text(), "wip\n")
-        self.assertFalse(list((wt / "changes/archive").glob("*-dep")))
+        self.assertFalse(list((wt / "changes/archive").glob(f"*-{self.id('dep')}")))
 
     def test_base_merge_conflict_is_aborted_cleanly(self):
         wt = self.started_with()
         (wt / "clash.txt").write_text("branch\n")
-        self.sdd("checkpoint", "c1", cwd=wt)
+        self.sdd("checkpoint", self.id(), cwd=wt)
         self.finish_change("dep")
         (self.root / "clash.txt").write_text("main\n")
         self.git("add", "-A", cwd=self.root)
         self.git("commit", "-qm", "clash", cwd=self.root)
         self.merge_into_main("dep")
-        code, out = self.sdd("resume", "c1")
+        code, out = self.sdd("resume", self.id())
         self.assertEqual(code, 1, out)
         self.assertIn("clash.txt", out)
         self.assertEqual(self.git("status", "--porcelain", cwd=wt), "")
@@ -1625,9 +1675,9 @@ class TestBaselineProof(GitCase):
         self.git("commit", "-qm", "code")
         self.git("push", "-q")
         self.wt = self.start()
-        put(self.wt / "changes/c1/specs/capabilities/tokens.md", NEW_CAP.replace(
+        put(self.wt / f"changes/{self.id()}/specs/capabilities/tokens.md", NEW_CAP.replace(
             "- **Then** the response is 401\n", "- **Then** the response is 401\n- **Baseline**: src/tokens.py\n"))
-        put(self.wt / "changes/c1/tasks.md", "---\ntype: tasks\n---\n\n# Tasks\n\n"
+        put(self.wt / f"changes/{self.id()}/tasks.md", "---\ntype: tasks\n---\n\n# Tasks\n\n"
             "- [x] T1 (test) t — capabilities/tokens#AC-01\n")
         self.test_file = self.wt / "tests/acceptance/test_tokens.py"
         put(self.test_file, "# capabilities/tokens#AC-01\ndef test_expired():\n    assert True\n")
@@ -1636,10 +1686,10 @@ class TestBaselineProof(GitCase):
         put(self.root / rel, text)
 
     def state(self) -> dict:
-        return json.loads((self.wt / "changes/c1/state.json").read_text())
+        return json.loads((self.wt / f"changes/{self.id()}/state.json").read_text())
 
     def test_freeze_records_the_base_commit(self):
-        code, out = self.sdd("freeze", "c1", cwd=self.wt)
+        code, out = self.sdd("freeze", self.id(), cwd=self.wt)
         self.assertEqual(code, 0, out)
         base = self.git("merge-base", "HEAD", "origin/main", cwd=self.wt)
         self.assertEqual(self.state()["baseline"]["commit"], base)
@@ -1648,59 +1698,59 @@ class TestBaselineProof(GitCase):
 
     def test_new_baseline_test_after_code_changed_is_refused(self):
         put(self.wt / "src/tokens.py", "TTL = 2\n")
-        code, out = self.sdd("freeze", "c1", cwd=self.wt)
+        code, out = self.sdd("freeze", self.id(), cwd=self.wt)
         self.assertEqual(code, 1, out)
         self.assertIn("Baseline tests must be frozen before production code changes: src/tokens.py", out)
-        self.assertFalse((self.wt / "changes/c1/frozen.json").exists())
-        code, out = self.sdd("freeze", "c1", "--after-code", cwd=self.wt)
+        self.assertFalse((self.wt / f"changes/{self.id()}/frozen.json").exists())
+        code, out = self.sdd("freeze", self.id(), "--after-code", cwd=self.wt)
         self.assertEqual(code, 0, out)
         self.assertIn("WARN  production code already changed", out)
 
     def test_init_files_are_not_production_code(self):
         put(self.wt / ".gitattributes", "specs/log.md merge=union\n")
-        code, out = self.sdd("freeze", "c1", cwd=self.wt)
+        code, out = self.sdd("freeze", self.id(), cwd=self.wt)
         self.assertEqual(code, 0, out)
 
     def test_mixed_baseline_file_warns(self):
-        put(self.wt / "changes/c1/specs/capabilities/tokens.md", NEW_CAP.replace(
+        put(self.wt / f"changes/{self.id()}/specs/capabilities/tokens.md", NEW_CAP.replace(
             "- **Then** the response is 401\n", "- **Then** the response is 401\n- **Baseline**: src/tokens.py\n")
             + "\n### AC-02: Revoked token\n\n- **Given** a revoked token\n- **When** it calls GET /v1/me\n"
             "- **Then** the response is 401\n")
-        put(self.wt / "changes/c1/tasks.md", "---\ntype: tasks\n---\n\n# Tasks\n\n"
+        put(self.wt / f"changes/{self.id()}/tasks.md", "---\ntype: tasks\n---\n\n# Tasks\n\n"
             "- [x] T1 (test) t — capabilities/tokens#AC-01 capabilities/tokens#AC-02\n"
             "- [ ] T2 (impl) i — capabilities/tokens#AC-02 | blocked-by: T1\n")
         put(self.test_file, "# capabilities/tokens#AC-01\n# capabilities/tokens#AC-02\ndef test_x():\n    pass\n")
-        code, out = self.sdd("freeze", "c1", cwd=self.wt)
+        code, out = self.sdd("freeze", self.id(), cwd=self.wt)
         self.assertEqual(code, 0, out)
         self.assertIn("also tests capabilities/tokens#AC-02", out)
 
     def test_unchanged_baseline_test_refreezes_after_code(self):
-        self.assertEqual(self.sdd("freeze", "c1", cwd=self.wt)[0], 0)
+        self.assertEqual(self.sdd("freeze", self.id(), cwd=self.wt)[0], 0)
         put(self.wt / "src/tokens.py", "TTL = 2\n")
-        self.assert_ok_(self.sdd("freeze", "c1", cwd=self.wt))
+        self.assert_ok_(self.sdd("freeze", self.id(), cwd=self.wt))
 
     def assert_ok_(self, res):
         self.assertEqual(res[0], 0, res[1])
 
     def test_baseline_tree_has_base_code_and_current_tests(self):
-        self.assertEqual(self.sdd("baseline-tree", "c1", cwd=self.wt)[0], 1)
-        self.assertEqual(self.sdd("freeze", "c1", cwd=self.wt)[0], 0)
+        self.assertEqual(self.sdd("baseline-tree", self.id(), cwd=self.wt)[0], 1)
+        self.assertEqual(self.sdd("freeze", self.id(), cwd=self.wt)[0], 0)
         put(self.wt / "src/tokens.py", "TTL = 2\n")
-        code, out = self.sdd("baseline-tree", "c1", cwd=self.wt)
+        code, out = self.sdd("baseline-tree", self.id(), cwd=self.wt)
         self.assertEqual(code, 0, out)
-        tree = self.wt / ".claude/worktrees/sdd-c1-baseline"
+        tree = self.wt / f".claude/worktrees/sdd-{self.id()}-baseline"
         self.assertEqual((tree / "src/tokens.py").read_text(), "TTL = 1\n")
         self.assertTrue((tree / "tests/acceptance/test_tokens.py").exists())
         self.assertIn("run: pytest -q tests/acceptance/test_tokens.py", out)
-        self.assertEqual(self.sdd("baseline-tree", "c1", "--link", "../x", cwd=self.wt)[0], 2)
+        self.assertEqual(self.sdd("baseline-tree", self.id(), "--link", "../x", cwd=self.wt)[0], 2)
         put(self.wt / "node_modules/dep/index.js", "")
         put(self.wt / "deps/lib.py", "")
-        code, out = self.sdd("baseline-tree", "c1", "--link", "deps", cwd=self.wt)
+        code, out = self.sdd("baseline-tree", self.id(), "--link", "deps", cwd=self.wt)
         self.assertEqual(code, 0, out)
         self.assertIn("linked node_modules deps", out)
         self.assertTrue((tree / "node_modules/dep/index.js").exists())
         self.assertTrue((tree / "deps").is_symlink())
-        code, out = self.sdd("baseline-tree", "c1", "--remove", cwd=self.wt)
+        code, out = self.sdd("baseline-tree", self.id(), "--remove", cwd=self.wt)
         self.assertEqual(code, 0, out)
         self.assertFalse(tree.exists())
 
@@ -1710,36 +1760,36 @@ class TestFinishAndStatus(GitCase):
         wt = self.start()
         code, out = self.sdd("status", "--json", cwd=wt)
         [c] = json.loads(out)["changes"]
-        self.assertEqual((c["phase"], c["pr"], c["branch"]), ("spec", 7, "sdd/c1"))
-        self.sdd("checkpoint", "c1", "--phase", "implement", cwd=wt)  # but status is draft
-        code, out = self.sdd("check", "c1", cwd=wt)
+        self.assertEqual((c["phase"], c["pr"], c["branch"]), ("spec", 7, f"sdd/{self.id()}"))
+        self.sdd("checkpoint", self.id(), "--phase", "implement", cwd=wt)  # but status is draft
+        code, out = self.sdd("check", self.id(), cwd=wt)
         self.assertIn("WARN  state.json phase 'implement' does not fit status 'draft'", out)
 
     def test_finish_ignores_archived_changes_whose_name_only_ends_the_same(self):
         wt = self.start()
-        other = wt / "changes/archive/2099-01-01-add-c1"
+        other = wt / f"changes/archive/2099-01-01-add-{self.id()}"
         other.mkdir(parents=True)
-        (other / "state.json").write_text(json.dumps({"branch": "sdd/add-c1", "phase": "sync"}))
-        code, out = self.sdd("finish", "c1", cwd=wt)
+        (other / "state.json").write_text(json.dumps({"branch": f"sdd/add-{self.id()}", "phase": "sync"}))
+        code, out = self.sdd("finish", self.id(), cwd=wt)
         self.assertEqual(code, 1, out)
-        self.assertIn("no archived change 'c1'", out)
+        self.assertIn(f"no archived change '{self.id()}'", out)
 
     def test_finish_marks_done_pushes_and_readies_pr(self):
         wt = self.start()
-        self.assertEqual(self.sdd("set-status", "c1", "verified", cwd=wt)[0], 0)
-        put(wt / "changes/c1/specs/capabilities/tokens.md", NEW_CAP)
-        (wt / "changes/c1/tasks.md").write_text(
+        self.assertEqual(self.sdd("set-status", self.id(), "verified", cwd=wt)[0], 0)
+        put(wt / f"changes/{self.id()}/specs/capabilities/tokens.md", NEW_CAP)
+        (wt / f"changes/{self.id()}/tasks.md").write_text(
             TOKEN_TASKS)
-        code, out = self.sdd("sync", "c1", "--force", cwd=wt)
+        code, out = self.sdd("sync", self.id(), "--force", cwd=wt)
         self.assertEqual(code, 0, out)
-        code, out = self.sdd("finish", "c1", cwd=wt)
+        code, out = self.sdd("finish", self.id(), cwd=wt)
         self.assertEqual(code, 0, out)
         self.assertIn("pr 7 ready for review", out)
         self.assertIn("pr ready 7", self.log.read_text())
-        [arch] = (wt / "changes/archive").glob("*-c1")
+        [arch] = (wt / "changes/archive").glob(f"*-{self.id()}")
         self.assertEqual(json.loads((arch / "state.json").read_text())["phase"], "done")
-        self.git("fetch", "-q", "origin", "sdd/c1")
-        self.assertEqual(self.remote_subjects("sdd/c1")[0], "chore(sdd): sync c1")
+        self.git("fetch", "-q", "origin", f"sdd/{self.id()}")
+        self.assertEqual(self.remote_subjects(f"sdd/{self.id()}")[0], f"chore(sdd): sync {self.id()}")
 
 
 class TestSyncAcrossBranches(GitCase):
@@ -1753,9 +1803,10 @@ class TestSyncAcrossBranches(GitCase):
         self.git("commit", "-qm", "living login")
         self.git("push", "-q")
 
-    def verified(self, name: str, ac: str, then: str) -> Path:
+    def verified(self, slug: str, ac: str, then: str) -> Path:
         """A started change that MODIFIES `ac`, verified and checkpointed, ready to sync."""
-        wt = self.start(name)
+        wt = self.start(slug)
+        name = self.id(slug)
         self.assertEqual(self.sdd("delta-stub", name, f"{LOGIN_REF}#{ac}", cwd=wt)[0], 0)
         f = wt / f"changes/{name}/specs/{LOGIN_REF}.md"
         old = "the response is 423" if ac == "AC-02" else "the response is 200"
@@ -1768,11 +1819,12 @@ class TestSyncAcrossBranches(GitCase):
         self.assertEqual(code, 0, out)
         return wt
 
-    def synced(self, name: str, wt: Path):
-        code, out = self.sdd("sync", name, cwd=wt)
+    def synced(self, slug: str, wt: Path):
+        code, out = self.sdd("sync", self.id(slug), cwd=wt)
         self.assertEqual(code, 0, out)
 
-    def merge_into_main(self, name: str):
+    def merge_into_main(self, slug: str):
+        name = self.id(slug)
         self.git("fetch", "-q", "origin", f"sdd/{name}")
         self.git("merge", "-q", "--no-edit", f"origin/sdd/{name}")
         self.git("push", "-q")
@@ -1785,23 +1837,23 @@ class TestSyncAcrossBranches(GitCase):
     def test_sync_checks_the_delta_against_the_base_as_it_is_now(self):
         a, b = self.verified("ca", "AC-02", "the response is 429"), self.verified("cb", "AC-02", "the response is 403")
         self.synced("ca", a)
-        self.assertEqual(self.sdd("finish", "ca", cwd=a)[0], 0)
+        self.assertEqual(self.sdd("finish", self.id("ca"), cwd=a)[0], 0)
         self.merge_into_main("ca")
-        code, out = self.sdd("sync", "cb", "--dry-run", cwd=b)
+        code, out = self.sdd("sync", self.id("cb"), "--dry-run", cwd=b)
         self.assertIn("WARN origin/main has commits this branch lacks", out)
-        code, out = self.sdd("sync", "cb", cwd=b)
+        code, out = self.sdd("sync", self.id("cb"), cwd=b)
         self.assertEqual(code, 1, out)
         self.assertIn("merged origin/main into the branch", out)
         self.assertIn(f"{LOGIN_REF}#AC-02: CONFLICT base", out)
-        self.assertTrue((b / "changes/cb/intent.md").exists(), "nothing archived")
+        self.assertTrue((b / f"changes/{self.id('cb')}/intent.md").exists(), "nothing archived")
 
     def test_changes_to_different_criteria_merge_cleanly_after_sync(self):
         a, b = self.verified("ca", "AC-01", "the response is 201"), self.verified("cb", "AC-02", "the response is 429")
         self.synced("ca", a)
         self.synced("cb", b)  # both synced before either is merged
-        self.assertEqual(self.sdd("finish", "ca", cwd=a)[0], 0)
+        self.assertEqual(self.sdd("finish", self.id("ca"), cwd=a)[0], 0)
         self.merge_into_main("ca")
-        code, out = self.sdd("finish", "cb", cwd=b)
+        code, out = self.sdd("finish", self.id("cb"), cwd=b)
         self.assertEqual(code, 0, out)
         self.assertIn("merged origin/main into the branch (merged after this sync)", out)
         spec = (b / f"specs/{LOGIN_REF}.md").read_text()
@@ -1809,26 +1861,26 @@ class TestSyncAcrossBranches(GitCase):
         self.assertIn("the response is 429", spec)
         self.assertIn('at: "2026-01-01T00:00:00Z"', spec, "a merge keeps generated.at")
         log = (b / "specs/log.md").read_text()
-        self.assertIn("ca: MODIFIED capabilities/auth/login#AC-01", log)
-        self.assertIn("cb: MODIFIED capabilities/auth/login#AC-02", log)
+        self.assertIn(f"{self.id('ca')}: MODIFIED capabilities/auth/login#AC-01", log)
+        self.assertIn(f"{self.id('cb')}: MODIFIED capabilities/auth/login#AC-02", log)
         self.assertNotIn("<<<<<<<", log + spec)
 
     def test_dry_run_does_not_fetch_but_sync_warns_when_it_cannot(self):
         wt = self.verified("ca", "AC-02", "the response is 429")
         self.git("remote", "set-url", "origin", str(self.tmp / "gone.git"), cwd=wt)
-        code, out = self.sdd("sync", "ca", "--dry-run", cwd=wt)
+        code, out = self.sdd("sync", self.id("ca"), "--dry-run", cwd=wt)
         self.assertEqual(code, 0, out)
         self.assertNotIn("could not fetch", out)
-        code, out = self.sdd("sync", "ca", cwd=wt)
+        code, out = self.sdd("sync", self.id("ca"), cwd=wt)
         self.assertIn("WARN  could not fetch origin/main", out)
 
     def test_a_unit_both_changed_after_sync_stops_finish(self):
         a, b = self.verified("ca", "AC-02", "the response is 429"), self.verified("cb", "AC-02", "the response is 403")
         self.synced("ca", a)
         self.synced("cb", b)
-        self.assertEqual(self.sdd("finish", "ca", cwd=a)[0], 0)
+        self.assertEqual(self.sdd("finish", self.id("ca"), cwd=a)[0], 0)
         self.merge_into_main("ca")
-        code, out = self.sdd("finish", "cb", cwd=b)
+        code, out = self.sdd("finish", self.id("cb"), cwd=b)
         self.assertEqual(code, 1, out)
         self.assertIn(f"failed (specs/{LOGIN_REF}.md)", out)
         self.assertIn("Conflict after sync", out)
@@ -1845,25 +1897,25 @@ class TestFreezeAcrossBase(GitCase):
         self.git("commit", "-qm", "base tests")
         self.git("push", "-q")
         wt = self.start()
-        put(wt / "changes/c1/specs/capabilities/tokens.md", NEW_CAP)
-        put(wt / "changes/c1/tasks.md", TOKEN_TASKS)
+        put(wt / f"changes/{self.id()}/specs/capabilities/tokens.md", NEW_CAP)
+        put(wt / f"changes/{self.id()}/tasks.md", TOKEN_TASKS)
         put(wt / "tests/acceptance/test_tokens.py", "# capabilities/tokens#AC-01\ndef test_x(): pass\n")
         put(wt / "tests/acceptance/test_login.py", f"# {LOGIN_REF}#AC-01\ndef test_v2(): pass\n")
-        code, out = self.sdd("freeze", "c1", cwd=wt)
+        code, out = self.sdd("freeze", self.id(), cwd=wt)
         self.assertEqual(code, 0, out)
-        self.assertEqual(self.sdd("checkpoint", "c1", "-m", "test(c1): T1", cwd=wt)[0], 0)
+        self.assertEqual(self.sdd("checkpoint", self.id(), "-m", f"test({self.id()}): T1", cwd=wt)[0], 0)
 
         put(self.root / "tests/acceptance/helpers.py", "def ok(): return 1\n")  # another change, merged
         self.git("commit", "-qam", "helpers v2")
         self.git("push", "-q")
         self.git("fetch", "-q", "origin", "main", cwd=wt)
         self.git("merge", "-q", "--no-edit", "origin/main", cwd=wt)
-        code, out = self.sdd("verify-frozen", "c1", cwd=wt)
+        code, out = self.sdd("verify-frozen", self.id(), cwd=wt)
         self.assertEqual(code, 0, out)
         self.assertIn("tests/acceptance/helpers.py modified by origin/main after freeze (accepted)", out)
 
         put(wt / "tests/acceptance/test_login.py", f"# {LOGIN_REF}#AC-01\ndef test_v1(): pass\n")  # as on the base
-        code, out = self.sdd("verify-frozen", "c1", cwd=wt)
+        code, out = self.sdd("verify-frozen", self.id(), cwd=wt)
         self.assertEqual(code, 1, out)
         self.assertIn("tests/acceptance/test_login.py modified after freeze", out)
 
@@ -1873,13 +1925,13 @@ class TestFreezeAcrossBase(GitCase):
         self.git("commit", "-qm", "base helpers")
         self.git("push", "-q")
         wt = self.start()
-        put(wt / "changes/c1/specs/capabilities/tokens.md", NEW_CAP)
-        put(wt / "changes/c1/tasks.md", TOKEN_TASKS)
+        put(wt / f"changes/{self.id()}/specs/capabilities/tokens.md", NEW_CAP)
+        put(wt / f"changes/{self.id()}/tasks.md", TOKEN_TASKS)
         put(wt / "tests/acceptance/test_tokens.py", "# capabilities/tokens#AC-01\ndef test_x(): pass\n")
-        self.assertEqual(self.sdd("freeze", "c1", cwd=wt)[0], 0)
+        self.assertEqual(self.sdd("freeze", self.id(), cwd=wt)[0], 0)
         (wt / "tests/acceptance/helpers.py").unlink()
         self.git("update-ref", "-d", "refs/remotes/origin/main")  # a shallow CI checkout has no base ref
-        code, out = self.sdd("verify-frozen", "c1", cwd=wt)
+        code, out = self.sdd("verify-frozen", self.id(), cwd=wt)
         self.assertEqual(code, 1, out)
         self.assertIn("tests/acceptance/helpers.py deleted after freeze", out)
 

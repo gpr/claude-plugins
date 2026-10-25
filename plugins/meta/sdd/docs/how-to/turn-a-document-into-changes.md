@@ -32,7 +32,7 @@ You get one line per change (`id | type | triage | sections covered | requires`)
 
 ## 3. Changes are started
 
-After you approve, each change gets `sdd start` in dependency order: branch `sdd/<id>`, worktree, draft PR, `--requires` for real dependencies. Its intent.md gets one line under `## Why`:
+After you approve, each change gets `sdd start <slug>` in dependency order: a generated id `<NNNN>-<YYMMDD>-<slug>`, branch `sdd/<id>`, worktree, draft PR, `--requires` for real dependencies. Its intent.md gets one line under `## Why`:
 
 ```
 Source: docs/prd/checkout.md § Payment retries

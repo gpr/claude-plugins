@@ -51,8 +51,9 @@ Commands
                                      accept ADRs, archive
   bundle <specs|adrs|change> [--fix] validate (and repair) an OKF bundle
 Branch / PR / resume (git + gh; the lead runs them)
-  start <change> --title T [--pr-title P] [--base B] [--requires a,b]
-                                     branch sdd/<change>, worktree, scaffold, push, draft PR
+  start <slug> --title T [--pr-title P] [--base B] [--requires a,b]
+                                     generate the change id <NNNN>-<YYMMDD>-<slug>, branch
+                                     sdd/<change>, worktree, scaffold, push, draft PR
   requires <change> [<dep>... | --clear]
                                      set (or show) the changes this one needs merged first
   deps <change>                      state of the required changes (exit 1 unless all merged)
@@ -3091,22 +3092,50 @@ def bring_in_base(wt: Path, base: str, why: str = "required changes arrived",
     print(f"merged origin/{base} into the branch ({why})")
 
 
+SLUG_RE = re.compile(r"[a-z0-9][a-z0-9-]{0,48}")  # + `NNNN-YYMMDD-` stays within CHANGE_ID_RE
+GENERATED_ID_RE = re.compile(r"(\d{4,})-\d{6}-[a-z0-9][a-z0-9-]*")
+
+
+def taken_numbers(base: str) -> set[int]:
+    """Numbers of the generated change ids already in use: changes and archives in this checkout
+    and on origin/<base>, and sdd branches here and on origin (changes started elsewhere)."""
+    names: list[str] = []
+    for d in (CHANGES, CHANGES / "archive"):
+        names += [p.name for p in d.iterdir()] if d.is_dir() else []
+        code, out = git("ls-tree", "--name-only", f"origin/{base}", f"{rel(d)}/")
+        names += [l.rsplit("/", 1)[-1] for l in out.splitlines()] if code == 0 else []
+    prefix = CFG["branch_prefix"]
+    heads = git_ok("ls-remote", "--heads", "origin").splitlines()
+    heads += git("for-each-ref", "--format=%(refname)", "refs/heads/")[1].splitlines()
+    names += [h.split("refs/heads/", 1)[-1].removeprefix(prefix) for h in heads if f"refs/heads/{prefix}" in h]
+    names = [re.sub(r"^\d{4}-\d{2}-\d{2}-", "", n) for n in names]  # archive/<YYYY-MM-DD>-<id>
+    return {int(m.group(1)) for n in names if (m := GENERATED_ID_RE.fullmatch(n))}
+
+
+def new_change_id(slug: str, base: str) -> str:
+    """<NNNN>-<YYMMDD>-<slug>: the next free number, today's date, the slug."""
+    n = max(taken_numbers(base), default=0) + 1
+    return f"{n:04d}-{_dt.date.today():%y%m%d}-{slug}"
+
+
 def cmd_start(args):
     if not args or args[0].startswith("-"):
-        die("usage: start <change> --title T [--pr-title P] [--base B] [--requires a,b]")
-    name = args[0]
-    check_change_id(name)
-    requires = parse_requires([opt(args, "--requires") or ""], name)
-    title = opt(args, "--title") or name
+        die("usage: start <slug> --title T [--pr-title P] [--base B] [--requires a,b]")
+    slug = args[0]
+    if not SLUG_RE.fullmatch(slug) or GENERATED_ID_RE.fullmatch(slug):
+        die(f"'{slug}' is not a slug: kebab-case, 1-49 chars, without the `NNNN-YYMMDD-` prefix "
+            "(start generates the change id)")
+    requires = parse_requires([opt(args, "--requires") or ""], "")
+    title = opt(args, "--title") or slug
     pr_title = opt(args, "--pr-title") or title
     base = base_branch(opt(args, "--base"))
+    git_ok("fetch", "origin", base)  # the base's changes and archives count for the number
+    name = new_change_id(slug, base)
+    dep_rows = dep_states(name, requires, base, ROOT) if requires else []  # dies on a cycle, before any side effect
     branch = CFG["branch_prefix"] + name
     wt = ROOT / CFG["worktree_dir"] / f"sdd-{name}"
-    dep_rows = dep_states(name, requires, base, ROOT) if requires else []  # dies on a cycle, before any side effect
     if wt.exists() or git("rev-parse", "--verify", "-q", f"refs/heads/{branch}")[0] == 0:
         die(f"{branch} or {wt.relative_to(ROOT)} already exists; use `resume {name}`", 1)
-    if not requires:  # otherwise dep_states fetched the base already
-        git_ok("fetch", "origin", base)
     if git("cat-file", "-e", f"origin/{base}:.claude/sdd.json")[0] != 0:
         die(f"commit and push .claude/sdd.json (and .gitignore) to {base} first: the worktree starts from origin/{base}", 1)
     attrs = git("show", f"origin/{base}:.gitattributes")[1].splitlines()
@@ -3140,6 +3169,7 @@ def cmd_start(args):
         save_state(d, st)
         commit_all(wt, f"chore(sdd): record PR #{num}")
         push(wt)
+    print(f"id {name}")
     print(f"worktree {wt}")
     print(f"branch {branch} (base {base})")
     if num:

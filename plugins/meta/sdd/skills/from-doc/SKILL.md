@@ -19,22 +19,23 @@ invariants. Pass requirement headings and ids, not the whole document.
 
 ## 2. Split
 One change per independently shippable outcome, triaged with `sdd:change` step 1 (full change,
-fix, fix with a criterion, direct). For each: kebab-case id, title, PR type (`feat`, `fix`),
+fix, fix with a criterion, direct). For each: kebab-case slug, title, PR type (`feat`, `fix`),
 doc sections covered, `requires` (only a real dependency: it needs another change's specs or
 code), capabilities touched, likely `surface`. Each requirement goes to exactly one change;
 what a change borders but leaves out is a Non-goal of it. List as open questions: requirements
 no acceptance test could check, contradictions, missing numbers (limits, formats, error cases).
 
 ## 3. Approve
-Show: one line per change (`id | type | triage | covers § | requires`), the order, the open
+Show: one line per change (`slug | type | triage | covers § | requires`), the order, the open
 questions. Ask (AskUserQuestion, max 4): approve / change the split / stop. Put the open
 questions to the user now; their answers go to the spec-author later, not into this table.
 Direct items are listed and never started.
 
 ## 4. Start
-For each non-direct change in dependency order: `sdd start <id> --title "<title>"
---pr-title "<type>: <title>" [--requires a,b]` (`PR missing`: create the draft PR and
-`sdd set-pr <id> <n>`). In its worktree (`EnterWorktree`), add one line under `## Why` of
+For each non-direct change in dependency order: `sdd start <slug> --title "<title>"
+--pr-title "<type>: <title>" [--requires a,b]`, where `--requires` lists the ids printed by the
+earlier starts (dependency order guarantees they exist); its own `id` line is the change id
+`<id>` below (`PR missing`: create the draft PR and `sdd set-pr <id> <n>`). In its worktree (`EnterWorktree`), add one line under `## Why` of
 intent.md: `Source: <path> § <heading>[, § <heading>]`; for a fix set `size: fix`. Then
 `sdd checkpoint <id> -m "docs(<id>): source"`. Leave the worktree before the next start.
 
