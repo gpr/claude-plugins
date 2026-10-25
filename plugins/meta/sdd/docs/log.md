@@ -2,6 +2,8 @@
 
 ## 2026-10-25
 
+**Update** Two skills. `/sdd:discover` maps an existing repo into areas and decisions and runs one `adopt` change per area (Baseline criteria with passing tests, draft ADRs recorded after the fact). `/sdd:from-doc <file>` splits a spec or PRD into changes with triage and `requires`, starts them after approval, writes a `Source:` line in each intent.md and runs the first; the spec-author reads the cited sections. No `sdd.py` change. New page: how-to/turn-a-document-into-changes. Updated: slash-commands, adopt, keep-in-sync, README.
+
 **Update** Contract step: a full change declares its public `surface` (`api`, `cli`, `ui` or `none`) in intent.md; for each kind the new `sdd:contract-designer` (sonnet, works from `sdd context <id> --contract`) writes TypeSpec, a CLI synopsis or a static HTML mockup under `changes/<id>/contracts/`, reviewed at Gate 1 (`sdd contract-diff`). New phase `contract` between `spec` and `gate1`, skipped for `surface: none`, fixes and adopts. `contract-stub` copies living files with a base hash (`check` reports CONFLICT), `sync` promotes the files into the living `contracts_dir`; `contract-preview` overlays them on the living contracts for `contract_cmd` (`{dir}`). Test and impl bundles include the contract files citing their criteria. The guard keeps living contract files to `sync` and change contract files to the contract-designer while draft. Updated: cli, file-formats, configuration, guard-rules, sdd-tool-roles, agents, phases-and-states, repo-layout, keep-in-sync, workflow overview, context bundles, first-change tutorial.
 
 ## 2026-10-24

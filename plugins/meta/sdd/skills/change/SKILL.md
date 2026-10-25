@@ -78,7 +78,8 @@ number. Direct-path work has no change id and none of this.
 `adopt <area>` writes down what an existing area of the code does, as Baseline criteria
 (sdd:formats), with passing acceptance tests, and changes no code.
 Delegate to `Explore` (medium): the area's public surface, the files that implement it, and
-existing tests for it. `sdd start <id> --title "Baseline: <area>" --pr-title "docs(<id>): baseline spec"`,
+existing tests for it, plus decisions the code commits to (with file evidence); skip this when
+`sdd:discover` already gave these findings. `sdd start <id> --title "Baseline: <area>" --pr-title "docs(<id>): baseline spec"`,
 enter the worktree, set `size: baseline` in intent.md, then steps 2.2-6 as usual (spec-author
 with the Explore findings, told the change is an adopt; Gate 1 asks "is this what the code
 does, and what it should keep doing?"). Step 6 ends with `--phase verify`; skip step 7 and the
@@ -120,7 +121,8 @@ Apply this rule, in order, and state the result in one line:
    draft PR for the branch (GitHub tools) and run `sdd set-pr <id> <number>`.
 2. Delegate to `spec-author` with: change id, the user's request verbatim, and the
    Explore findings (summarized, with file paths; for code that no capability covers, the
-   files that implement the behavior the change touches). It writes intent.md (with `surface:`), the new or changed
+   files that implement the behavior the change touches; when intent.md `## Why` has a
+   `Source:` line, that document path and sections). It writes intent.md (with `surface:`), the new or changed
    capabilities and invariants under `changes/<id>/specs/`, and any draft ADRs, then runs `bundle` and `sdd check <id>`. Then
    `sdd checkpoint <id> --phase contract -m "docs(<id>): spec delta"` (`--phase gate1` when
    intent.md says `surface: none`).

@@ -14,7 +14,8 @@ Documentation for the `sdd` Claude Code plugin, a spec-driven multi-agent workfl
 ## How-to guides
 
 * [Install and configure sdd](how-to/install-and-configure.md) - project-scope install, `sdd init`, test commands, publish the config.
-* [Adopt sdd in an existing repository](how-to/adopt-an-existing-repo.md) - survey, point the config at existing tests and ADRs, Baseline criteria, `adopt <area>`.
+* [Adopt sdd in an existing repository](how-to/adopt-an-existing-repo.md) - survey, point the config at existing tests and ADRs, Baseline criteria, `adopt <area>`, `/sdd:discover`.
+* [Turn a document into changes](how-to/turn-a-document-into-changes.md) - `/sdd:from-doc`: split a spec or PRD, approve, start the changes.
 * [Write a spec delta and an ADR](how-to/write-a-delta-and-adr.md) - add a capability or invariant; add, modify or retire criteria; record or supersede a decision.
 * [Migrate to Capability and Invariant concepts](how-to/migrate-to-okf-layout.md) - rewrite REQ/INV specs and ADR-NNNN files as concepts, by hand, once.
 * [Resume a change](how-to/resume-a-change.md) - continue by id or PR number; blocked, diverged and conflicting resumes.
@@ -36,7 +37,7 @@ Documentation for the `sdd` Claude Code plugin, a spec-driven multi-agent workfl
 * [OKF bundles](reference/bundles.md) - the layout of `specs/` and of a change, front matter per type, bundle checks and fixes, migration.
 * [Repository layout](reference/repo-layout.md) - the files sdd creates and who writes each.
 * [Configuration](reference/configuration.md) - `.claude/sdd.json` keys, project root, requirements.
-* [Slash commands, band and panes](reference/slash-commands.md) - `/sdd:change`, `/sdd`, the band and both panes.
+* [Slash commands, band and panes](reference/slash-commands.md) - `/sdd:change`, `/sdd:discover`, `/sdd:from-doc`, `/sdd`, the band and both panes.
 * [Known limits](reference/known-limits.md) - current limitations and their workarounds.
 
 ## Explanation
