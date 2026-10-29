@@ -100,7 +100,7 @@ PHASE_STEPS = {
     "contract": "step 2.4: contract-designer writes the contract files of the intent's surface",
     "gate1": "step 3: show Gate 1 to the user",
     "plan": "step 4: planner writes plan.md and tasks.md",
-    "gate2": "step 5: sdd check, then set-status implementing",
+    "gate2": "step 5: sdd check, then checkpoint --status implementing",
     "acceptance": "step 6: acceptance-tester for the open (test) tasks",
     "implement": "step 7: implementers for the open (impl) tasks",
     "verify": "step 8: verifier, then code-review",
@@ -3263,7 +3263,7 @@ def cmd_checkpoint(args):
                 bring_in_base(ROOT, base)
         st["phase"] = phase
         save_state(d, st)
-    if status:  # after every refusal above: a refused checkpoint changes nothing
+    if status:  # after the status, phase and requires checks: a checkpoint they refuse changes nothing
         set_status(d, status)
     write_indexes(d)
     msg = opt(args, "-m") or f"chore(sdd): {args[0]} {st.get('phase', 'checkpoint')}"

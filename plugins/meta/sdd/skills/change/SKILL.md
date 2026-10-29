@@ -195,7 +195,7 @@ After each task returns:
    findings to the user and let them decide. Once the verifier passes and no finding is
    left to fix, go on.
 4. Then `sdd checkpoint <id> --status verified --phase sync -m "chore(<id>): verified"`, then
-   `sdd sync <id>` (it checks everything before it writes anything, so no dry run). Sync merges `origin/<base>` in when the base moved, writes the new
+   `sdd sync <id>` (it checks everything before it writes the specs, so no dry run). Sync merges `origin/<base>` in when the base moved, writes the new
    concepts, merges each CapabilityDelta unit by unit into the specs/ OKF bundle (status
    `stable`, regenerated indexes, `log.md`), accepts the ADRs, copies the change's contract
    files into `contracts_dir` and archives the change. If it refuses (a merge conflict, a

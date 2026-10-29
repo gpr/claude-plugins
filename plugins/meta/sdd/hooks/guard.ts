@@ -217,7 +217,7 @@ export async function checkPath(
       return `${rel}: ADR status changes only through \`sdd adr-accept\` (lead).`
     }
     if (isTopLevelOfChange && name === 'intent.md' && statusChanged(write, (await chStatus()) ?? 'draft')) {
-      return `${rel}: change status moves only through \`sdd set-status\` (lead).`
+      return `${rel}: change status moves only through \`sdd checkpoint --status\` or \`sdd set-status\` (lead).`
     }
   }
 

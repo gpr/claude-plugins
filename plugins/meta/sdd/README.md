@@ -173,7 +173,7 @@ remote's default branch), `branch_prefix` (`sdd/`), `worktree_dir` (`.claude/wor
   - `implementer` can never touch the acceptance tests, the spec, the contract files or the ADRs.
   - `verifier` writes nothing but its memory.
   - No subagent edits `.claude/` outside its own memory directory, or changes the `status:` of `intent.md` or an ADR
-    (that is `sdd set-status` / `sdd adr-accept`, lead only). The guard compares the file's
+    (that is `sdd checkpoint --status`, `sdd set-status` / `sdd adr-accept`, lead only). The guard compares the file's
     front matter before and after the write, so a status spliced in by an Edit counts.
 
   If the guard itself fails, or a call comes from an agent the session does not list, it
