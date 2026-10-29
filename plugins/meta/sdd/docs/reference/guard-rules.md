@@ -79,7 +79,7 @@ The lead passes every other write.
 | its own memory dirs `.claude/agent-memory/sdd-<role>/`, `.claude/agent-memory-local/sdd-<role>/` | allowed (workflow roles only) |
 | any other path under `.claude/` | refused |
 | a write that leaves an ADR with another front-matter status than before (a new ADR: other than `draft` or none) | refused: ADR status moves only through `sdd adr-accept` |
-| a write that leaves `changes/<c>/intent.md` with another front-matter status than before | refused: status moves only through `sdd set-status` |
+| a write that leaves `changes/<c>/intent.md` with another front-matter status than before | refused: status moves only through `sdd checkpoint --status` or `sdd set-status` |
 
 ### Per role
 

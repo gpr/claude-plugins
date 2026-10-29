@@ -72,7 +72,7 @@ Acceptance tests stay where they are in `tests/acceptance/` and become part of t
 | `intent.md` `retire_contracts:` | `sdd contract-stub --retire` |
 | `contracts/{api,cli,ui}/**` | `sdd sync` |
 | `changes/<id>/**/index.md` | `sdd new`, `delta-new`, `delta-stub`, `checkpoint`, `sync`, `bundle <id> --fix` |
-| `intent.md` `status:` | `sdd set-status` / `sdd sync` |
+| `intent.md` `status:` | `sdd checkpoint --status` / `sdd set-status` / `sdd sync` |
 | `plan.md`, `tasks.md` | planner, while `draft` or `approved` |
 | task ticks in `tasks.md` | acceptance-tester and implementer, each its own task |
 | `tests/acceptance/**` | acceptance-tester |

@@ -16,7 +16,7 @@ generated:
 
 A change has two independent markers:
 
-- its **status**, in `intent.md` front matter, moved by `sdd set-status` and `sdd sync`;
+- its **status**, in `intent.md` front matter, moved by `sdd checkpoint --status` (or `sdd set-status`) and `sdd sync`;
 - its **phase**, in `state.json`, moved by `sdd checkpoint --phase` and `sdd finish`.
 
 ## Statuses
@@ -25,10 +25,10 @@ A change has two independent markers:
 stateDiagram-v2
     direction LR
     [*] --> draft: sdd new / start
-    draft --> approved: set-status (Gate 1)
-    draft --> implementing: set-status (fix, Gate 2)
-    approved --> implementing: set-status (Gate 2)
-    implementing --> verified: set-status (verifier PASS)
+    draft --> approved: checkpoint --status (Gate 1)
+    draft --> implementing: checkpoint --status (fix, Gate 2)
+    approved --> implementing: checkpoint --status (Gate 2)
+    implementing --> verified: checkpoint --status (verifier PASS)
     verified --> archived: sdd sync
     approved --> draft: reopen
     implementing --> draft: reopen
@@ -38,9 +38,9 @@ stateDiagram-v2
 | Status | Set by | Meaning |
 |---|---|---|
 | `draft` | template | spec being written; spec-author may edit intent and delta, contract-designer the contract files |
-| `approved` | `set-status` after Gate 1 | spec and contract frozen; planner may still edit plan and tasks |
-| `implementing` | `set-status` after Gate 2 | plan frozen; tests and code being written |
-| `verified` | `set-status` after the verifier passes | ready to sync |
+| `approved` | `checkpoint --status` after Gate 1 | spec and contract frozen; planner may still edit plan and tasks |
+| `implementing` | `checkpoint --status` after Gate 2 | plan frozen; tests and code being written |
+| `verified` | `checkpoint --status` after the verifier passes | ready to sync |
 | `archived` | `sync` | merged into `specs/`, moved to `changes/archive/` |
 
 ## Phases

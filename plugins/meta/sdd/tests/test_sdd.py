@@ -1400,6 +1400,29 @@ class TestCheckpoint(GitCase):
         self.assertIn("nothing to commit", out)
         self.assertEqual(self.sdd("checkpoint", self.id(), "--phase", "nope", cwd=wt)[0], 2)
 
+    def test_checkpoint_status_sets_status_and_phase_in_one_commit(self):
+        wt = self.start()
+        c1 = self.id()
+        code, out = self.sdd("checkpoint", c1, "--status", "approved", "--phase", "plan",
+                             "-m", "chore(sdd): approve", cwd=wt)
+        self.assertEqual(code, 0, out)
+        self.assertIn("draft -> approved", out)
+        self.assertEqual(self.state(wt)["phase"], "plan")
+        self.assertIn("status: approved", (wt / f"changes/{c1}/intent.md").read_text())
+        self.assertEqual(self.git("status", "--porcelain", cwd=wt), "")
+        self.git("fetch", "-q", "origin", f"sdd/{c1}")
+        self.assertEqual(self.remote_subjects(f"sdd/{c1}")[0], "chore(sdd): approve")
+
+    def test_checkpoint_bad_status_or_phase_changes_nothing(self):
+        wt = self.start()
+        c1 = self.id()
+        head = self.git("rev-parse", "HEAD", cwd=wt)
+        for args in (["--status", "nope"], ["--status", "approved", "--phase", "nope"]):
+            self.assertEqual(self.sdd("checkpoint", c1, *args, cwd=wt)[0], 2, args)
+            self.assertIn("status: draft", (wt / f"changes/{c1}/intent.md").read_text())
+            self.assertEqual(self.state(wt)["phase"], "spec")
+            self.assertEqual(self.git("rev-parse", "HEAD", cwd=wt), head)
+
     def test_checkpoint_refuses_files_that_look_like_secrets(self):
         wt = self.start()
         put(wt / ".env", "TOKEN=x\n")

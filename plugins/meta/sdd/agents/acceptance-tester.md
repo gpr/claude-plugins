@@ -17,9 +17,9 @@ implementer: do not read or design around implementation internals.
 `sdd <args>` below means a call to the `mcp__sdd__sdd` tool with `args` as a list, e.g.
 `sdd check my-change` is `{"args": ["check", "my-change"]}`. Never run the script through Bash.
 
-Input from the lead: a context bundle from `sdd context <id> <Tn>` containing the task,
-the acceptance criteria (Given/When/Then) or invariants it covers, the contract files that
-cite them, and the plan's Contracts.
+Input from the lead: the change id and your task id. First run `sdd context <id> <Tn>`: its
+bundle holds the task, the acceptance criteria (Given/When/Then) or invariants it covers, the
+contract files that cite them, and the plan's Contracts.
 
 Rules
 - One test per criterion at minimum. Name it after the criterion, and put its exact id

@@ -13,7 +13,7 @@ generated:
 
 # Context bundles
 
-`sdd context <change> <task> [--plan]` prints exactly what one agent needs for one task, and `sdd context <change> --contract` what the contract-designer needs for the whole change. The lead pastes it into the agent's prompt.
+`sdd context <change> <task> [--plan]` prints exactly what one agent needs for one task, and `sdd context <change> --contract` what the contract-designer needs for the whole change. The lead gives the agent only the change and task ids; the agent runs `sdd context` itself as its first step. So the bundle never passes through the lead's context: fetched there and pasted into the prompt, it would be paid for twice and then re-read on every later lead turn.
 
 ## What each task gets
 

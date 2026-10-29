@@ -35,9 +35,10 @@ claude plugin eval plugins/meta/sdd --trust-plugin --scaffold --allow-tools Bash
 - To compare two workflow shapes, run the suite on each and diff per case in
   `results/<timestamp>/aggregate-result.json`: score, `costUsd`, `durationSeconds`. Look at
   which cases flipped, not only the mean. `turns` counts only the lead's last stretch after
-  background agents return (6 on a full fix), so count spawns and lead↔agent round trips from
-  the trace instead (`--keep-temp`, then `out/trace.jsonl`; subagent calls carry
-  `parent_tool_use_id`).
+  background agents return, so run with `--keep-temp` and summarise each trace instead:
+  `python3 evals/trace-stats.py <kept dir>/out/trace.jsonl` prints the lead's turns, spawns per
+  agent, resumes, `sleep` polls, the lead's `sdd` calls and each agent's share of a weighted
+  token count.
 
 ## Known limits
 

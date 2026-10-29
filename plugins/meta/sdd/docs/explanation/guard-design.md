@@ -26,7 +26,7 @@ Agents that aren't part of the workflow (`Explore`, `general-purpose`, other plu
 
 Some files are refused even to the lead: `specs/`, `frozen.json`, `state.json`, archived changes and accepted (stable) or deprecated ADRs. They aren't meant to be edited at all, only produced by `sdd.py` (`sync`, `freeze`, `checkpoint`, ...) or replaced by a superseding ADR. Making that true for everyone means the guarantees in [Why sdd.py exists](determinism.md) hold regardless of who is typing.
 
-The same reasoning covers status lines. A spec-author that could write `status: approved` into its own `intent.md` would approve its own work. Status moves only through `sdd set-status` and `sdd adr-accept`, and the guard refuses those subcommands to every subagent.
+The same reasoning covers status lines. A spec-author that could write `status: approved` into its own `intent.md` would approve its own work. Status moves only through `sdd checkpoint --status`, `sdd set-status` and `sdd adr-accept`, and the guard refuses those subcommands to every subagent.
 
 ## Status-dependent permissions
 

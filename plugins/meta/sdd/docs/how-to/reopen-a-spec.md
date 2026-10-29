@@ -21,11 +21,10 @@ The lead does this. You see it as a new Gate 1 for the affected criteria and inv
 
 1. Back to draft:
    ```
-   sdd set-status <id> draft
-   sdd checkpoint <id> --phase spec -m "chore(<id>): reopen spec"
+   sdd checkpoint <id> --status draft --phase spec -m "chore(<id>): reopen spec"
    ```
 2. The spec-author is resumed with the report and fixes the affected criteria or invariants.
-3. **Gate 1** for the affected units only. You approve, then `set-status approved`.
+3. **Gate 1** for the affected units only. You approve, then `checkpoint --status approved`.
 4. The planner re-plans the affected tasks, `sdd check` passes (Gate 2).
 5. The acceptance-tester rewrites the affected tests, then the lead runs `sdd freeze` again.
 6. Implementation resumes.
@@ -38,7 +37,6 @@ A fix has no spec-author to resume. If it turns out to need behavior no criterio
 
 1. Set `size: change` in `intent.md`.
 2. ```
-   sdd set-status <id> draft
-   sdd checkpoint <id> --phase spec -m "chore(<id>): re-triage as change"
+   sdd checkpoint <id> --status draft --phase spec -m "chore(<id>): re-triage as change"
    ```
 3. Start the spec-author with the finding, then Gate 1.

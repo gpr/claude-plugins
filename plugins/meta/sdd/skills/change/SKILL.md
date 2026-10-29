@@ -101,7 +101,7 @@ Apply this rule, in order, and state the result in one line:
 3. If it returns open questions, ask the user (AskUserQuestion, max 4) and resume the
    same spec-author with the answers (SendMessage), do not start a new one.
 4. Contract (only when `surface:` lists `api`, `cli` or `ui`): delegate to `contract-designer`
-   with the change id and the `sdd context <id> --contract` output pasted in the prompt. It
+   with the change id (it fetches its own `sdd context <id> --contract` bundle). It
    writes `changes/<id>/contracts/` (TypeSpec, CLI synopsis, HTML mockup), runs `contract_cmd`
    on `sdd contract-preview <id>` and `sdd check <id>`. Open questions as in 2.3, resuming the same contract-designer. A spec
    problem it reports goes back to the spec-author (SendMessage), then the contract-designer
@@ -118,8 +118,8 @@ small modification. Give file paths for the full text.
 Ask: approve / change something / stop.
 - Change -> resume spec-author with feedback on the spec or `surface:`, contract-designer with
   feedback on the contract (both, spec first, when a criterion changes), then Gate 1 again.
-- Approve -> `sdd set-status <id> approved`, then
-  `sdd checkpoint <id> --phase plan -m "chore(<id>): approve spec"`. After a "change" round,
+- Approve -> `sdd checkpoint <id> --status approved --phase plan -m "chore(<id>): approve spec"`.
+  After a "change" round,
   checkpoint without `--phase`.
 
 ## 4. Plan and tasks
@@ -138,15 +138,15 @@ Also confirm plan.md `## Contracts` is filled: the acceptance tests depend on it
 For a fix, wait for both agents instead: T1 ticked and frozen (`sdd verify-frozen <id>`
 passes).
 Show the user only: task count, contracts summary (one line each), and any WARN lines.
-They may still object; otherwise continue. `sdd set-status <id> implementing`, then
-`sdd checkpoint <id> --phase acceptance -m "chore(<id>): start implementation"` (a fix: `--phase implement`,
+They may still object; otherwise continue:
+`sdd checkpoint <id> --status implementing --phase acceptance -m "chore(<id>): start implementation"` (a fix: `--phase implement`,
 its tests are already frozen).
 
 ## 6. Acceptance tests first (ATDD)
 A fix already did this step alongside step 4; skip to step 7.
 For each `(test)` task (several: one Agent call each, all in one message, so they run in
-parallel): delegate to `acceptance-tester` with
-the `sdd context <id> <Tn>` output pasted in the prompt. It writes the tests, confirms they
+parallel): delegate to `acceptance-tester` with the change id and the task id (it fetches its
+own `sdd context <id> <Tn>` bundle). It writes the tests, confirms they
 fail for the right reason (a Baseline test: that it passes) and ticks its task; testers never
 freeze. Settle any untestable criterion or MISMATCH below first. Then, once every test task
 of the batch is back, run `sdd freeze <id>` once (one snapshot of the whole acceptance dir,
@@ -161,8 +161,8 @@ in an adopt, see [adopt.md](adopt.md) instead).
 
 ## 7. Implementation (inner TDD)
 A `size: baseline` change has no impl tasks: go to step 8.
-Take the `(impl)` tasks whose blocked-by tasks are done one at a time, each with the
-`sdd context <id> <Tn> --plan` output pasted in the prompt. Delegate the first to a new
+Take the `(impl)` tasks whose blocked-by tasks are done one at a time, each given as the change
+id and the task id (the implementer fetches its own `sdd context <id> <Tn> --plan` bundle). Delegate the first to a new
 `implementer` and resume that same implementer (SendMessage) for each next task: it keeps
 what it learned about the code. Spawn a new one instead after it returned BLOCKED, or when
 it has done 4 tasks (its context grows with each). Never run implementers in parallel or with
@@ -186,7 +186,7 @@ After each task returns:
    spec problems), checkpoint after each fix, then go back to 8.1.
 3. On PASS, route each code-review finding:
    - a bug inside the behavior of an existing criterion -> implementer, with the finding and the
-     `sdd context <id> <Tn> --plan` bundle of the task whose files it touches; it adds a
+     id of the task whose files it touches (it fetches that task's bundle); it adds a
      failing unit test first;
    - a defect in a frozen acceptance test, or a fix that needs behavior
      (validation, a new error path) that no criterion describes -> step 9;
@@ -194,9 +194,8 @@ After each task returns:
    After any fix, go back to 8.1. Max 2 review rounds: after that, list the remaining
    findings to the user and let them decide. Once the verifier passes and no finding is
    left to fix, go on.
-4. Then `sdd set-status <id> verified`, `sdd checkpoint <id> --phase sync -m "chore(<id>): verified"`,
-   then `sdd sync <id> --dry-run`, then
-   `sdd sync <id>`. Sync merges `origin/<base>` in when the base moved, writes the new
+4. Then `sdd checkpoint <id> --status verified --phase sync -m "chore(<id>): verified"`, then
+   `sdd sync <id>` (it checks everything before it writes the specs, so no dry run). Sync merges `origin/<base>` in when the base moved, writes the new
    concepts, merges each CapabilityDelta unit by unit into the specs/ OKF bundle (status
    `stable`, regenerated indexes, `log.md`), accepts the ADRs, copies the change's contract
    files into `contracts_dir` and archives the change. If it refuses (a merge conflict, a
@@ -218,7 +217,8 @@ workflow agents; `/sdd phase` opens a pane with the workflow phase the change is
 You do not need to recap progress to the user; point them to it.
 
 ## Token rules
-- Agents get `sdd context` bundles, not whole files and not your conversation.
+- Agents get `sdd context` bundles, not whole files and not your conversation: give them the
+  change and task ids and let them fetch the bundle; never fetch it to paste it.
 - Resume an agent (SendMessage) for follow-ups instead of spawning a new one.
 - When the next step needs an agent's result, wait for its completion notice (or run it in
   the foreground); never poll with `sleep` or by reading its files.
