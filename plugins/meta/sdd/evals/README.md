@@ -33,8 +33,11 @@ claude plugin eval plugins/meta/sdd --trust-plugin --scaffold --allow-tools Bash
   no-plugin baseline arm; `--ablation none` skips it when you only compare two versions of
   sdd.
 - To compare two workflow shapes, run the suite on each and diff per case in
-  `results/<timestamp>/aggregate-result.json`: score, `costUsd`, `durationSeconds`, `turns`.
-  Look at which cases flipped, not only the mean.
+  `results/<timestamp>/aggregate-result.json`: score, `costUsd`, `durationSeconds`. Look at
+  which cases flipped, not only the mean. `turns` counts only the lead's last stretch after
+  background agents return (6 on a full fix), so count spawns and lead↔agent round trips from
+  the trace instead (`--keep-temp`, then `out/trace.jsonl`; subagent calls carry
+  `parent_tool_use_id`).
 
 ## Known limits
 
@@ -45,5 +48,7 @@ claude plugin eval plugins/meta/sdd --trust-plugin --scaffold --allow-tools Bash
   that path, not the worktree one; the two differ only in where the branch is checked out.
 - The `files` graders see the files the run created. Files that existed before the run never
   show up there.
-- `no-code-edit`/`no-code-write` in `adopt-cli` only catch calls that reach the trace; whether
-  subagent calls do is unverified until a full case has been piloted.
+- Subagent tool calls are in the trace, so `tool_used` graders see the implementer's edits too.
+- Pilot of `fix-blank-line` (one run): 6/6 graders passed in about 4.5 minutes for $1.61. It
+  spawned spec-author (twice), acceptance-tester, planner, implementer and verifier. The
+  code-review step was skipped because the skill is not available in an eval session.
