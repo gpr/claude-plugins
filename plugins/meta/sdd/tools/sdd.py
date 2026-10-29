@@ -185,6 +185,10 @@ if _cfg_file.exists():
         # every command (and the mod's `status --json`) reads it: a clear error, not a traceback
         print(f"ERROR .claude/sdd.json: {_raw_cfg if isinstance(_raw_cfg, str) else 'not a JSON object'}; fix the file")
         sys.exit(2)
+    if not isinstance(_raw_cfg.get("in_place", False), bool):
+        # a string "true" would silently mean false: start would add a worktree the session cannot enter
+        print(f"ERROR .claude/sdd.json: in_place must be true or false (a JSON boolean), not {_raw_cfg['in_place']!r}")
+        sys.exit(2)
     CFG.update(_raw_cfg)
 
 
@@ -3161,9 +3165,9 @@ def cmd_start(args):
     branch = CFG["branch_prefix"] + name
     wt = ROOT if in_place() else ROOT / CFG["worktree_dir"] / f"sdd-{name}"
     if (wt != ROOT and wt.exists()) or git("rev-parse", "--verify", "-q", f"refs/heads/{branch}")[0] == 0:
-        die(f"{branch} or {wt.relative_to(ROOT)} already exists; use `resume {name}`", 1)
+        die(f"{branch}{'' if in_place() else f' or {wt.relative_to(ROOT)}'} already exists; use `resume {name}`", 1)
     if git("cat-file", "-e", f"origin/{base}:.claude/sdd.json")[0] != 0:
-        die(f"commit and push .claude/sdd.json (and .gitignore) to {base} first: the worktree starts from origin/{base}", 1)
+        die(f"commit and push .claude/sdd.json (and .gitignore) to {base} first: the change branch starts from origin/{base}", 1)
     attrs = git("show", f"origin/{base}:.gitattributes")[1].splitlines()
     if any(l not in attrs for l in union_lines()):
         print(f"WARN .gitattributes on {base} lacks merge=union for the spec logs: run `sdd init` there "

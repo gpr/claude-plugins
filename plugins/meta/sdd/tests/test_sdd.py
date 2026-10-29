@@ -1489,6 +1489,13 @@ class TestInPlace(GitCase):
             else:
                 self.assertIs(json.loads((fresh / ".claude/sdd.json").read_text())["in_place"], saved)
 
+    def test_a_non_boolean_in_place_is_an_error(self):
+        cfg = self.root / ".claude/sdd.json"
+        cfg.write_text(json.dumps({**json.loads(cfg.read_text()), "in_place": "true"}))
+        code, out = self.sdd("config")
+        self.assertEqual(code, 2, out)
+        self.assertIn("in_place must be true or false (a JSON boolean), not 'true'", out)
+
     def test_start_checks_the_branch_out_here_and_checkpoint_works(self):
         code, out = self.sdd("start", "c1", "--title", "One")
         self.assertEqual(code, 0, out)
