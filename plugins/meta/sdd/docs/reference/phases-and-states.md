@@ -54,7 +54,7 @@ stateDiagram-v2
 | `gate2` | Gate 2 | 5: `sdd check`, then set implementing | `draft`, `approved` |
 | `acceptance` | Acceptance tests | 6: acceptance-testers, then the lead freezes | `draft`, `implementing` |
 | `implement` | Implement | 7: implementers, one task at a time | `implementing` |
-| `verify` | Verify | 8: verifier, then code-review | `implementing` |
+| `verify` | Verify | 8: verifier and code-review, in parallel | `implementing` |
 | `sync` | Sync | 8.4: `sdd sync`, then `sdd finish` | `verified` |
 | `done` | — | nothing left: the PR is ready for review | `archived` |
 

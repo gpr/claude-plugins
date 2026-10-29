@@ -189,7 +189,7 @@ frozen: ok   acceptance: 2/2   unit: 3/3   trace: ok
 findings:
 ```
 
-A `code-review` pass follows. Then the lead syncs:
+The `code-review` pass the lead ran alongside the verifier found nothing. Then the lead syncs:
 
 ```
 ADDED capabilities/greeting (AC-01, AC-02)

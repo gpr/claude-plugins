@@ -18,9 +18,9 @@ request ─► lead (/sdd:change) ─► triage ──direct──► general-pu
                                   ▼
                       sdd:acceptance-tester(s) ─► sdd freeze (lead, once)
                                   ▼
-                        sdd:implementer, one task at a time  (inner TDD; BLOCKED ─► reopen spec ─► GATE 1)
+               sdd:implementer, resumed task by task  (inner TDD; BLOCKED ─► reopen spec ─► GATE 1)
                                   ▼
-                           sdd:verifier ─► PASS ─► code-review (findings ─► implementer / reopen)
+              sdd:verifier ∥ code-review  (FAIL or findings ─► implementer / reopen)
                                   ▼
                               sdd sync (merge origin/<base>, concepts → specs/, contracts → contracts/, ADRs accepted, archive)
                                   ▼

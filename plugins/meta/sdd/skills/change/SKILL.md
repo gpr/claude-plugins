@@ -28,7 +28,8 @@ The workflow agents are plugin agents: `sdd:spec-author`, `sdd:contract-designer
 `sdd:acceptance-tester`, `sdd:implementer`, `sdd:verifier`. Built-ins reused: `Explore`,
 `general-purpose`. Below they are named without the `sdd:` prefix.
 Request: $ARGUMENTS
-If it starts with `resume`, see "Resume" below; with `adopt`, see "Adopt" below.
+If it starts with `resume`, read [resume.md](resume.md) and follow it; with `adopt`,
+[adopt.md](adopt.md).
 
 ## Paths at a glance
 | Path (triage) | Steps | `checkpoint --phase` after `start` |
@@ -47,7 +48,7 @@ has no change id and none of this.
 - **Checkpoint**: each time an agent (or you) finishes an artifact, run
   `sdd checkpoint <id> [--phase <next>] -m "<conventional message>"`. It stores the phase,
   commits everything and pushes. Phase ids: `spec contract gate1 plan gate2 acceptance implement
-  verify sync done`. If it refuses because a required change is not merged, handle it as in Resume. Pass `--phase` when the step you just finished moves the change to
+  verify sync done`. If it refuses because a required change is not merged, handle it as in [resume.md](resume.md) step 1. Pass `--phase` when the step you just finished moves the change to
   the next phase; omit it for further commits within a phase.
 - **Requires**: a change may depend on others (`requires` in `state.json`, set with
   `sdd start --requires a,b` or `sdd requires <id> a b`). A dependency counts as done only
@@ -55,39 +56,6 @@ has no change id and none of this.
   `sdd resume` refuse until then; `sdd deps <id>` shows where each one stands. Spec work
   (steps 2-3) may go ahead meanwhile.
 - Never `git commit` or `git push` yourself for a change; never write `state.json`.
-
-## Resume
-`resume <id>` continues a change from this or another machine:
-1. `sdd resume <id>` (add `--pr <n>` if you only have the PR number). It fetches the PR
-   branch, creates or reuses the worktree, fast-forwards it, and prints the stored phase
-   and the step to continue at.
-   If it ends with `blocked` / `next: ...`, a required change is not merged yet: do not
-   enter the worktree or continue this change. Follow `next:`. For `resume <dep>`, run this
-   whole Resume procedure for the dep (its own worktree, its own `requires` first), carry it
-   through to `sdd finish`, then come back. For `merge the PR of <dep>`, tell the user which
-   PR to merge and stop; once they say it is merged, `sdd resume <id>` again (it merges the
-   base into the branch, so the dependency's specs and code arrive).
-2. `EnterWorktree` with `path` = the printed worktree (skip it when the output says `in_place`:
-   the branch is then checked out in this checkout). From here every `sdd` call acts on it.
-3. `sdd status <id>`, then continue at the step the phase names (spec -> 2, contract -> 2.4, gate1 -> 3,
-   plan -> 4, gate2 -> 5, acceptance -> 6, implement -> 7, verify -> 8, sync -> 8.4,
-   done -> nothing left; "Paths at a glance" gives each path's order). A stored phase can lag a step that was done but not
-   checkpointed: trust the files (`sdd check`, task ticks) over the phase when they disagree.
-   Resume a partly written spec or plan with the same agent type and the files as context.
-   Run the `bundle` tool on the change first. A change written in the old REQ/INV format
-   cannot be fixed by `bundle`: resume spec-author to rewrite its delta as concepts.
-
-## Adopt
-`adopt <area>` writes down what an existing area of the code does, as Baseline criteria
-(sdd:formats), with passing acceptance tests, and changes no code.
-Delegate to `Explore` (medium): the area's public surface, the files that implement it, and
-existing tests for it, plus decisions the code commits to (with file evidence); skip this when
-`sdd:discover` already gave these findings. `sdd start <area> --title "Baseline: <area>" --pr-title "docs(<area>): baseline spec"`,
-enter the worktree, set `size: baseline` in intent.md, then steps 2.2-6 as usual (spec-author
-with the Explore findings, told the change is an adopt; Gate 1 asks "is this what the code
-does, and what it should keep doing?"). Step 6 ends with `--phase verify`; skip step 7 and the
-code-review in step 8.3. A MISMATCH (step 6) in an adopt is either a wrong criterion
-(spec-author) or a bug: drop that criterion from the adopt and offer a fix as its own change.
 
 ## 1. Triage (you, no agent unless context is missing)
 If you need codebase facts to decide, delegate to `Explore` (quick or medium) with one
@@ -189,29 +157,34 @@ If a tester reports that a criterion is untestable or ambiguous -> step 9 (reope
 If it reports `MISMATCH: <id>` (a Baseline test fails on the current code), ask the user which
 is right: the code (step 9, the criterion is corrected and stays Baseline) or the criterion
 (a latent bug: step 9, the spec-author drops its Baseline line, the planner adds an impl task;
-in an adopt, see "Adopt" instead).
+in an adopt, see [adopt.md](adopt.md) instead).
 
 ## 7. Implementation (inner TDD)
 A `size: baseline` change has no impl tasks: go to step 8.
-For each `(impl)` task whose blocked-by tasks are done, one at a time, delegate to
-`implementer` with the `sdd context <id> <Tn> --plan` output pasted in the prompt. Never run
-implementers in parallel or with `isolation: "worktree"`: an isolated worktree starts from
-the default branch, without this change's tasks, plan or frozen tests.
+Take the `(impl)` tasks whose blocked-by tasks are done one at a time, each with the
+`sdd context <id> <Tn> --plan` output pasted in the prompt. Delegate the first to a new
+`implementer` and resume that same implementer (SendMessage) for each next task: it keeps
+what it learned about the code. Spawn a new one instead after it returned BLOCKED, or when
+it has done 4 tasks (its context grows with each). Never run implementers in parallel or with
+`isolation: "worktree"`: an isolated worktree starts from the default branch, without this
+change's tasks, plan or frozen tests.
 If an implementer returns `BLOCKED: <criterion or invariant id> <reason>` -> step 9. Never relax a test.
-After each implementer returns:
+After each task returns:
 `sdd checkpoint <id> -m "feat(<id>): <Tn> <task title>"`; after the last impl task add
 `--phase verify`.
 
 ## 8. Verify and close out
-1. Delegate to `verifier` with the change id. It runs the frozen-test check, the
-   acceptance and unit suites, `sdd check <id> --tests`, and reviews the diff.
-2. On FAIL: route each finding (implementer for code, step 9 for spec problems);
-   checkpoint after each fix.
-3. On PASS, review before syncing: the verifier checks conformance to the spec, not bugs
-   outside its criteria. Delegate to `general-purpose`: run the built-in `code-review`
-   skill on the change's diff against the base branch (uncommitted changes included) and
-   return only the findings list (skip this step if the skill is not available). Never
-   pass `--fix`: the implementer fixes code, test first. Route each finding:
+1. In one message, delegate both (they only read, so they run in parallel):
+   - `verifier` with the change id. It runs the frozen-test check, the acceptance and unit
+     suites, `sdd check <id> --tests`, and reviews the diff against the spec. It checks
+     conformance, not bugs outside its criteria;
+   - `general-purpose`: run the built-in `code-review` skill on the change's diff against the
+     base branch (uncommitted changes included) and return only the findings list. Never
+     pass `--fix`: the implementer fixes code, test first. Skip it for an adopt; when the
+     skill is not available, say so to the user in one line.
+2. On a verifier FAIL: route each of its findings first (implementer for code, step 9 for
+   spec problems), checkpoint after each fix, then go back to 8.1.
+3. On PASS, route each code-review finding:
    - a bug inside the behavior of an existing criterion -> implementer, with the finding and the
      `sdd context <id> <Tn> --plan` bundle of the task whose files it touches; it adds a
      failing unit test first;
@@ -219,45 +192,24 @@ After each implementer returns:
      (validation, a new error path) that no criterion describes -> step 9;
    - not worth fixing -> tell the user in one line, then go on.
    After any fix, go back to 8.1. Max 2 review rounds: after that, list the remaining
-   findings to the user and let them decide.
+   findings to the user and let them decide. Once the verifier passes and no finding is
+   left to fix, go on.
 4. Then `sdd set-status <id> verified`, `sdd checkpoint <id> --phase sync -m "chore(<id>): verified"`,
    then `sdd sync <id> --dry-run`, then
-   `sdd sync <id>`. Sync first merges `origin/<base>` into the branch when the base moved (a
-   dry run only warns), so its checks see the living spec as it is now; if that merge
-   conflicts, resolve it in the worktree, checkpoint, and sync again. It then writes the new
-   concepts and merges each CapabilityDelta unit by
-   unit into the specs/ OKF bundle (status `stable`, regenerated indexes, `log.md`), accepts
-   the ADRs (status `stable`) and archives the change. If sync refuses with a `specs bundle:`
-   error, run the `bundle` tool on `specs` (with `fix: true` for what it marks fixable) and
-   commit that first; old REQ/INV concepts must be rewritten by hand. If sync reports
-   CONFLICT, another change modified the same criterion, section or invariant first: resume
-   spec-author to rebase that unit (`delta-stub` again), back to Gate 1 for it only. A CONFLICT
-   on a contract file: resume contract-designer to stub it again and redo the edit, then Gate 1
-   for that file only. Sync also copies the change's contract files into `contracts_dir`
-   (without their base lines) and deletes the retired ones.
+   `sdd sync <id>`. Sync merges `origin/<base>` in when the base moved, writes the new
+   concepts, merges each CapabilityDelta unit by unit into the specs/ OKF bundle (status
+   `stable`, regenerated indexes, `log.md`), accepts the ADRs, copies the change's contract
+   files into `contracts_dir` and archives the change. If it refuses (a merge conflict, a
+   `specs bundle:` error, a CONFLICT), read [sync-conflicts.md](sync-conflicts.md).
 5. `sdd finish <id>`: marks the phase done, commits the synced specs/ADRs/archive, merges
    `origin/<base>` again if it moved since the sync, pushes and marks the PR ready for review
-   (merging stays with the user). If that merge conflicts, another change edited the same
-   unit after this sync: tell the user which files and that they resolve it by hand (the
-   guard keeps you out of `specs/`), as "Conflict after sync" in the plugin's
-   how-to/resolve-sync-conflict says; show the merged unit as a Gate 1 for it only, then
-   `finish` again. Report to the user in
+   (merging stays with the user). If that merge conflicts, read
+   [sync-conflicts.md](sync-conflicts.md). Report to the user in
    3 lines: what changed, criterion and invariant ids, anything deferred, plus the PR link.
 
 ## 9. Reopen (failure path)
-A wrong or untestable criterion or invariant goes back to the spec, never into the code or the tests.
-A contract file that cannot carry a criterion (tester, implementer or verifier says so) is the
-same: reopen, then contract-designer (after the spec-author when a criterion changes).
-`sdd set-status <id> draft`, `sdd checkpoint <id> --phase spec -m "chore(<id>): reopen spec"`,
-resume spec-author with the BLOCKED report, then Gate 1 for
-the affected units only, then re-plan the affected tasks, re-run their test tasks
-(then `sdd freeze <id>` again), then implementation. A Baseline test rewritten after code has changed is
-refused by `freeze`: you then run `sdd freeze <id> --after-code` yourself (the verifier's
-run on the base commit is then its only proof).
-A `size: fix` change adds at most new criteria: when it needs more (a changed criterion,
-a section, an invariant, an ADR), re-triage it as a full change. Set `size: change` in intent.md,
-`sdd set-status <id> draft`, `sdd checkpoint <id> --phase spec -m "chore(<id>): re-triage as change"`,
-start spec-author with the finding, then step 3.
+A wrong or untestable criterion or invariant goes back to the spec, never into the code or
+the tests. When a step sends you here, read [reopen.md](reopen.md) and follow it.
 
 ## Status
 The plugin shows the active change, its status and task progress above the prompt, and
@@ -268,4 +220,6 @@ You do not need to recap progress to the user; point them to it.
 ## Token rules
 - Agents get `sdd context` bundles, not whole files and not your conversation.
 - Resume an agent (SendMessage) for follow-ups instead of spawning a new one.
+- When the next step needs an agent's result, wait for its completion notice (or run it in
+  the foreground); never poll with `sleep` or by reading its files.
 - Never paste file contents into your replies to the user; give paths and IDs.

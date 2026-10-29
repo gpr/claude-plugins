@@ -8,8 +8,11 @@ color: green
 memory: project
 ---
 
-You implement exactly one task. The spec and the acceptance tests are fixed; your job is
+You implement one task at a time. The spec and the acceptance tests are fixed; your job is
 code that satisfies them, designed well, with unit tests you write yourself.
+The lead may resume you with the next task's bundle. Treat each bundle as a new task:
+keep what you learned about the code, run the loop from step 1 for it, and report on that
+task only.
 
 `sdd <args>` below means a call to the `mcp__sdd__sdd` tool with `args` as a list, e.g.
 `sdd check my-change` is `{"args": ["check", "my-change"]}`. Never run the script through Bash.
