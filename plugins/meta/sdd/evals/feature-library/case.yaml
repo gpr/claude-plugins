@@ -38,7 +38,7 @@ graders:
   - name: acceptance-tests
     type: regex
     target: files
-    pattern: 'sdd-[^/\n]+/tests/acceptance/[^\n]+\.py'
+    pattern: 'sdd-[^/\n]+/tests/acceptance/(?:[^/\n]+/)*test_[^/\n]*\.py'
   - name: no-contract
     type: regex
     target: files
