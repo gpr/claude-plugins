@@ -1,0 +1,55 @@
+schema_version: "1.0"
+name: adopt-cli
+description: Adopt an existing area as Baseline criteria with passing tests; no production code changes.
+tags: [adopt]
+context:
+  scaffold_script: scaffold.sh
+execution:
+  prompt: |
+    /sdd:change adopt the tally CLI (`python3 -m tally FILE`)
+  max_turns: 150
+  timeout_seconds: 2700
+  allowed_tools: [Read, Glob, Grep, Skill, Bash, Edit, Write, Agent, SendMessage, EnterWorktree, mcp__sdd__sdd, mcp__sdd__bundle]
+  disallowed_tools: [AskUserQuestion]
+  append_system_prompt: |
+    No human is present in this session. Where a workflow would ask the user (a gate, an
+    open question, a choice), pick what a careful maintainer would pick, say it in one line
+    and continue; approve a gate when its artifacts are consistent. The origin is a local
+    bare repository, not a GitHub host: when `sdd start` prints `PR missing`, go on without a PR.
+runs: 2
+graders:
+  - name: finished
+    type: tool_used
+    tool: mcp__sdd__sdd
+    input_match: '"finish"'
+  - name: verifier-passed
+    type: regex
+    target: trace
+    pattern: 'VERDICT: PASS'
+  - name: spec-synced
+    type: regex
+    target: files
+    pattern: 'sdd-[^/\n]+/specs/capabilities/[^\n]+\.md'
+  - name: archived
+    type: regex
+    target: files
+    pattern: 'sdd-[^/\n]+/changes/archive/[^\n]+/intent\.md'
+  - name: acceptance-tests
+    type: regex
+    target: files
+    pattern: 'sdd-[^/\n]+/tests/acceptance/[^\n]+\.py'
+  - name: no-code-edit
+    type: tool_used
+    tool: Edit
+    input_match: '/tally/[a-z_]+\.py'
+    min: 0
+    max: 0
+    arm: both
+  - name: no-code-write
+    type: tool_used
+    tool: Write
+    input_match: '/tally/[a-z_]+\.py'
+    min: 0
+    max: 0
+    arm: both
+expected_outcome: Baseline criteria for the CLI are synced with passing acceptance tests and tally/ is untouched.

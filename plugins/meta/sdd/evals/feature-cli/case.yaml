@@ -1,0 +1,46 @@
+schema_version: "1.0"
+name: feature-cli
+description: Full change with a CLI surface (spec, contract, plan, tests, code, verify, sync).
+tags: [full, surface-cli]
+context:
+  scaffold_script: scaffold.sh
+execution:
+  prompt: |
+    Add a `--json` flag to tally: `python3 -m tally --json FILE` prints
+    `{"total": <number>, "count": <number of values>}` instead of the `total: N` line.
+  max_turns: 200
+  timeout_seconds: 3600
+  allowed_tools: [Read, Glob, Grep, Skill, Bash, Edit, Write, Agent, SendMessage, EnterWorktree, mcp__sdd__sdd, mcp__sdd__bundle]
+  disallowed_tools: [AskUserQuestion]
+  append_system_prompt: |
+    No human is present in this session. Where a workflow would ask the user (a gate, an
+    open question, a choice), pick what a careful maintainer would pick, say it in one line
+    and continue; approve a gate when its artifacts are consistent. The origin is a local
+    bare repository, not a GitHub host: when `sdd start` prints `PR missing`, go on without a PR.
+runs: 2
+graders:
+  - name: finished
+    type: tool_used
+    tool: mcp__sdd__sdd
+    input_match: '"finish"'
+  - name: verifier-passed
+    type: regex
+    target: trace
+    pattern: 'VERDICT: PASS'
+  - name: spec-synced
+    type: regex
+    target: files
+    pattern: 'sdd-[^/\n]+/specs/capabilities/[^\n]+\.md'
+  - name: archived
+    type: regex
+    target: files
+    pattern: 'sdd-[^/\n]+/changes/archive/[^\n]+/intent\.md'
+  - name: acceptance-tests
+    type: regex
+    target: files
+    pattern: 'sdd-[^/\n]+/tests/acceptance/[^\n]+\.py'
+  - name: cli-contract-synced
+    type: regex
+    target: files
+    pattern: 'sdd-[^/\n]+/contracts/cli/'
+expected_outcome: The change is finished on its branch with a synced CLI contract, a synced capability and passing acceptance tests.
