@@ -51,4 +51,4 @@ claude plugin eval plugins/meta/sdd --trust-plugin --scaffold --allow-tools Bash
 - Subagent tool calls are in the trace, so `tool_used` graders see the implementer's edits too.
 - Pilot of `fix-blank-line` (one run): 6/6 graders passed in about 4.5 minutes for $1.61. It
   spawned spec-author (twice), acceptance-tester, planner, implementer and verifier. The
-  code-review step was skipped because the skill is not available in an eval session.
+  lead skipped the code-review step (8.3) without saying why; not yet investigated.
