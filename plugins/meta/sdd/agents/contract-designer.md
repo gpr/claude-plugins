@@ -16,8 +16,8 @@ client calls, what a user types, what a user sees. You do not change the spec, p
 `sdd <args>` below means a call to the `mcp__sdd__sdd` tool with `args` as a list, e.g.
 `sdd check my-change` is `{"args": ["check", "my-change"]}`. Never run the script through Bash.
 
-Input from the lead: the change id and the `sdd context <id> --contract` bundle: the
-surface, the criteria this change adds or modifies, and the contract files they touch.
+Input from the lead: the change id. First run `sdd context <id> --contract`: its bundle holds
+the surface, the criteria this change adds or modifies, and the contract files they touch.
 Work from the bundle. Do not explore the repo: read a file only when the bundle names it.
 
 Steps

@@ -58,8 +58,8 @@ Branch / PR / resume (git + gh; the lead runs them)
   requires <change> [<dep>... | --clear]
                                      set (or show) the changes this one needs merged first
   deps <change>                      state of the required changes (exit 1 unless all merged)
-  checkpoint <change> [--phase P] [-m MSG]
-                                     record the phase, commit everything, push
+  checkpoint <change> [--status S] [--phase P] [-m MSG]
+                                     record the status and phase, commit everything, push
   set-pr <change> <number> [--url U]  record a PR created by hand
   resume <change> [--pr N]           fetch the branch, (re)create its worktree (in_place: check it
                                      out here), show the phase;
@@ -1591,15 +1591,18 @@ def cmd_status(args):
                       f"{','.join(t['refs'])} blocked-by={','.join(t['blocked_by']) or '-'}")
 
 
+def set_status(d: Path, status: str):
+    doc = read_doc(d / "intent.md")
+    old = doc.fm.str("status") or "draft"
+    doc.fm.set("status", status)
+    write_doc(d / "intent.md", doc.fm, doc.body)
+    print(f"{d.name}: {old} -> {status}")
+
+
 def cmd_set_status(args):
     if len(args) != 2 or args[1] not in STATUSES:
         die(f"usage: set-status <change> <{'|'.join(STATUSES)}>")
-    d = change_dir(args[0])
-    doc = read_doc(d / "intent.md")
-    old = doc.fm.str("status") or "draft"
-    doc.fm.set("status", args[1])
-    write_doc(d / "intent.md", doc.fm, doc.body)
-    print(f"{d.name}: {old} -> {args[1]}")
+    set_status(change_dir(args[0]), args[1])
 
 
 def concept_template(kind: str) -> str:
@@ -3241,9 +3244,11 @@ def worktree_cwd(name: str) -> tuple[Path, dict]:
 
 def cmd_checkpoint(args):
     if not args or args[0].startswith("-"):
-        die("usage: checkpoint <change> [--phase P] [-m MSG]")
+        die("usage: checkpoint <change> [--status S] [--phase P] [-m MSG]")
     d, st = worktree_cwd(args[0])
-    phase = opt(args, "--phase")
+    phase, status = opt(args, "--phase"), opt(args, "--status")
+    if status and status not in STATUSES:
+        die(f"status must be one of {'|'.join(STATUSES)}")
     if phase:
         if phase not in PHASES:
             die(f"phase must be one of {'|'.join(PHASES)}")
@@ -3258,6 +3263,8 @@ def cmd_checkpoint(args):
                 bring_in_base(ROOT, base)
         st["phase"] = phase
         save_state(d, st)
+    if status:  # after every refusal above: a refused checkpoint changes nothing
+        set_status(d, status)
     write_indexes(d)
     msg = opt(args, "-m") or f"chore(sdd): {args[0]} {st.get('phase', 'checkpoint')}"
     made = commit_all(ROOT, msg)
