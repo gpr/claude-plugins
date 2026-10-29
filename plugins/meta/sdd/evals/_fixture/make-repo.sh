@@ -76,7 +76,8 @@ Sums the numbers in a text file, one per line: `python3 -m tally numbers.txt` pr
 Tests: `python3 -m unittest discover -s tests/unit -t .`
 EOF
 
-python3 "$sdd" init \
+# in_place: an eval session has no EnterWorktree, so changes are checked out here
+python3 "$sdd" init in_place=true \
   'acceptance_cmd=python3 -m unittest {files}' \
   'unit_cmd=python3 -m unittest discover -s tests/unit -t .' >/dev/null
 

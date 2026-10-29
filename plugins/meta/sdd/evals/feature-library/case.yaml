@@ -30,18 +30,18 @@ graders:
   - name: spec-synced
     type: regex
     target: files
-    pattern: 'sdd-[^/\n]+/specs/capabilities/[^\n]+\.md'
+    pattern: '(?<!changes/[^\n]*)specs/capabilities/[^\n]+\.md'
   - name: archived
     type: regex
     target: files
-    pattern: 'sdd-[^/\n]+/changes/archive/[^\n]+/intent\.md'
+    pattern: '(?:^|\n|/)changes/archive/[^\n]+/intent\.md'
   - name: acceptance-tests
     type: regex
     target: files
-    pattern: 'sdd-[^/\n]+/tests/acceptance/(?:[^/\n]+/)*test_[^/\n]*\.py'
+    pattern: '(?:^|\n|/)tests/acceptance/(?:[^/\n]+/)*test_[^/\n]*\.py'
   - name: no-contract
     type: regex
     target: files
-    pattern: '/contracts/'
+    pattern: '(?:^|\n|/)contracts/'
     match: not_contains
 expected_outcome: The change is finished with a synced capability for mean and no contract files.

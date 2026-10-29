@@ -30,17 +30,17 @@ graders:
   - name: spec-synced
     type: regex
     target: files
-    pattern: 'sdd-[^/\n]+/specs/capabilities/[^\n]+\.md'
+    pattern: '(?<!changes/[^\n]*)specs/capabilities/[^\n]+\.md'
   - name: archived
     type: regex
     target: files
-    pattern: 'sdd-[^/\n]+/changes/archive/[^\n]+/intent\.md'
+    pattern: '(?:^|\n|/)changes/archive/[^\n]+/intent\.md'
   - name: acceptance-tests
     type: regex
     target: files
-    pattern: 'sdd-[^/\n]+/tests/acceptance/(?:[^/\n]+/)*test_[^/\n]*\.py'
+    pattern: '(?:^|\n|/)tests/acceptance/(?:[^/\n]+/)*test_[^/\n]*\.py'
   - name: cli-contract-synced
     type: regex
     target: files
-    pattern: 'sdd-[^/\n]+/contracts/cli/'
+    pattern: '(?<!changes/[^\n]*)contracts/cli/'
 expected_outcome: The change is finished on its branch with a synced CLI contract, a synced capability and passing acceptance tests.

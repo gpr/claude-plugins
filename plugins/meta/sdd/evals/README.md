@@ -40,13 +40,10 @@ claude plugin eval plugins/meta/sdd --trust-plugin --scaffold --allow-tools Bash
 
 - A headless run has no user. The cases append a system prompt that says to approve
   consistent gates and to go on without a GitHub PR (`origin` is a local bare repo).
-- The `files` graders see files the run created, including those in the change's worktree
-  (`.claude/worktrees/sdd-<id>/`). Files that existed before the run never show up there,
-  except that the worktree checkout itself counts as created: a grader on worktree files must
-  match only what the workflow writes (`test_*.py`, not any `.py` under `tests/acceptance/`).
-- **The full cases cannot pass yet.** `EnterWorktree` is not available in a headless eval
-  session, so after `sdd start` the lead cannot move into the change's worktree, and every
-  later `sdd <id>` call runs against the main checkout (`no change '<id>'`). Piloted on
-  `fix-blank-line`: the lead stopped after `start` and reported the blocker.
+- An eval session has no `EnterWorktree`, so the fixture sets `"in_place": true`: each change
+  is checked out in the run's cwd instead of `.claude/worktrees/sdd-<id>/`. The suite measures
+  that path, not the worktree one; the two differ only in where the branch is checked out.
+- The `files` graders see the files the run created. Files that existed before the run never
+  show up there.
 - `no-code-edit`/`no-code-write` in `adopt-cli` only catch calls that reach the trace; whether
-  subagent calls do is unverified until a full case gets past `sdd start`.
+  subagent calls do is unverified until a full case has been piloted.
