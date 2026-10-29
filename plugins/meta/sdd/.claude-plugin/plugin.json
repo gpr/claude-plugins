@@ -1,6 +1,6 @@
 {
   "name": "sdd",
-  "version": "0.13.0",
+  "version": "0.14.0",
   "description": "Spec-driven multi-agent workflow: triage, spec/ADR deltas with deterministic sync, plan and tasks, test-first agents, an in-process write guard, and a live status band and pane.",
   "author": {
     "name": "Grégory Romé",

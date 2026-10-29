@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## sdd-0.14.0 - 2026-10-29
+#### Features
+- (**sdd**) add in_place mode and an end-to-end workflow eval suite (#34) - (227d59e) - Grégory R., *Claude Opus 5.5*, *Claude Opus 5.5*, *Claude Opus 5.5*, *Claude Opus 5.5*, *Claude Opus 5.5*, *Claude Opus 5.5*, *Claude Opus 5.5*, *Claude*
+
+- - -
+
 ## sdd-0.13.0 - 2026-10-25
 #### Features
 - (**sdd**) generate change ids as <NNNN>-<YYMMDD>-<slug> (#33) - (65f666c) - Grégory R.
