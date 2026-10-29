@@ -7,7 +7,7 @@ argument-hint: [all | <area> ...]
 # Lead: discover specs and ADRs from code
 
 You are the lead. This skill maps an existing repo and drives one `adopt` change per area
-(`sdd:change`, "Adopt"). It changes no production code. Every criterion it produces is a
+(`sdd:change adopt <area>`, its `adopt.md`). It changes no production code. Every criterion it produces is a
 Baseline criterion with a passing acceptance test; every ADR is a draft that `sync` accepts.
 `sdd <args>` = the `mcp__sdd__sdd` tool, as in `sdd:change`.
 Request: $ARGUMENTS (`all`, empty, or the areas to document)
@@ -33,7 +33,7 @@ tests last (their Baseline tests are all new). Ask (AskUserQuestion): which area
 which order; which decision candidates to record. Candidates the user drops are not written.
 
 ## 4. One adopt per area
-For each chosen area, one at a time, follow `sdd:change` "Adopt" with the Explore findings of
+For each chosen area, one at a time, invoke `sdd:change` with `adopt <area>` and follow its `adopt.md`, with the Explore findings of
 this area already in hand (skip its own Explore) and the chosen decision candidates passed to
 the spec-author as "record after the fact". One adopt = one change = one PR; never batch areas.
 After `sdd finish`, report in one line and ask whether to continue. When the user stops, list
@@ -42,7 +42,7 @@ the remaining areas as `/sdd:change adopt <area>` lines.
 ## Rules
 - Describe what the code does now. A wish for other behavior is not recorded: it becomes a
   separate `/sdd:change` request.
-- A MISMATCH is handled as in "Adopt": drop the criterion from the adopt, offer a fix change.
+- A MISMATCH is handled as in `sdd:change`'s `adopt.md`: drop the criterion from the adopt, offer a fix change.
 - An invariant is written only where the code enforces the rule (a test, a lint rule, a
   type, a gate). An unenforced habit is not an invariant.
 - An ADR needs a real alternative the code shows (a replaced library, a removed path, a

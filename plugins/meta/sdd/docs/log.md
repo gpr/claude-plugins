@@ -2,6 +2,8 @@
 
 ## 2026-10-29
 
+**Update** Workflow shape, from the eval pilot. Step 8 starts the verifier and the `code-review` pass in one message (both read-only); verifier failures are routed first. The lead resumes one implementer across impl tasks (SendMessage), spawning a new one after BLOCKED or 4 tasks. The lead waits for agents' completion notices and never polls with `sleep`. The lead section routes behavior-preserving changes (refactor, rename, docs) to the direct path without loading `sdd:change`. `skills/change` keeps the main path in `SKILL.md`; resume, adopt, reopen and sync conflicts moved to `resume.md`, `adopt.md`, `reopen.md` and `sync-conflicts.md`, read on demand. Updated: agents, phases-and-states, workflow overview, lead-as-main-conversation, first-change tutorial, README.
+
 **Update** `in_place` config key: `start` and `resume` check the change's branch out in the current checkout instead of a worktree, refusing while `git status --porcelain` lists anything, and print `next: continue in this checkout (in_place)` instead of `EnterWorktree`. Sessions without `EnterWorktree` (headless, CI, `claude plugin eval`) can now run the whole workflow; the eval fixture turns it on. Updated: cli, configuration, README, `skills/change`, `skills/from-doc`.
 
 **Update** Workflow evals: `evals/` holds a `claude plugin eval` suite. Six cases (full change with a CLI surface, full change with none, fix with a criterion, adopt, direct refactor, question) run on a scaffolded `tally` repo with a local bare origin. They are graded on the end state, not on which agents ran, so the same suite can compare workflow shapes before any agent is folded or parallelised. Updated: contributing/testing.

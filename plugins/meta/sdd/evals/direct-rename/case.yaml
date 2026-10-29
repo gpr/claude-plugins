@@ -40,4 +40,11 @@ graders:
     pattern: '"subagent_type":\s*"sdd:'
     match: not_contains
     arm: both
+  - name: no-workflow-skill
+    type: tool_used
+    tool: Skill
+    input_match: 'sdd:change'
+    min: 0
+    max: 0
+    arm: both
 expected_outcome: total is renamed in place, unit tests run, and no sdd change is started.

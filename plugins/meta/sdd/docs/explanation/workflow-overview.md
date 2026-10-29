@@ -35,12 +35,11 @@ flowchart TD
     PL --> G2{{"GATE 2<br/>sdd check, automatic"}}
     G2 -- "full change" --> AT["acceptance-tester(s)<br/>failing tests; lead: sdd freeze"]
     AT --> IM
-    G2 -- fix --> IM["implementer, one task at a time<br/>inner TDD"]
-    IM --> VE["verifier<br/>frozen, suites, trace, diff"]
-    VE -- PASS --> CR["code-review"]
+    G2 -- fix --> IM["implementer, one task at a time<br/>resumed task by task, inner TDD"]
+    IM --> VE["verifier<br/>frozen, suites, trace, diff"] & CR["code-review<br/>in parallel"]
     VE -- "FAIL: code" --> IM
     CR -- "bug in a criterion's behavior" --> IM
-    CR -- clean --> SY["sdd sync<br/>delta into specs/, ADRs accepted, archive"]
+    VE & CR -- "PASS, clean" --> SY["sdd sync<br/>delta into specs/, ADRs accepted, archive"]
     SY --> FI["sdd finish<br/>PR ready"] --> M([you merge])
 
     AT -. "criterion untestable" .-> RO
@@ -105,7 +104,7 @@ When an implementer finds a criterion wrong, contradictory or untestable, it sto
 
 ## Verify, review, sync
 
-The verifier checks conformance: frozen tests untouched, suites green, full traceability, and a diff review against the spec, the ADRs and the non-goals. Since conformance doesn't catch bugs outside the criteria, a `code-review` pass follows. Its findings go to an implementer (test first) or back to the spec.
+The verifier checks conformance: frozen tests untouched, suites green, full traceability, and a diff review against the spec, the ADRs and the non-goals. Since conformance doesn't catch bugs outside the criteria, a `code-review` pass runs alongside it: both only read, so the lead starts them in one message. Verifier failures are routed first; review findings go to an implementer (test first) or back to the spec.
 
 Only then does `sdd sync` merge the delta into `specs/`, accept the ADRs and archive the change. It does this deterministically, as described in [Why sdd.py exists](determinism.md).
 

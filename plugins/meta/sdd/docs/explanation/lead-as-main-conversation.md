@@ -14,7 +14,7 @@ generated:
 
 # Why the main conversation is the lead
 
-With the plugin enabled, you just describe a change and the workflow runs. That works because the mod's `prompt.compose` hook appends a short `sdd:lead` section to the main conversation's system prompt. The section says: send change requests (and `resume <id>`) to the `sdd:change` skill verbatim, and answer questions, explanations and reviews directly.
+With the plugin enabled, you just describe a change and the workflow runs. That works because the mod's `prompt.compose` hook appends a short `sdd:lead` section to the main conversation's system prompt. The section says: send change requests (and `resume <id>`) to the `sdd:change` skill verbatim, make behavior-preserving changes (a refactor, a rename, docs) directly, and answer questions, explanations and reviews directly.
 
 ```mermaid
 flowchart LR
@@ -35,7 +35,7 @@ Claude Code can make a plugin agent the session's main agent. But that agent's p
 
 ## Why so short?
 
-The section is a router, not the workflow. The workflow (triage, gates, routing, close-out, reopen) lives in `skills/change/SKILL.md` and loads only when a change is actually requested. Questions about the codebase pay no context cost for a workflow they don't use.
+The section is a router, not the workflow. The workflow (triage, gates, routing, close-out) lives in `skills/change/SKILL.md` and loads only when a change is actually requested. Questions about the codebase pay no context cost for a workflow they don't use, and neither does a rename: the router sends behavior-preserving changes straight to the direct path, which the skill's triage would choose anyway. Inside the skill, the paths most changes never take (resume, adopt, reopen, sync conflicts) are separate files next to `SKILL.md`, read only when a step sends the lead there.
 
 ## Why the lead doesn't write artifacts
 

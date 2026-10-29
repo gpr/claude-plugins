@@ -9,7 +9,7 @@ export const PHASES = [
   { id: 'gate2', label: 'Gate 2', hint: 'sdd check, then set implementing' },
   { id: 'acceptance', label: 'Acceptance tests', hint: 'acceptance-tester writes failing tests, then freeze' },
   { id: 'implement', label: 'Implement', hint: 'implementers make the frozen tests pass' },
-  { id: 'verify', label: 'Verify', hint: 'verifier runs the suites and reviews the diff, then code-review' },
+  { id: 'verify', label: 'Verify', hint: 'verifier runs the suites and reviews the diff, code-review alongside' },
   { id: 'sync', label: 'Sync', hint: 'sdd sync merges the delta into specs/ and archives' },
 ] as const
 
