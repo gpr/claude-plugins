@@ -53,14 +53,16 @@ Commands
 Branch / PR / resume (git + gh; the lead runs them)
   start <slug> --title T [--pr-title P] [--base B] [--requires a,b]
                                      generate the change id <NNNN>-<YYMMDD>-<slug>, branch
-                                     sdd/<change>, worktree, scaffold, push, draft PR
+                                     sdd/<change>, worktree (in_place: checked out
+                                     here), scaffold, push, draft PR
   requires <change> [<dep>... | --clear]
                                      set (or show) the changes this one needs merged first
   deps <change>                      state of the required changes (exit 1 unless all merged)
   checkpoint <change> [--phase P] [-m MSG]
                                      record the phase, commit everything, push
   set-pr <change> <number> [--url U]  record a PR created by hand
-  resume <change> [--pr N]           fetch the branch, (re)create its worktree, show the phase;
+  resume <change> [--pr N]           fetch the branch, (re)create its worktree (in_place: check it
+                                     out here), show the phase;
                                      refuses while a required change is not merged into the base
   finish <change>                    after sync: phase done, commit, merge a moved base, push,
                                      mark the PR ready
@@ -168,6 +170,7 @@ CFG = {
     "base_branch": "",               # empty: the remote's default branch, else main
     "branch_prefix": "sdd/",
     "worktree_dir": ".claude/worktrees",
+    "in_place": False,               # true: start/resume check the branch out here, no worktree (headless sessions)
     "contracts_dir": "contracts",
     "contract_cmd": "",              # validates `contract-preview`'s {dir} (e.g. `npx tsp compile {dir}/api/sdd-main.tsp --no-emit`); agents run it
 }
@@ -181,6 +184,10 @@ if _cfg_file.exists():
     if not isinstance(_raw_cfg, dict):
         # every command (and the mod's `status --json`) reads it: a clear error, not a traceback
         print(f"ERROR .claude/sdd.json: {_raw_cfg if isinstance(_raw_cfg, str) else 'not a JSON object'}; fix the file")
+        sys.exit(2)
+    if not isinstance(_raw_cfg.get("in_place", False), bool):
+        # a string "true" would silently mean false: start would add a worktree the session cannot enter
+        print(f"ERROR .claude/sdd.json: in_place must be true or false (a JSON boolean), not {_raw_cfg['in_place']!r}")
         sys.exit(2)
     CFG.update(_raw_cfg)
 
@@ -1454,6 +1461,11 @@ def init_values(sets: list[str]) -> dict:
                 die(f"init: {k} must be a directory inside the repo, relative to its root (got '{a.partition('=')[2]}')")
         elif k.endswith("_cmd") and not v.strip():
             die(f"init: {k} is empty")
+        elif k == "in_place":
+            if v not in ("true", "false"):
+                die(f"init: in_place must be true or false (got '{v}')")
+            cfg[k] = v == "true"
+            continue
         cfg[k] = v
     return cfg
 
@@ -3118,6 +3130,24 @@ def new_change_id(slug: str, base: str) -> str:
     return f"{n:04d}-{_dt.date.today():%y%m%d}-{slug}"
 
 
+def in_place() -> bool:
+    """`in_place`: changes are checked out in this checkout, not in a worktree per change. For
+    sessions that cannot switch their cwd (headless, CI, evals): no EnterWorktree."""
+    return CFG.get("in_place") is True
+
+
+def require_clean(what: str):
+    """In place, a checkout carries uncommitted and untracked files to the other branch, and
+    commit_all would commit them into the change: refuse instead."""
+    dirty = git_ok("status", "--porcelain")
+    if dirty:
+        die(f"in_place: commit or stash these first, {what} switches this checkout's branch:\n{dirty}", 1)
+
+
+def enter_line(wt: Path) -> str:
+    return "next: continue in this checkout (in_place)" if in_place() else f"next: EnterWorktree path={wt}"
+
+
 def cmd_start(args):
     if not args or args[0].startswith("-"):
         die("usage: start <slug> --title T [--pr-title P] [--base B] [--requires a,b]")
@@ -3133,16 +3163,21 @@ def cmd_start(args):
     name = new_change_id(slug, base)
     dep_rows = dep_states(name, requires, base, ROOT) if requires else []  # dies on a cycle, before any side effect
     branch = CFG["branch_prefix"] + name
-    wt = ROOT / CFG["worktree_dir"] / f"sdd-{name}"
-    if wt.exists() or git("rev-parse", "--verify", "-q", f"refs/heads/{branch}")[0] == 0:
-        die(f"{branch} or {wt.relative_to(ROOT)} already exists; use `resume {name}`", 1)
+    wt = ROOT if in_place() else ROOT / CFG["worktree_dir"] / f"sdd-{name}"
+    if (wt != ROOT and wt.exists()) or git("rev-parse", "--verify", "-q", f"refs/heads/{branch}")[0] == 0:
+        die(f"{branch}{'' if in_place() else f' or {wt.relative_to(ROOT)}'} already exists; use `resume {name}`", 1)
     if git("cat-file", "-e", f"origin/{base}:.claude/sdd.json")[0] != 0:
-        die(f"commit and push .claude/sdd.json (and .gitignore) to {base} first: the worktree starts from origin/{base}", 1)
+        die(f"commit and push .claude/sdd.json (and .gitignore) to {base} first: the change branch starts from origin/{base}", 1)
     attrs = git("show", f"origin/{base}:.gitattributes")[1].splitlines()
     if any(l not in attrs for l in union_lines()):
         print(f"WARN .gitattributes on {base} lacks merge=union for the spec logs: run `sdd init` there "
               "and commit it, or concurrent changes conflict on log.md")
-    git_ok("worktree", "add", str(wt), "-b", branch, f"origin/{base}")
+    if in_place():
+        require_clean("start")
+        prev = git_ok("rev-parse", "--abbrev-ref", "HEAD")
+        git_ok("checkout", "-q", "-b", branch, f"origin/{base}")
+    else:
+        git_ok("worktree", "add", str(wt), "-b", branch, f"origin/{base}")
     try:
         code, out = sh([sys.executable, str(Path(__file__).resolve()), "new", name, "--title", title], wt)
         if code != 0:
@@ -3154,7 +3189,11 @@ def cmd_start(args):
         push(wt)
     except SystemExit:
         # nothing is published yet: drop the half-made worktree and branch so a retry is clean
-        git("worktree", "remove", "--force", str(wt))
+        if in_place():
+            git("checkout", "-q", "-f", prev)
+            shutil.rmtree(ROOT / CFG["changes_dir"] / name, ignore_errors=True)
+        else:
+            git("worktree", "remove", "--force", str(wt))
         git("branch", "-D", branch)
         raise
     body = (f"Spec-driven change `{name}`: {title}\n\nDraft until `sdd finish`. "
@@ -3170,7 +3209,7 @@ def cmd_start(args):
         commit_all(wt, f"chore(sdd): record PR #{num}")
         push(wt)
     print(f"id {name}")
-    print(f"worktree {wt}")
+    print(f"worktree {wt}{' (in_place)' if in_place() else ''}")
     print(f"branch {branch} (base {base})")
     if num:
         print(f"pr {num} {url}")
@@ -3181,7 +3220,7 @@ def cmd_start(args):
         for line in dep_lines([r for r in dep_rows if r["state"] in ("open", "ready", "unknown")]):
             print(f"WARN requires {line}")
         print("WARN spec work may go on; plan and later phases wait until they are merged")
-    print(f"next: EnterWorktree path={wt}")
+    print(enter_line(wt))
 
 
 def require_branch(st: dict, name: str):
@@ -3297,8 +3336,15 @@ def cmd_resume(args):
     else:
         branch = load_state(CHANGES / name).get("branch") or CFG["branch_prefix"] + name
     git_ok("fetch", "origin", branch)
-    wt = worktree_of(branch)
-    if wt is None:
+    wt = ROOT if in_place() else worktree_of(branch)
+    if in_place():
+        if git_ok("rev-parse", "--abbrev-ref", "HEAD") != branch:
+            require_clean("resume")
+            if git("rev-parse", "--verify", "-q", f"refs/heads/{branch}")[0] == 0:
+                git_ok("checkout", "-q", branch)
+            else:
+                git_ok("checkout", "-q", "--track", "-b", branch, f"origin/{branch}")
+    elif wt is None:
         wt = ROOT / CFG["worktree_dir"] / f"sdd-{name}"
         if git("rev-parse", "--verify", "-q", f"refs/heads/{branch}")[0] == 0:
             git_ok("worktree", "add", str(wt), branch)
@@ -3312,7 +3358,7 @@ def cmd_resume(args):
         die(f"{branch} has no change '{name}' ({CFG['changes_dir']}/{name}/intent.md)", 1)
     st, fm = load_state(d), intent_fm(d)
     phase = st.get("phase")
-    print(f"worktree {wt}")
+    print(f"worktree {wt}{' (in_place)' if in_place() else ''}")
     print(f"branch {branch}")
     print(f"pr {st.get('pr') or '-'} {st.get('pr_url') or ''}".rstrip())
     print(f"status {fm.str('status') or '?'}")
@@ -3328,7 +3374,7 @@ def cmd_resume(args):
             sys.exit(1)
         if missing(rows):
             bring_in_base(wt, base)
-    print(f"next: EnterWorktree path={wt}")
+    print(enter_line(wt))
 
 
 def cmd_finish(args):

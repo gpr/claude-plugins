@@ -1,5 +1,11 @@
 # Log
 
+## 2026-10-29
+
+**Update** `in_place` config key: `start` and `resume` check the change's branch out in the current checkout instead of a worktree, refusing while `git status --porcelain` lists anything, and print `next: continue in this checkout (in_place)` instead of `EnterWorktree`. Sessions without `EnterWorktree` (headless, CI, `claude plugin eval`) can now run the whole workflow; the eval fixture turns it on. Updated: cli, configuration, README, `skills/change`, `skills/from-doc`.
+
+**Update** Workflow evals: `evals/` holds a `claude plugin eval` suite. Six cases (full change with a CLI surface, full change with none, fix with a criterion, adopt, direct refactor, question) run on a scaffolded `tally` repo with a local bare origin. They are graded on the end state, not on which agents ran, so the same suite can compare workflow shapes before any agent is folded or parallelised. Updated: contributing/testing.
+
 ## 2026-10-25
 
 **Update** Generated change ids. `sdd start <slug>` builds the id `<NNNN>-<YYMMDD>-<slug>`: one more than the highest number among the changes and archives (here and on `origin/<base>`) and the `sdd/` branches (local and on origin), today's date, the slug. It prints `id <id>`; every later command takes that id, `--requires` included. A slug that already carries the prefix is refused. Ids made before are kept and ignored by the numbering. Updated: cli, repo-layout, keep-in-sync, manage-dependencies, resume-a-change, turn-a-document-into-changes, first-change tutorial, README, `skills/change`, `skills/from-doc`.

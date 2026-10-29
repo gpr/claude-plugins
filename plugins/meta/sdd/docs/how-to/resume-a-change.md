@@ -31,6 +31,7 @@ generated:
    phase plan: step 4: planner writes plan.md and tasks.md
    next: EnterWorktree path=/repo/.claude/worktrees/sdd-0003-261020-add-login
    ```
+   With `"in_place": true` (see [Configuration](../reference/configuration.md)) the branch is checked out in your current checkout instead, and the last line is `next: continue in this checkout (in_place)`: there is no worktree to enter.
 
 3. The lead enters the worktree, runs `sdd status <id>`, and continues at the step the phase names. If the files say more was done than the phase (a step finished without a checkpoint), the files win.
 

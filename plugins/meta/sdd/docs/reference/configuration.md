@@ -29,6 +29,7 @@ Created by `sdd init` with every key below except `req_id_pattern`; `sdd init ke
 | `base_branch` | `""` | base for new changes; empty means the remote's default branch (`origin/HEAD`), else `main` |
 | `branch_prefix` | `sdd/` | change branch name prefix |
 | `worktree_dir` | `.claude/worktrees` | where change worktrees go |
+| `in_place` | `false` | a JSON boolean (any other value is an error); `true`: `start` and `resume` check the change's branch out in this checkout instead of a worktree, so the lead needs no `EnterWorktree` (headless sessions, CI, evals). One change at a time per checkout; both refuse while it has uncommitted or untracked files |
 | `contracts_dir` | `contracts` | living contract files (`api/`, `cli/`, `ui/`), written by `sync`; other files there (tspconfig, emitter output) are yours |
 | `contract_cmd` | `""` | how the contract-designer validates the contracts as the change leaves them; `{dir}` is the dir `sdd contract-preview` builds, e.g. `npx tsp compile {dir}/api/sdd-main.tsp --no-emit`; empty: not validated |
 

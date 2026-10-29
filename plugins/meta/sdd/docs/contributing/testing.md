@@ -1,7 +1,7 @@
 ---
 type: How-to Guide
 title: Test a change to the plugin
-description: Run the three sdd test suites and the plugin validator, and know which suite covers which part.
+description: Run the three sdd test suites, the plugin validator and the workflow evals, and know which suite covers which part.
 tags: [sdd, contributing, testing]
 sources:
   - resource: ../../tests/test_sdd.py
@@ -9,6 +9,7 @@ sources:
   - resource: ../../tests/phase.test.ts
   - resource: ../../tests/mod.test.tsx
   - resource: ../../README.md
+  - resource: ../../evals/README.md
 generated:
   by: claude-code
   at: 2026-10-17T00:00:00Z
@@ -38,7 +39,13 @@ Run from the repository root.
    ```
    Then `@agent-plugin-dev:plugin-validator` and `/plugin-auditor:audit-plugin plugins/meta/sdd`, as the repository's `CLAUDE.md` requires.
 
-4. **Try it for real**: `claude --plugin-dir ./plugins/meta/sdd` in a scratch repo, and walk through [Your first change](../tutorials/first-change.md).
+4. **Workflow evals**: end-to-end runs of real requests against a fixture repo, graded on the end state (see [`evals/README.md`](../../evals/README.md)):
+   ```
+   claude plugin eval plugins/meta/sdd --trust-plugin --scaffold --allow-tools Bash Edit Write --no-publish
+   ```
+   Run them before and after any change to the workflow's shape (which agent does what, what runs in parallel, what the lead loads). The `should-not-fire` tag is a cheap smoke run; the full cases take 30-60 minutes each.
+
+5. **Try it for real**: `claude --plugin-dir ./plugins/meta/sdd` in a scratch repo, and walk through [Your first change](../tutorials/first-change.md).
 
 ## Commits
 

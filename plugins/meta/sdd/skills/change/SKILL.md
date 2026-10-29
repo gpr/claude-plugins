@@ -67,7 +67,8 @@ has no change id and none of this.
    through to `sdd finish`, then come back. For `merge the PR of <dep>`, tell the user which
    PR to merge and stop; once they say it is merged, `sdd resume <id>` again (it merges the
    base into the branch, so the dependency's specs and code arrive).
-2. `EnterWorktree` with `path` = the printed worktree. From here every `sdd` call acts on it.
+2. `EnterWorktree` with `path` = the printed worktree (skip it when the output says `in_place`:
+   the branch is then checked out in this checkout). From here every `sdd` call acts on it.
 3. `sdd status <id>`, then continue at the step the phase names (spec -> 2, contract -> 2.4, gate1 -> 3,
    plan -> 4, gate2 -> 5, acceptance -> 6, implement -> 7, verify -> 8, sync -> 8.4,
    done -> nothing left; "Paths at a glance" gives each path's order). A stored phase can lag a step that was done but not
@@ -120,7 +121,7 @@ Apply this rule, in order, and state the result in one line:
    request builds on an open change (its PR not merged yet), add `--requires <id>[,<id>]` with
    the full ids. `sdd start <slug> --title "<title>" --pr-title "<feat|fix>: <title>"`
    (conventional type from triage); the change id is its `id` line. Then `EnterWorktree` with `path` = the worktree it
-   prints. Do this before any agent writes an artifact. If it prints `PR missing`, create a
+   prints (not when it says `in_place`: `start` already checked the branch out here). Do this before any agent writes an artifact. If it prints `PR missing`, create a
    draft PR for the branch (GitHub tools) and run `sdd set-pr <id> <number>`.
 2. Delegate to `spec-author` with: change id, the user's request verbatim, and the
    Explore findings (summarized, with file paths; for code that no capability covers, the

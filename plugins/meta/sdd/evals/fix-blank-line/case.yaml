@@ -1,0 +1,48 @@
+schema_version: "1.0"
+name: fix-blank-line
+description: Bug with no living criterion - fix with a criterion (short Gate 1, test first, then code).
+tags: [fix]
+context:
+  scaffold_script: scaffold.sh
+execution:
+  prompt: |
+    Bug: `python3 -m tally numbers.txt` crashes with ValueError when the file has an empty
+    line between two numbers (e.g. "1", "", "2"). Empty lines should be skipped.
+  max_turns: 150
+  timeout_seconds: 2700
+  allowed_tools: [Read, Glob, Grep, Skill, Bash, Edit, Write, Agent, SendMessage, EnterWorktree, mcp__sdd__sdd, mcp__sdd__bundle]
+  disallowed_tools: [AskUserQuestion]
+  append_system_prompt: |
+    No human is present in this session. Where a workflow would ask the user (a gate, an
+    open question, a choice), pick what a careful maintainer would pick, say it in one line
+    and continue; approve a gate when its artifacts are consistent. The origin is a local
+    bare repository, not a GitHub host: when `sdd start` prints `PR missing`, go on without a PR.
+runs: 2
+graders:
+  - name: finished
+    type: tool_used
+    tool: mcp__sdd__sdd
+    input_match: '"finish"'
+  - name: verifier-passed
+    type: regex
+    target: trace
+    pattern: 'VERDICT: PASS'
+  - name: spec-synced
+    type: regex
+    target: files
+    pattern: '(?<!changes/[^\n]*)specs/capabilities/[^\n]+\.md'
+  - name: archived
+    type: regex
+    target: files
+    pattern: '(?:^|\n|/)changes/archive/[^\n]+/intent\.md'
+  - name: acceptance-tests
+    type: regex
+    target: files
+    pattern: '(?:^|\n|/)tests/acceptance/(?:[^/\n]+/)*test_[^/\n]*\.py'
+  - name: fix-not-full-change
+    type: regex
+    target: trace
+    pattern: '"subagent_type":\s*"sdd:contract-designer'
+    match: not_contains
+    arm: both
+expected_outcome: The fix is finished with a new criterion for skipped empty lines, a frozen failing-then-passing acceptance test and the code fix.

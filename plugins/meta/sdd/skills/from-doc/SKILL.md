@@ -35,9 +35,9 @@ Direct items are listed and never started.
 For each non-direct change in dependency order: `sdd start <slug> --title "<title>"
 --pr-title "<type>: <title>" [--requires a,b]`, where `--requires` lists the ids printed by the
 earlier starts (dependency order guarantees they exist); its own `id` line is the change id
-`<id>` below (`PR missing`: create the draft PR and `sdd set-pr <id> <n>`). In its worktree (`EnterWorktree`), add one line under `## Why` of
+`<id>` below (`PR missing`: create the draft PR and `sdd set-pr <id> <n>`). In its worktree (`EnterWorktree`; with `in_place`, `start` switched this checkout to its branch), add one line under `## Why` of
 intent.md: `Source: <path> § <heading>[, § <heading>]`; for a fix set `size: fix`. Then
-`sdd checkpoint <id> -m "docs(<id>): source"`. Leave the worktree before the next start.
+`sdd checkpoint <id> -m "docs(<id>): source"`. Leave the worktree before the next start (`in_place`: nothing to leave, the checkout is clean after the checkpoint).
 
 ## 5. Run the first
 Run `sdd:change` on the first change whose requires are all done, as `resume <id>`; the spec-author
