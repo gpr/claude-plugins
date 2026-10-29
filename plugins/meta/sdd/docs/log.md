@@ -2,6 +2,8 @@
 
 ## 2026-10-29
 
+**Update** `in_place` config key: `start` and `resume` check the change's branch out in the current checkout instead of a worktree, refusing while `git status --porcelain` lists anything, and print `next: continue in this checkout (in_place)` instead of `EnterWorktree`. Sessions without `EnterWorktree` (headless, CI, `claude plugin eval`) can now run the whole workflow; the eval fixture turns it on. Updated: cli, configuration, README, `skills/change`, `skills/from-doc`.
+
 **Update** Workflow evals: `evals/` holds a `claude plugin eval` suite. Six cases (full change with a CLI surface, full change with none, fix with a criterion, adopt, direct refactor, question) run on a scaffolded `tally` repo with a local bare origin. They are graded on the end state, not on which agents ran, so the same suite can compare workflow shapes before any agent is folded or parallelised. Updated: contributing/testing.
 
 ## 2026-10-25

@@ -1467,6 +1467,66 @@ class TestResume(GitCase):
         self.assertEqual(code, 1, out)
 
 
+class TestInPlace(GitCase):
+    """`in_place`: start/resume check the change's branch out in this checkout, for sessions
+    that cannot switch their cwd (no EnterWorktree)."""
+
+    def setUp(self):
+        super().setUp()
+        cfg = self.root / ".claude/sdd.json"
+        cfg.write_text(json.dumps({**json.loads(cfg.read_text()), "in_place": True}, indent=2) + "\n")
+        self.git("commit", "-qam", "in place")
+        self.git("push", "-q")
+
+    def test_init_takes_only_a_boolean(self):
+        for value, code_, saved in (("yes", 2, None), ("true", 0, True)):
+            fresh = Path(tempfile.mkdtemp(prefix="sdd-fresh-", dir=self.tmp))
+            self.git("init", "-q", cwd=fresh)
+            code, out = self.sdd("init", f"in_place={value}", cwd=fresh)
+            self.assertEqual(code, code_, out)
+            if saved is None:
+                self.assertIn("in_place must be true or false", out)
+            else:
+                self.assertIs(json.loads((fresh / ".claude/sdd.json").read_text())["in_place"], saved)
+
+    def test_start_checks_the_branch_out_here_and_checkpoint_works(self):
+        code, out = self.sdd("start", "c1", "--title", "One")
+        self.assertEqual(code, 0, out)
+        c1 = id_in(out)
+        self.assertIn(f"worktree {self.root} (in_place)", out)
+        self.assertIn("next: continue in this checkout (in_place)", out)
+        self.assertNotIn("EnterWorktree", out)
+        self.assertFalse((self.root / f".claude/worktrees/sdd-{c1}").exists())
+        self.assertEqual(self.git("rev-parse", "--abbrev-ref", "HEAD"), f"sdd/{c1}")
+        self.assertTrue((self.root / f"changes/{c1}/intent.md").exists())
+        code, out = self.sdd("checkpoint", c1, "--phase", "contract", "-m", "docs: spec")
+        self.assertEqual(code, 0, out)
+        self.git("fetch", "-q", "origin", f"sdd/{c1}")
+        self.assertEqual(self.remote_subjects(f"sdd/{c1}")[0], "docs: spec")
+
+    def test_start_refuses_a_dirty_checkout_and_leaves_no_branch(self):
+        (self.root / "scratch.txt").write_text("x")
+        code, out = self.sdd("start", "c1", "--title", "One")
+        self.assertEqual(code, 1, out)
+        self.assertIn("in_place: commit or stash these first", out)
+        self.assertIn("scratch.txt", out)
+        self.assertEqual(self.git("rev-parse", "--abbrev-ref", "HEAD"), "main")
+        self.assertEqual(self.git("branch", "--list", "sdd/*"), "")
+
+    def test_resume_checks_the_branch_out_in_another_clone(self):
+        code, out = self.sdd("start", "c1", "--title", "One")
+        self.assertEqual(code, 0, out)
+        c1 = id_in(out)
+        other = self.tmp / "other"
+        self.git("clone", "-q", str(self.origin), str(other), cwd=self.tmp)
+        code, out = self.sdd("resume", c1, cwd=other)
+        self.assertEqual(code, 0, out)
+        self.assertIn(f"worktree {other.resolve()} (in_place)", out)
+        self.assertIn("next: continue in this checkout (in_place)", out)
+        self.assertEqual(self.git("rev-parse", "--abbrev-ref", "HEAD", cwd=other), f"sdd/{c1}")
+        self.assertFalse((other / ".claude/worktrees").exists())
+
+
 class TestDeps(GitCase):
     def finish_change(self, slug: str) -> Path:
         """Take a started change through sync + finish on its branch (not merged into main yet)."""

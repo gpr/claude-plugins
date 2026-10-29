@@ -118,7 +118,8 @@ For a full change or a fix the lead runs `sdd start <slug>` before any artifact 
   used by a change, an archive or an `sdd/` branch (local, on `origin/<base>` or pushed from
   another machine), today's date and the slug. Every later command takes this id.
 - branch `sdd/<id>` from `origin/<base>`, a worktree in `.claude/worktrees/sdd-<id>` (the
-  lead moves into it with `EnterWorktree`), the scaffolded change pushed, and a **draft PR**
+  lead moves into it with `EnterWorktree`; with `"in_place": true` the branch is checked out in
+  the current checkout instead, for sessions without `EnterWorktree`: headless, CI, evals), the scaffolded change pushed, and a **draft PR**
   opened with `gh`. If `gh` is missing or fails, the lead opens the PR and records it with
   `sdd set-pr <id> <number>`.
 - `changes/<id>/state.json` stores `phase`, `branch`, `base`, `pr`, `pr_url`, `requires`. Only `sdd.py`
