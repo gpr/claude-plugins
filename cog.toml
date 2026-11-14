@@ -30,3 +30,4 @@ documentalist-agent = { path = "plugins/meta/documentalist-agent", changelog_pat
 diataxis = { path = "plugins/meta/diataxis", changelog_path = "plugins/meta/diataxis/CHANGELOG.md" }
 code-outline = { path = "plugins/meta/code-outline", changelog_path = "plugins/meta/code-outline/CHANGELOG.md" }
 sdd = { path = "plugins/meta/sdd", changelog_path = "plugins/meta/sdd/CHANGELOG.md" }
+branch-usage = { path = "plugins/meta/branch-usage", changelog_path = "plugins/meta/branch-usage/CHANGELOG.md" }
