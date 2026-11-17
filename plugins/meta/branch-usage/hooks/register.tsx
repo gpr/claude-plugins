@@ -361,15 +361,12 @@ export const register: Register = (on, options) => {
     return next(e)
   })
 
-  // /clear starts a new session id without session.start; attach it now so
-  // the pane lists it before the first prompt.
-  on('classic.SessionStart', async ($, e, next) => {
-    if (e.source === 'clear') await attach($)
-
-    return next(e)
-  })
-
-  // A checkout moves the branch: each turn re-attaches to the current branch.
+  // A checkout moves the branch, and /clear starts a new session id without
+  // session.start: each turn re-attaches to the current branch and session.
+  // No classic.* hook here: on managed machines and Team/Enterprise orgs the
+  // outermost cc-plugin-sec-default module passes classic events past the
+  // plugin tier, so such a hook is skipped. The cost is that after /clear the
+  // pane lists the new session from the first prompt on.
   on('turn.start', async ($, e, next) => {
     await attach($)
 
