@@ -10,6 +10,10 @@ pre_package_bump_hooks = [
   "jq --arg v '{{version}}' '.version = $v' .claude-plugin/plugin.json > .claude-plugin/plugin.json.tmp && mv .claude-plugin/plugin.json.tmp .claude-plugin/plugin.json",
 ]
 
+# Everything under plugins/ ships to users, so a refactor is a release too.
+[commit_types]
+refactor = { changelog_title = "Refactoring", bump_patch = true }
+
 [changelog]
 path = "CHANGELOG.md"
 template = "remote"

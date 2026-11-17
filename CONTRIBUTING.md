@@ -87,8 +87,8 @@ chore: update marketplace.json schema
 
 Plugin versions and changelogs are automatic ([cocogitto](https://docs.cocogitto.io/)); never edit `version` in `plugin.json` or a plugin's `CHANGELOG.md` by hand. When a PR is squash-merged into `main`, a GitHub Action bumps every plugin whose directory the commit touched, commits the new `plugin.json` version and `CHANGELOG.md`, and tags `<plugin>-<version>`.
 
-- `feat` bumps minor, `fix` and `perf` bump patch, `!` or a `BREAKING CHANGE:` footer bumps major.
-- Other types (`refactor`, `docs`, `chore`, `test`, ...) do not bump.
+- `feat` bumps minor, `fix`, `perf` and `refactor` bump patch, `!` or a `BREAKING CHANGE:` footer bumps major.
+- Other types (`docs`, `chore`, `test`, ...) do not bump.
 - The PR title becomes the commit message, so it must be a valid conventional commit (checked by CI).
 - A commit touching several plugins bumps each of them; split the PR if that is not what you want.
 - Changes outside `plugins/` (root docs, workflows) never bump anything.
