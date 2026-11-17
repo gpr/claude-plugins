@@ -69,9 +69,9 @@ Use `${CLAUDE_PLUGIN_ROOT}` for all script paths in hooks/MCP config. Never hard
 
 Each plugin is versioned independently by cocogitto (`cog.toml`, workflows in `.github/workflows/`). On every push to `main`, `release.yml` runs `cog bump --auto`: for each plugin whose directory changed since its last `<plugin>-<version>` tag it computes the bump from the conventional commits, rewrites `plugin.json` `version`, writes `<plugin>/CHANGELOG.md`, commits, tags and pushes.
 
-- `feat` → minor; `fix`/`perf` → patch; `refactor` → patch (`cog.toml` `[commit_types]`; all of `plugins/` ships, so a refactor changes what users get); `!` or `BREAKING CHANGE:` → major; `docs`/`chore`/`test` → no bump. Commit scope is cosmetic, bumping follows the touched paths.
+- `feat` → minor; `fix`/`perf` → patch; every other type (`refactor`/`docs`/`chore`/`test`/…) → patch (`cog.toml` `[commit_types]`: all of `plugins/` is installed as-is and updates key off `version`, so any change inside a plugin must release); `!` or `BREAKING CHANGE:` → major. Commits touching nothing under `plugins/` bump nothing. Commit scope is cosmetic, bumping follows the touched paths.
 - PRs are squash-merged: the PR title is the commit cog reads, and `pr-checks.yml` runs `cog verify` on it.
-- Use `refactor` (not `fix`) for pre-release bugs, as above: it still releases (patch) but stays out of the "Bug Fixes" changelog section. `docs`/`chore`/`test` never release, so don't use them for changes under `plugins/` that alter shipped behavior.
+- Use `refactor` (not `fix`) for pre-release bugs, as above: it releases (patch) but stays out of the "Bug Fixes" changelog section.
 - Local dry run: `cog bump --auto --dry-run` (needs cocogitto 7.x; tags come from `git fetch --tags`).
 - CI pins `cocogitto-action@v4.2.0` (installs cog 7.0.0) and fails unless `cog --version` is 7.x. Don't use the floating `v4` tag: it installs 6.x, which can't read `[monorepo.packages]`.
 - A repo ruleset rejects pushes updating more than 5 refs, so `scripts/release/push-tags.sh` pushes new tags in batches of 5.
