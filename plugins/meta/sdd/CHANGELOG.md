@@ -2,6 +2,15 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## sdd-0.14.1 - 2026-11-24
+#### Performance Improvements
+- (**sdd**) keep context bundles and paired calls out of the lead (#36) - (cfaa6e6) - Grégory R., *Claude Opus 5.5*, *Claude Opus 5.5*, *Claude Opus 5.5*, *Claude*
+- (**sdd**) parallel close-out, resumed implementer, lighter lead context (#35) - (fd8172f) - Grégory R., *Claude Opus 5.5*, *Claude Opus 5.5*, *Claude*
+#### Miscellaneous Chores
+- (**release**) bump patch on refactor commits (#40) - (c6e4d9b) - Grégory R.
+
+- - -
+
 ## sdd-0.14.0 - 2026-10-29
 #### Features
 - (**sdd**) add in_place mode and an end-to-end workflow eval suite (#34) - (227d59e) - Grégory R., *Claude Opus 5.5*, *Claude Opus 5.5*, *Claude Opus 5.5*, *Claude Opus 5.5*, *Claude Opus 5.5*, *Claude Opus 5.5*, *Claude Opus 5.5*, *Claude*
