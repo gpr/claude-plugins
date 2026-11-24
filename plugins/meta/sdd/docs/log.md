@@ -1,5 +1,9 @@
 # Log
 
+## 2026-11-24
+
+**Update** Release rules. Every commit type touching a plugin now releases a patch (only `feat` bumps minor), so contributing/testing no longer says other types do not release. Updated: contributing/testing.
+
 ## 2026-10-29
 
 **Update** Lighter lead. Workflow agents fetch their own `sdd context` bundle; the lead passes change and task ids, so a bundle no longer goes through the lead's context twice (fetched, then pasted as output). `checkpoint --status <s>` sets the status and commits in one call, replacing the `set-status` + `checkpoint` pairs at Gate 1, Gate 2, verified and reopen. The lead runs `sync` without a dry run first (sync checks everything before writing). New `evals/trace-stats.py` summarises a kept eval trace: lead turns, spawns, resumes, sleep polls, lead `sdd` calls, per-agent token share. Updated: cli, agents, context-bundles, reopen-a-spec, `skills/change`, three agents.

@@ -49,4 +49,4 @@ Run from the repository root.
 
 ## Commits
 
-Use Conventional Commits. `feat` → minor, `fix`/`perf` → patch, others → no release (cocogitto computes the version on `main`). Use `refactor`, not `fix`, for a bug that was never released. Never edit `version` in `plugin.json` or `CHANGELOG.md` by hand. If you change something listed in [Things that must change together](keep-in-sync.md), update the docs in the same commit.
+Use Conventional Commits. `feat` → minor, every other type (`fix`, `perf`, `refactor`, `docs`, `chore`, `test`, ...) → patch (cocogitto computes the version on `main`). Use `refactor`, not `fix`, for a bug that was never released. Never edit `version` in `plugin.json` or `CHANGELOG.md` by hand. If you change something listed in [Things that must change together](keep-in-sync.md), update the docs in the same commit.

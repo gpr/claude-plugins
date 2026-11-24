@@ -10,6 +10,20 @@ pre_package_bump_hooks = [
   "jq --arg v '{{version}}' '.version = $v' .claude-plugin/plugin.json > .claude-plugin/plugin.json.tmp && mv .claude-plugin/plugin.json.tmp .claude-plugin/plugin.json",
 ]
 
+# Everything under plugins/ is installed as-is, and Claude Code only updates an
+# installed plugin when its version changes. So any commit touching a plugin
+# must release it: feat/fix/perf keep their built-in bump (minor/patch/patch),
+# every other type bumps patch. Commits outside plugins/ still bump nothing.
+[commit_types]
+build = { changelog_title = "Build System", bump_patch = true }
+chore = { changelog_title = "Miscellaneous Chores", bump_patch = true }
+ci = { changelog_title = "Continuous Integration", bump_patch = true }
+docs = { changelog_title = "Documentation", bump_patch = true }
+refactor = { changelog_title = "Refactoring", bump_patch = true }
+revert = { changelog_title = "Revert", bump_patch = true }
+style = { changelog_title = "Style", bump_patch = true }
+test = { changelog_title = "Tests", bump_patch = true }
+
 [changelog]
 path = "CHANGELOG.md"
 template = "remote"
