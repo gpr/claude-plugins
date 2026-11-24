@@ -11,7 +11,7 @@ This repository is for developing Claude Code plugins. Use the `/plugin-dev:crea
 - After creating a new plugin, add it to `marketplace.json` to make it available in the marketplace, and to `cog.toml` `[monorepo.packages]` (key = plugin.json `name`) so it gets versioned. Check with `scripts/release/check-registry.sh`
 - Never hand-edit `version` in `plugin.json` or any plugin `CHANGELOG.md`; see [Versioning](#versioning)
 - After creating or modifying a plugin, review it with `@agent-plugin-dev:plugin-validator`
-- Follow [Conventional Commits](https://www.conventionalcommits.org/) for all git commits (`feat`/`fix`/`refactor`/`perf` for production; `chore`/`test`/`docs` otherwise). Use `fix` only for released issues; use `refactor` for pre-release bugs.
+- Follow [Conventional Commits](https://www.conventionalcommits.org/) for all git commits (`feat`/`fix`/`refactor`/`perf` for production; `chore`/`test`/`docs` otherwise). Every type releases a patch when it touches a plugin, so pick the type that describes the change, not the one that avoids a release. Use `fix` only for released issues; use `refactor` for pre-release bugs.
 - Plugins may carry their own `CLAUDE.md` for plugin-specific rules (see `plugins/backend/rails/CLAUDE.md`). Parent context auto-loads.
 
 ## Plugin Architecture
