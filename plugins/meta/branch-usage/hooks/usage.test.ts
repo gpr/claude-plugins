@@ -175,12 +175,15 @@ test('carried file names are safe and tagged with the starting point', () => {
   expect(carriedFileName('main', null)).toBe('carried-main@local.json')
 })
 
+// Strings as `ps -o args=` prints them: argv joined by spaces, no quotes.
 test('isTeammateArgs spots a terminal-pane teammate command line only', () => {
   const teammate =
     'node /usr/lib/claude/cli.js --agent-id scout@team --agent-name scout --team-name team --agent-color blue --parent-session-id abc'
   expect(isTeammateArgs(teammate)).toBe(true)
-  expect(isTeammateArgs('claude --agent-id=a@t --team-name=t')).toBe(true)
-  expect(isTeammateArgs('claude "what does --agent-id do"')).toBe(false)
+  expect(isTeammateArgs('claude --agent-id=a@t --team-name=t --parent-session-id=p')).toBe(true)
+  expect(isTeammateArgs('claude explain how --agent-id and --team-name work')).toBe(false)
+  expect(isTeammateArgs('claude what do --agent-id x@team --team-name team mean')).toBe(false)
+  expect(isTeammateArgs('claude --agent-id a@one --team-name two --parent-session-id p')).toBe(false)
   expect(isTeammateArgs('claude')).toBe(false)
   expect(isTeammateArgs('claude --agent reviewer')).toBe(false)
   expect(isTeammateArgs('claude --prompt x--team-names')).toBe(false)

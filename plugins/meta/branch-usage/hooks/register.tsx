@@ -179,8 +179,15 @@ async function compute($: EngineInterface, branchName?: string): Promise<BranchV
 /** Starts the refresh timer once; a teammate starts it only when /branch-usage opens its pane. */
 function startTicking($: EngineInterface): void {
   if (ticking) return
-  ticking = true
   $.clock.every(REFRESH_MS, () => refresh($))
+  ticking = true
+}
+
+// The PR link shows in the band and the pane; a teammate draws neither until
+// /branch-usage opens the pane, so it skips the `gh` lookup until then.
+async function showsPr($: EngineInterface): Promise<boolean> {
+  if (!(await read($, teammate))) return true
+  return (await $.ui.panes()).some(pane => pane.id === PANE)
 }
 
 async function refresh($: EngineInterface): Promise<void> {
@@ -188,7 +195,7 @@ async function refresh($: EngineInterface): Promise<void> {
   try {
     const next = await compute($)
     await update($, view, () => next)
-    if (next.branch !== prBranch) await refreshPr($)
+    if (next.branch !== prBranch && (await showsPr($))) await refreshPr($)
   } catch (err) {
     $.ui.log(`branch-usage: refresh failed: ${String(err)}`)
   }
