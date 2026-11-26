@@ -1,6 +1,6 @@
 {
   "name": "branch-usage",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Tracks tokens and cost per model, agent and session for every session on a git branch, in a right pane.",
   "types": "./types/index.d.ts",
   "userConfig": {
