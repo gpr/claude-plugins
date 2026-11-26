@@ -85,7 +85,12 @@ test('a teammate starts the refresh timer when /branch-usage opens its pane', as
   await start($, on, TEAMMATE_ARGS, opened, timers)
   expect(timers.length).toBe(0)
 
-  await $.command.run({ command: 'branch-usage', args: '' })
+  await $.command.run({
+    command: 'branch-usage',
+    args: '',
+    origin: { kind: 'composer' },
+    presentation: { isFullscreen: true, columns: 120 },
+  })
   expect(opened).toEqual(['branch-usage'])
   expect(timers.length).toBe(1)
 })
