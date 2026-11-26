@@ -278,6 +278,16 @@ const PR_SYNC_COMMAND = /(^|[;&|\n]\s*)(gh\s+pr\s+create|git(\s+-\S+(\s+[^\s-]\S
 /** True when a Bash command creates a PR or pushes a branch. */
 export const isPrSyncCommand = (command: string): boolean => PR_SYNC_COMMAND.test(command)
 
+// The flags the lead passes to a teammate it starts in a terminal pane of its
+// own (tmux, iTerm2). Not a documented contract: if Claude Code renames them,
+// detection stops matching and the pane shows again, as it did before.
+// Both are required, so a prompt that merely mentions one does not match.
+const flag = (name: string) => new RegExp(`(^|\\s)--${name}(=|\\s|$)`)
+const TEAMMATE_FLAGS = [flag('agent-id'), flag('team-name')]
+
+/** Whether a process command line is a teammate's started in its own terminal pane. */
+export const isTeammateArgs = (args: string): boolean => TEAMMATE_FLAGS.every(f => f.test(args))
+
 /** PR comment text: the marker, then the report without the "this session" mark. */
 export const prCommentBody = (view: BranchView): string =>
   `${PR_COMMENT_MARKER}\n${summaryText({ ...view, sessionId: '' })}`
