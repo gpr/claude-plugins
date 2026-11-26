@@ -278,6 +278,22 @@ const PR_SYNC_COMMAND = /(^|[;&|\n]\s*)(gh\s+pr\s+create|git(\s+-\S+(\s+[^\s-]\S
 /** True when a Bash command creates a PR or pushes a branch. */
 export const isPrSyncCommand = (command: string): boolean => PR_SYNC_COMMAND.test(command)
 
+// How the lead starts a teammate in a terminal pane of its own (tmux, iTerm2):
+// `--agent-id <name>@<team> ... --team-name <team> ... --parent-session-id <id>`.
+// `ps` prints argv unquoted, so a lead's prompt that merely names these flags
+// shows up too: the shape, the matching team and all three flags are required.
+// Not a documented contract: if Claude Code changes it, detection stops matching
+// and the pane shows again, as it did before.
+const AGENT_ID = /(?:^|\s)--agent-id(?:=|\s+)[^\s@]+@(\S+)(?=\s|$)/
+const TEAM_NAME = /(?:^|\s)--team-name(?:=|\s+)(\S+)(?=\s|$)/
+const PARENT_SESSION = /(?:^|\s)--parent-session-id(?:=|\s+)\S/
+
+/** Whether a process command line (as `ps` prints it) is a teammate's started in its own terminal pane. */
+export const isTeammateArgs = (args: string): boolean => {
+  const team = TEAM_NAME.exec(args)?.[1]
+  return team !== undefined && AGENT_ID.exec(args)?.[1] === team && PARENT_SESSION.test(args)
+}
+
 /** PR comment text: the marker, then the report without the "this session" mark. */
 export const prCommentBody = (view: BranchView): string =>
   `${PR_COMMENT_MARKER}\n${summaryText({ ...view, sessionId: '' })}`

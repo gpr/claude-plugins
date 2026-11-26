@@ -12,6 +12,7 @@ import {
   emptyView,
   formatUsd,
   isPrSyncCommand,
+  isTeammateArgs,
   matchesBase,
   newSessionFile,
   prCommentBody,
@@ -36,6 +37,9 @@ const PR_COLOR = 'blue'
 
 const view = atom({ plugin: 'branch-usage', key: 'view' } as const, emptyView('', null))
 const prLink = atom({ plugin: 'branch-usage', key: 'pr' } as const, null as PrLink | null)
+// True in a teammate the lead started in a terminal pane of its own: it keeps
+// recording, and draws neither the pane nor the band.
+const teammate = atom({ plugin: 'branch-usage', key: 'isTeammate' } as const, false)
 
 // Module variables start over on a hot reload; everything here is rebuilt
 // from the session files on disk.
@@ -43,12 +47,28 @@ let prices: PriceTable = DEFAULT_PRICES
 let writes: Promise<unknown> = Promise.resolve()
 let lastRefresh = 0
 let prBranch: string | null = null
+let ticking = false
 const agentTypes = new Map<string, string>()
 const files = new Map<string, SessionFile>()
 
 async function git($: EngineInterface, ...args: string[]): Promise<string | null> {
   const ran = await $.process.run(['git', ...args], { cwd: await $.session.root() })
   return ran.exitCode === 0 ? ran.stdout.trim() : null
+}
+
+/** Whether this process is a teammate in a terminal pane of its own, read from its command line; false when unsure. */
+async function isPaneTeammate($: EngineInterface): Promise<boolean> {
+  try {
+    // Pane teammates need tmux or iTerm2, and Windows has no `ps` to ask.
+    if ((await $.session.info()).platform === 'windows') return false
+    const pid = (await $.process.hookEnv()).CLAUDE_PID
+    if (pid === undefined || pid === '') return false
+    const ran = await $.process.run(['ps', '-o', 'args=', '-p', pid])
+    return ran.exitCode === 0 && isTeammateArgs(ran.stdout)
+  } catch (err) {
+    $.ui.log(`branch-usage: could not tell whether this is a teammate: ${String(err)}`)
+    return false
+  }
 }
 
 async function currentBranch($: EngineInterface): Promise<string | null> {
@@ -156,12 +176,26 @@ async function compute($: EngineInterface, branchName?: string): Promise<BranchV
   return aggregate(await readBranchFiles($, repo.root, where), branch, sessionId, where)
 }
 
+/** Starts the refresh timer once; a teammate starts it only when /branch-usage opens its pane. */
+function startTicking($: EngineInterface): void {
+  if (ticking) return
+  $.clock.every(REFRESH_MS, () => refresh($))
+  ticking = true
+}
+
+// The PR link shows in the band and the pane; a teammate draws neither until
+// /branch-usage opens the pane, so it skips the `gh` lookup until then.
+async function showsPr($: EngineInterface): Promise<boolean> {
+  if (!(await read($, teammate))) return true
+  return (await $.ui.panes()).some(pane => pane.id === PANE)
+}
+
 async function refresh($: EngineInterface): Promise<void> {
   lastRefresh = Date.now()
   try {
     const next = await compute($)
     await update($, view, () => next)
-    if (next.branch !== prBranch) await refreshPr($)
+    if (next.branch !== prBranch && (await showsPr($))) await refreshPr($)
   } catch (err) {
     $.ui.log(`branch-usage: refresh failed: ${String(err)}`)
   }
@@ -340,6 +374,8 @@ export const register: Register = (on, options) => {
   prices = buildPrices(String(options.prices ?? ''))
 
   on('session.start', async ($, e, next) => {
+    const isTeammate = await isPaneTeammate($)
+    await update($, teammate, () => isTeammate)
     await $.command.register({
       name: 'branch-usage',
       description: 'Show token usage and cost of all sessions on this branch',
@@ -355,8 +391,12 @@ export const register: Register = (on, options) => {
     })
     await attach($)
     await refresh($)
-    $.clock.every(REFRESH_MS, () => refresh($))
-    void $.ui.open({ id: PANE, title: 'Branch usage' })
+    // A teammate's pane is the lead's to watch: nothing draws here unless
+    // /branch-usage opens it, which starts the timer then.
+    if (!isTeammate) {
+      startTicking($)
+      void $.ui.open({ id: PANE, title: 'Branch usage' })
+    }
 
     return next(e)
   })
@@ -412,6 +452,7 @@ export const register: Register = (on, options) => {
 
   on('command.run', { command: 'branch-usage' }, async $ => {
     await $.ui.open({ id: PANE, title: 'Branch usage', focus: true })
+    startTicking($)
     await refreshPr($)
     await refresh($)
 
@@ -426,6 +467,7 @@ export const register: Register = (on, options) => {
   })
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
+    if (await read($, teammate)) return next(e)
     const { branch, totalUsd } = await read($, view)
     if (e.props.hasSurvey || branch === null) return next(e)
 

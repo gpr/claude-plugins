@@ -70,6 +70,6 @@ export type PrLink = {
 
 declare module 'claude-code' {
   interface PluginState {
-    'branch-usage': { view: BranchView; pr: PrLink | null }
+    'branch-usage': { view: BranchView; pr: PrLink | null; isTeammate: boolean }
   }
 }
